@@ -3287,5 +3287,22 @@
     },
     "removeLocalOnly": "Nur d Kopie uf däm Grät wird glöscht. Di offiziell Version bliibt uf em Server.",
     "removeMovedLocalOnly": "Nur d Kopie uf däm Grät wird glöscht. S Spiil bliibt uf em Server und uf em Grät, wo s füehrt."
+  },
+  "liveScreen": {
+    "title": "Live-Bildschirm",
+    "label": "Spielständ uf TVs",
+    "hint": "Alli Fälder vo dim Aalass uf TVs oder emne Beamer.",
+    "intro": "Zeigt de Spielstand vo allne Fälder vo dim Aalass uf TVs oder emne Beamer, für jedes Spiel. Start en uf eim Schriiber-Grät und gib de Code uf de andere ii. Online gaht nur de Spielstand (Teamnäme, Pünkt, Sätz), nie Aagabe zu de Spielerinne und Spieler. Beach-Teamnäme sind oft d Näme vo de Spielerinne und Spieler: Die erschiined dänn uf de öffentliche Siite.",
+    "codeLabel": "Live-Bildschirm-Code",
+    "smartTv": "Uf emne Smart-TV: de Webbrowser vom TV öffne und {{url}} iigäh.",
+    "venueUrl": "Ohni Internet am Spielort öffned TVs im WLAN vom Spielort: {{url}}",
+    "otherDevices": "Gib dä Code uf de andere Schriiber-Grät vom Aalass under Optione › Live-Bildschirm ii.",
+    "copyLink": "Link kopiere",
+    "copied": "Kopiert",
+    "turnOff": "Uf dem Grät usschalte",
+    "start": "Live-Bildschirm starte",
+    "enterCode": "Live-Bildschirm-Code",
+    "join": "Biiträte",
+    "badCode": "Das isch kein Live-Bildschirm-Code (8 Buechstabe und Ziffere)."
   }
 }

@@ -3287,5 +3287,22 @@
     },
     "removeLocalOnly": "Nur die Kopie auf diesem Gerät wird gelöscht. Die offizielle Version bleibt auf dem Server.",
     "removeMovedLocalOnly": "Nur die Kopie auf diesem Gerät wird gelöscht. Das Spiel bleibt auf dem Server und auf dem Gerät, das es führt."
+  },
+  "liveScreen": {
+    "title": "Live-Bildschirm",
+    "label": "Spielstände auf TVs",
+    "hint": "Alle Felder deines Anlasses auf TVs oder einem Beamer.",
+    "intro": "Zeigt den Spielstand aller Felder deines Anlasses auf TVs oder einem Beamer, für jedes Spiel. Starte ihn auf einem Schreibergerät und gib den Code auf den anderen ein. Online geht nur der Spielstand (Teamnamen, Punkte, Sätze), nie Angaben zu Spielerinnen und Spielern. Beach-Teamnamen sind oft die Namen der Spielerinnen und Spieler: Diese erscheinen dann auf der öffentlichen Seite.",
+    "codeLabel": "Live-Bildschirm-Code",
+    "smartTv": "Auf einem Smart-TV: den Webbrowser des TVs öffnen und {{url}} eingeben.",
+    "venueUrl": "Ohne Internet am Spielort öffnen TVs im WLAN des Spielorts: {{url}}",
+    "otherDevices": "Gib diesen Code auf den anderen Schreibergeräten des Anlasses unter Optionen › Live-Bildschirm ein.",
+    "copyLink": "Link kopieren",
+    "copied": "Kopiert",
+    "turnOff": "Auf diesem Gerät ausschalten",
+    "start": "Live-Bildschirm starten",
+    "enterCode": "Live-Bildschirm-Code",
+    "join": "Beitreten",
+    "badCode": "Das ist kein Live-Bildschirm-Code (8 Buchstaben und Ziffern)."
   }
 }

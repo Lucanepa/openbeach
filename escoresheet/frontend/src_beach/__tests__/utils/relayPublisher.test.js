@@ -448,3 +448,36 @@ describe('scorerRelayUrl (App and Scoreboard attach to the same url)', () => {
     expect(scorerRelayUrl()).toBe(withPort)
   })
 })
+
+describe('the Live screen fields on the relay live push', () => {
+  const fakeRelay = () => {
+    const sent = []
+    return { sent, send: (p) => { sent.push(p); return true } }
+  }
+  const court = 'a'.repeat(32)
+
+  it('the message carries globalLive and globalLiveCourt beside the live state, only with a code', () => {
+    expect(liveStateMessage('k', { points_a: 1 })).not.toHaveProperty('globalLive')
+    expect(liveStateMessage('k', { points_a: 1 }, {})).not.toHaveProperty('globalLive')
+    expect(liveStateMessage('k', { points_a: 1 }, { globalLive: 'ABCD2345', globalLiveCourt: court })).toEqual({
+      type: 'live-state-update', matchId: 'k', liveState: { points_a: 1, serve_player: null, sport_type: 'beach' }, globalLive: 'ABCD2345', globalLiveCourt: court
+    })
+    // no court token yet: the server hashes the room instead
+    expect(liveStateMessage('k', { points_a: 1 }, { globalLive: 'ABCD2345' })).not.toHaveProperty('globalLiveCourt')
+    // a court token without a code means nothing
+    expect(liveStateMessage('k', { points_a: 1 }, { globalLiveCourt: court })).not.toHaveProperty('globalLiveCourt')
+  })
+
+  it('the publisher sends them, and again with the live state resent after a sync', () => {
+    const relay = fakeRelay()
+    const pub = createRelayMatchPublisher({ relay })
+    pub.liveState('k', { points_a: 2 }, { globalLive: 'ABCD2345', globalLiveCourt: court })
+    expect(relay.sent.at(-1)).toMatchObject({ type: 'live-state-update', globalLive: 'ABCD2345', globalLiveCourt: court })
+    expect(pub.lastLiveState('k')).toEqual({ points_a: 2 })
+    pub.sync('k', { match: localMatch() })
+    expect(relay.sent.at(-1)).toMatchObject({ type: 'live-state-update', liveState: { points_a: 2 }, globalLive: 'ABCD2345' })
+    // turned off: the next point carries none
+    pub.liveState('k', { points_a: 3 }, {})
+    expect(relay.sent.at(-1)).not.toHaveProperty('globalLive')
+  })
+})
