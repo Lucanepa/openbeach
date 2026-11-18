@@ -1,0 +1,5 @@
+OpenBeach 3.0.5
+- Android: the approval PDF no longer fails as "stopped answering" on slow tablets.
+- Live screen: every court of a beach event on TVs (opt-in).
+- Show/hide eye on every password field.
+- The activity log records the match-end scoresheet PDF.
