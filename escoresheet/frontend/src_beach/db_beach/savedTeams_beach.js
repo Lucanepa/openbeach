@@ -5,7 +5,8 @@
  * "Load saved team" and the name suggestions work without a connection
  * afterwards.
  *
- * The rows hold personal data (DOB, licence number, country): they are only
+ * The rows hold personal data (licence number, country; never a date of
+ * birth: bundleToRows drops one an older backend still sends): they are only
  * for the account that loaded them (meta.userId) and are cleared on sign-out,
  * account switch, account deletion, a login the server rejects or that
  * expires, and on start when they belong to another account
@@ -73,10 +74,17 @@ export function bundleCompetitions(bundle) {
   }))
 }
 
+/** A player or staff row of the API without its date of birth. */
+export function withoutDob(person) {
+  if (!person || typeof person !== 'object' || !('dob' in person)) return person
+  const { dob: _dob, ...rest } = person
+  return rest
+}
+
 /**
  * API bundle → cache rows: the teams of the beach competitions, with the
  * competition embedded and the two lookup keys. players / staff keep the
- * API's snake_case objects (country included).
+ * API's snake_case objects (country and licence included, no dob).
  */
 export function bundleToRows(bundle) {
   const competitions = new Map(bundleCompetitions(bundle).map(c => [c.id, c]))
@@ -94,8 +102,8 @@ export function bundleToRows(bundle) {
         color: t.color || '',
         nameKey,
         pairKey,
-        players: Array.isArray(t.players) ? t.players : [],
-        staff: Array.isArray(t.staff) ? t.staff : [],
+        players: Array.isArray(t.players) ? t.players.map(withoutDob) : [],
+        staff: Array.isArray(t.staff) ? t.staff.map(withoutDob) : [],
         updatedAt: t.updated_at || null
       }
     })

@@ -5,32 +5,34 @@ import { parseExcel, mapExcelRowToCompMatch, validateCompMatch } from '../../uti
 
 const BATCH_SIZE = 50
 
+// A person's licence number goes in its Licence column (never a date of birth)
 const TEMPLATE_HEADERS = [
   'Competition', 'Game #', 'Date', 'Time', 'Site', 'Beach', 'Court',
   'Gender', 'Phase', 'Round', 'Has Coach',
   'Team 1 Name', 'Team 1 Country',
-  'T1 Player 1 #', 'T1 Player 1 Last', 'T1 Player 1 First',
-  'T1 Player 2 #', 'T1 Player 2 Last', 'T1 Player 2 First',
+  'T1 Player 1 #', 'T1 Player 1 Last', 'T1 Player 1 First', 'T1 Player 1 Licence',
+  'T1 Player 2 #', 'T1 Player 2 Last', 'T1 Player 2 First', 'T1 Player 2 Licence',
   'Team 2 Name', 'Team 2 Country',
-  'T2 Player 1 #', 'T2 Player 1 Last', 'T2 Player 1 First',
-  'T2 Player 2 #', 'T2 Player 2 Last', 'T2 Player 2 First',
-  '1st Referee Last', '1st Referee First',
-  '2nd Referee Last', '2nd Referee First',
-  'Scorer Last', 'Scorer First'
+  'T2 Player 1 #', 'T2 Player 1 Last', 'T2 Player 1 First', 'T2 Player 1 Licence',
+  'T2 Player 2 #', 'T2 Player 2 Last', 'T2 Player 2 First', 'T2 Player 2 Licence',
+  '1st Referee Last', '1st Referee First', '1st Referee Licence',
+  '2nd Referee Last', '2nd Referee First', '2nd Referee Licence',
+  'Scorer Last', 'Scorer First', 'Scorer Licence'
 ]
 
+// Made-up people and numbers
 const TEMPLATE_EXAMPLE = [
-  'Swiss Beach Tour 2026', '1', '2026-06-15', '10:00', 'Bern', 'Bundesplatz Beach', '1',
+  'Beach Tour Musterdorf 2026', '1', '2026-06-15', '10:00', 'Musterdorf', 'Seeplatz Beach', '1',
   'Men', 'Main Draw', 'Pool Play', '',
   '', 'CHE',
-  '1', 'Heidrich', 'Adrian',
-  '2', 'Gerson', 'Mirco',
+  '1', 'Muster', 'Max', '100101',
+  '2', 'Beispiel', 'Ben', '100102',
   '', 'CHE',
-  '1', 'Krattiger', 'Florian',
-  '2', 'Breer', 'Marco',
-  'Mueller', 'Hans',
-  'Schmidt', 'Anna',
-  'Weber', 'Thomas'
+  '1', 'Probst', 'Paul', '100201',
+  '2', 'Vorlage', 'Valentin', '100202',
+  'Schiedsmann', 'Hans', '200301',
+  'Pfiff', 'Anna', '200302',
+  'Tafel', 'Tom', '300401'
 ]
 
 function escapeCsvCell(val) {
@@ -173,13 +175,13 @@ export default function ExcelUpload({ userId, onComplete }) {
               <span>Gender (required), Phase (required), Round (required)</span>
               <span>Has Coach</span>
               <span>Team 1 Name (auto-inferred from players), Country</span>
-              <span>T1 Player 1 #, Last, First</span>
-              <span>T1 Player 2 #, Last, First</span>
+              <span>T1 Player 1 #, Last, First, Licence</span>
+              <span>T1 Player 2 #, Last, First, Licence</span>
               <span>Team 2 Name (auto-inferred from players), Country</span>
-              <span>T2 Player 1 #, Last, First</span>
-              <span>T2 Player 2 #, Last, First</span>
-              <span>1st/2nd Referee Last, First</span>
-              <span>Scorer Last, First</span>
+              <span>T2 Player 1 #, Last, First, Licence</span>
+              <span>T2 Player 2 #, Last, First, Licence</span>
+              <span>1st/2nd Referee Last, First, Licence</span>
+              <span>Scorer Last, First, Licence</span>
             </div>
           </div>
         </div>

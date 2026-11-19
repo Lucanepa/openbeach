@@ -85,7 +85,9 @@ describe.skipIf(!BASE || !EMAIL)('saved beach teams on a local OpenVolley backen
     expect(mw).toMatchObject({ nameKey: 'müller/weber', pairKey: 'müller/weber', competition: { name: 'Coop Beachtour', season: '2026', sport: 'beach' } })
     const { savedTeamToBeachRoster, findBeachTeamSuggestions } = await import('../../utils_beach/savedTeams_beach')
     const r = savedTeamToBeachRoster(mw)
-    expect(r.roster.map(p => [p.number, p.lastName, p.dob])).toEqual([[1, 'Müller', '05/01/1998'], [2, 'Weber', '12/03/1997']])
+    expect(r.roster.map(p => [p.number, p.lastName])).toEqual([[1, 'Müller'], [2, 'Weber']])
+    // the value is the saved licence (digits) or nothing, never a date of birth
+    for (const p of r.roster) expect(p.dob).toMatch(/^\d*$/)
     expect(r.country).toBe('CHE')
     expect(findBeachTeamSuggestions(rows, { team1Name: 'Weber / Müller (CHE)' }).team1.id).toBe(mw.id)
   })

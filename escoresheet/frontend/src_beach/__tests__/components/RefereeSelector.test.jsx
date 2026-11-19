@@ -13,12 +13,12 @@ vi.mock('../../utils_beach/backendConfig_beach', () => ({
 }))
 
 // apiFrom('referee_database') resolves each page request when the test says so.
-const api = vi.hoisted(() => ({ pending: [], queries: [], contains: [] }))
+const api = vi.hoisted(() => ({ pending: [], queries: [], contains: [], selects: [] }))
 vi.mock('../../lib_beach/apiClient_beach', () => ({
   apiFrom: () => {
     const call = { order: [], gt: null, limit: null }
     const q = {
-      select: () => q,
+      select: (cols) => { api.selects.push(cols); return q },
       contains: (col, v) => { api.contains.push([col, v]); return q },
       order: (col, opts) => { call.order.push([col, opts?.ascending !== false]); return q },
       gt: (col, v) => { call.gt = [col, v]; return q },
@@ -48,7 +48,7 @@ const rows = [
 ]
 
 describe('RefereeSelector_beach', () => {
-  beforeEach(() => { api.pending = []; api.queries = []; api.contains = [] })
+  beforeEach(() => { api.pending = []; api.queries = []; api.contains = []; api.selects = [] })
 
   it('lists the beach referees by last name', async () => {
     render(<RefereeSelector open onClose={() => {}} onSelect={() => {}} />)
@@ -58,6 +58,20 @@ describe('RefereeSelector_beach', () => {
     const names = [...list.querySelectorAll('button')].map(b => b.textContent)
     expect(names).toEqual(['Keller, Luca', 'Müller, Anna'])
     expect(api.contains[0]).toEqual(['sport_type', JSON.stringify(['beach'])])
+  })
+
+  // Owner 19.11.2026: no date of birth from the directory (the licence is
+  // typed in Match Setup)
+  it('reads names and countries, never a date of birth', async () => {
+    const onSelect = vi.fn()
+    render(<RefereeSelector open onClose={() => {}} onSelect={onSelect} />)
+    await resolvePage(0, { data: rows, error: null })
+    expect(api.selects[0]).not.toMatch(/dob/)
+    const list = screen.getByRole('dialog')
+    await waitFor(() => expect(list.textContent).toContain('Müller'))
+    const anna = [...list.querySelectorAll('button')].find(b => b.textContent === 'Müller, Anna')
+    act(() => { anna.click() })
+    expect(onSelect).toHaveBeenCalledWith({ id: 'müller_anna', firstName: 'Anna', lastName: 'Müller', country: 'CHE' })
   })
 
   it('reads the whole directory past the 1000-row cap and lists it by last name', async () => {

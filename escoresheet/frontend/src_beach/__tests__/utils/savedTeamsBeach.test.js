@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  normalizeName, beachNameKey, pairKeyFromName, pairKeyFromPlayers, teamKeys, isoToBeachDob, teamCountry,
+  normalizeName, beachNameKey, pairKeyFromName, pairKeyFromPlayers, teamKeys, teamCountry,
   savedTeamToBeachRoster, rosterHasNames, teamMatchesName, findBeachTeamSuggestions, zurichYear, seasonOf
 } from '../../utils_beach/savedTeams_beach'
 import { beachBundle, COOP_ID, MUELLER_WEBER_ID, ROSSI_ID } from '../fixtures/beachBundle'
@@ -59,13 +59,7 @@ describe('name keys', () => {
   })
 })
 
-describe('isoToBeachDob and teamCountry', () => {
-  it('formats ISO dates as DD/MM/YYYY', () => {
-    expect(isoToBeachDob('1998-01-05')).toBe('05/01/1998')
-    expect(isoToBeachDob('1998-01-05T00:00:00.000Z')).toBe('05/01/1998')
-    expect(isoToBeachDob(null)).toBe('')
-    expect(isoToBeachDob('05.01.1998')).toBe('')
-  })
+describe('teamCountry', () => {
   it('gives the one shared country, else nothing', () => {
     expect(teamCountry([{ country: 'CHE' }, { country: 'che' }])).toBe('CHE')
     expect(teamCountry([{ country: 'CHE' }, { country: null }])).toBe('CHE')
@@ -75,16 +69,27 @@ describe('isoToBeachDob and teamCountry', () => {
 })
 
 describe('savedTeamToBeachRoster', () => {
-  it('fills both slots from the fixture pair, with DOB, country and coach', () => {
+  // The value beside the name is the saved licence (its digits), never the
+  // date of birth an older backend still sends (owner 19.11.2026)
+  it('fills both slots from the fixture pair, with the licence, country and coach', () => {
     const r = savedTeamToBeachRoster(team(MUELLER_WEBER_ID))
     expect(r.roster).toEqual([
-      { number: 1, firstName: 'Anna', lastName: 'Müller', dob: '05/01/1998', isCaptain: false },
-      { number: 2, firstName: 'Sara', lastName: 'Weber', dob: '12/03/1997', isCaptain: false }
+      { number: 1, firstName: 'Anna', lastName: 'Müller', dob: '1', isCaptain: false },
+      { number: 2, firstName: 'Sara', lastName: 'Weber', dob: '', isCaptain: false }
     ])
     expect(r.country).toBe('CHE')
     expect(r.meta).toEqual({ name: 'Müller / Weber', shortName: 'MÜLLER/WEBER', color: '#3b82f6' })
     expect(r.coach).toEqual({ firstName: 'Eva', lastName: 'Kunz' })
     expect(r.warnings).toEqual([])
+  })
+
+  it('a saved licence number fills the value; a date of birth never does', () => {
+    const t = team(MUELLER_WEBER_ID)
+    t.players[0].license_number = '100101'
+    t.players[1].license_number = '1997-03-12'
+    const r = savedTeamToBeachRoster(t)
+    expect(r.roster.map(p => p.dob)).toEqual(['100101', ''])
+    expect(JSON.stringify(r)).not.toMatch(/1998|1997/)
   })
 
   it('a single saved player leaves slot 2 empty and warns', () => {

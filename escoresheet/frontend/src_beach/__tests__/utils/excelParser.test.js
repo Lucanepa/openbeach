@@ -46,3 +46,33 @@ describe('parseExcel', () => {
     ])
   })
 })
+
+// Owner 19.11.2026: the competition upload imports a person's licence (its
+// Licence column), never a date of birth
+describe('mapExcelRowToCompMatch: licences', () => {
+  const row = {
+    Competition: 'Beach Tour Musterdorf', Gender: 'Men', Phase: 'Main Draw', Round: 'Pool Play',
+    'T1 Player 1 #': '1', 'T1 Player 1 Last': 'Muster', 'T1 Player 1 First': 'Max', 'T1 Player 1 Licence': 100101,
+    'T1 Player 2 #': '2', 'T1 Player 2 Last': 'Beispiel', 'T1 Player 2 First': 'Ben', 'T1 Player 2 Licence': '14.03.2008',
+    'T2 Player 1 #': '1', 'T2 Player 1 Last': 'Probst', 'T2 Player 1 First': 'Paul', 'T2 Player 1 Licence': ' 100 201 ',
+    'T2 Player 2 #': '2', 'T2 Player 2 Last': 'Vorlage', 'T2 Player 2 First': 'Vera', 'T2 Player 2 Licence': new Date(Date.UTC(2008, 2, 14)),
+    '1st Referee Last': 'Schiedsmann', '1st Referee First': 'Hans', '1st Referee Licence': '200301',
+    'Scorer Last': 'Tafel', 'Scorer First': 'Tom', 'Scorer Licence': '2008-03-14',
+    'Date of birth': '14.03.2008'
+  }
+
+  it('players and officials carry the licence; a date in the column is dropped', async () => {
+    const { mapExcelRowToCompMatch } = await import('../../utils_beach/excelParser_beach')
+    const m = mapExcelRowToCompMatch(row, 'u1')
+    expect(m.players_team1.map(p => p.dob)).toEqual(['100101', ''])
+    expect(m.players_team2.map(p => p.dob)).toEqual(['100201', ''])
+    expect(m.officials.map(o => [o.role, o.dob])).toEqual([['1st referee', '200301'], ['scorer', '']])
+    expect(JSON.stringify(m)).not.toMatch(/2008/)
+  })
+
+  it('a sheet without a Licence column imports no value', async () => {
+    const { mapExcelRowToCompMatch } = await import('../../utils_beach/excelParser_beach')
+    const m = mapExcelRowToCompMatch({ Competition: 'X', Gender: 'Women', Phase: 'Main', Round: 'Pool', 'T1 Player 1 Last': 'Muster', 'T1 Player 1 First': 'Mia' }, null)
+    expect(m.players_team1).toEqual([{ number: '', first_name: 'Mia', last_name: 'Muster', dob: '', is_captain: false }])
+  })
+})

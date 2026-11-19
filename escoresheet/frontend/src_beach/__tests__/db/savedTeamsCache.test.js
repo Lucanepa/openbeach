@@ -57,8 +57,11 @@ describe('saved beach teams cache', () => {
       nameKey: 'müller/weber', pairKey: 'müller/weber', updatedAt: '2026-10-06T08:00:00.000Z',
       competition: { id: COOP_ID, name: 'Coop Beachtour', season: '2026', gender: 'women', archived: false, sport: 'beach' }
     })
-    expect(mw.players[0]).toMatchObject({ number: 1, first_name: 'Anna', dob: '1998-01-05', country: 'CHE' })
+    expect(mw.players[0]).toMatchObject({ number: 1, first_name: 'Anna', license_number: 'B-1', country: 'CHE' })
     expect(mw.staff[0]).toMatchObject({ role: 'Coach', last_name: 'Kunz' })
+    // no date of birth on the device, even when an older backend sends one
+    expect(mw.players.some(p => 'dob' in p)).toBe(false)
+    expect(mw.staff.some(p => 'dob' in p)).toBe(false)
     // indexed lookups
     expect((await db.saved_teams.where('pairKey').equals('müller/weber').toArray()).map(r => r.id)).toEqual([MUELLER_WEBER_ID])
     const meta = await cache.getSavedTeamsMeta()
