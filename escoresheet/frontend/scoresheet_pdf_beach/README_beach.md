@@ -69,7 +69,7 @@ App_Scoresheet.tsx
 Database player records are mapped to scoresheet format:
 - `number`: Player jersey number (converted to string)
 - `name`: Full name (from `firstName` + `lastName`)
-- `dob`: Date of birth
+- `dob`: the value beside the name: a licence number, or a date of birth (dd.mm.yyyy); the TEAMS box prints it under "Licence"
 - `isCaptain`: Captain flag
 
 ### Sets
