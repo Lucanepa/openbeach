@@ -12,10 +12,27 @@ import { discardUnsentLogs } from '../utils_beach/logger_beach'
 function readCachedProfile() {
   try {
     const cached = localStorage.getItem('cachedProfile')
-    return cached ? JSON.parse(cached) : null
+    return cached ? withoutDob(JSON.parse(cached)) : null
   } catch {
     return null
   }
+}
+
+/**
+ * The profile as this device keeps it: no date of birth (an account carries
+ * a name, an email and an optional licence number; an older backend may
+ * still send a dob column).
+ */
+export function withoutDob(profile) {
+  if (!profile || typeof profile !== 'object' || !('dob' in profile)) return profile
+  const { dob: _dob, ...rest } = profile
+  return rest
+}
+
+function cacheProfile(profile) {
+  try {
+    localStorage.setItem('cachedProfile', JSON.stringify(profile))
+  } catch { /* storage blocked */ }
 }
 
 const AuthContext = createContext(null)
@@ -65,16 +82,17 @@ export function AuthProvider({ children }) {
         return null
       }
 
-      setProfile(data)
+      const kept = withoutDob(data)
+      setProfile(kept)
       // Cache profile in localStorage for offline auto-fill
-      localStorage.setItem('cachedProfile', JSON.stringify(data))
+      cacheProfile(kept)
       // The per-app access, where the backend reports it (never blocks)
       apiMe().then(({ data: meData, error: meError }) => {
         // Tagged with the account it was asked for (a late answer after a
         // switch of account is never used for the next one)
         if (!meError && meData && typeof meData === 'object') setMe({ ...meData, _for: userId })
       }).catch(() => { /* older backend or offline: roles decide */ })
-      return data
+      return kept
     } catch (err) {
       console.error('[AuthContext] Profile fetch error:', err.message, err)
       setProfile(null)
@@ -184,21 +202,30 @@ export function AuthProvider({ children }) {
       return { error: { message: 'Not authenticated' } }
     }
 
+    // Only what the caller gives (an undefined key is not sent). Never a date
+    // of birth: an account carries an optional licence number instead
+    // (profiles.license_number, 4 to 7 digits; '' clears it).
+    const row = {
+      first_name: updates.firstName,
+      last_name: updates.lastName,
+      country: updates.country
+      // No roles: the backend strips them (only an admin assigns roles)
+    }
+    if (updates.licenseNumber !== undefined) {
+      const lic = String(updates.licenseNumber ?? '').trim()
+      row.license_number = lic === '' ? null : lic
+    }
     const { data, error } = await apiFrom('profiles')
-      .update({
-        first_name: updates.firstName,
-        last_name: updates.lastName,
-        country: updates.country,
-        dob: updates.dob
-        // No roles: the backend strips them (only an admin assigns roles)
-      })
+      .update(row)
       .eq('user_id', user.id)
       .select()
       .single()
 
     if (!error && data) {
-      setProfile(data)
-      localStorage.setItem('cachedProfile', JSON.stringify(data))
+      const kept = withoutDob(data)
+      setProfile(kept)
+      cacheProfile(kept)
+      return { data: kept, error }
     }
 
     return { data, error }
@@ -231,10 +258,7 @@ export function AuthProvider({ children }) {
   }, [user])
 
   // Get cached profile for offline use
-  const getCachedProfile = useCallback(() => {
-    const cached = localStorage.getItem('cachedProfile')
-    return cached ? JSON.parse(cached) : null
-  }, [])
+  const getCachedProfile = useCallback(() => readCachedProfile(), [])
 
   // Delete account: POST /api/auth/delete-account (the backend deletes the
   // user, its sessions and its profile; apiAuth then drops the stored token)

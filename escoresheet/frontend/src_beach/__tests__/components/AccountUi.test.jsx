@@ -123,14 +123,59 @@ describe('the header account button', () => {
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Joining OpenBeach failed')
   })
 
-  it('Save name is the kit primary button', async () => {
+  it('Save is the kit primary button', async () => {
     auth.current = signedIn({ access: { known: true, isPending: false, roles: ['beach:scorer'] } })
     render(<UserButton buttonClass="btn" />)
     fireEvent.click(screen.getByTestId('header-account'))
     const dialog = await screen.findByRole('dialog')
-    const save = within(dialog).getByRole('button', { name: 'Save name' })
+    const save = within(dialog).getByRole('button', { name: 'Save' })
     expect(save.className).toMatch(/bg-red-600/)
     expect(save.className).not.toMatch(/emerald/)
+  })
+
+  // Owner 19.11.2026: an account carries an optional licence number, never a
+  // date of birth
+  it('the account: name and an optional licence number, no date of birth', async () => {
+    auth.current = signedIn({
+      access: { known: true, isPending: false, roles: ['beach:scorer'] },
+      profile: { user_id: 'u1', first_name: 'Anna', last_name: 'Muster', license_number: '12345', roles: [] }
+    })
+    render(<UserButton buttonClass="btn" />)
+    fireEvent.click(screen.getByTestId('header-account'))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByText(/date of birth/i)).toBeNull()
+    expect(dialog.querySelector('input[type="date"]')).toBeNull()
+    const licence = within(dialog).getByLabelText('Licence number (optional)')
+    expect(licence).toHaveValue('12345')
+    expect(licence).toHaveAttribute('inputmode', 'numeric')
+    expect(within(dialog).getByText(/4 to 7 digits/)).toBeInTheDocument()
+  })
+
+  it('saves a changed licence number (digits only), never a dob', async () => {
+    auth.current = signedIn({ access: { known: true, isPending: false, roles: ['beach:scorer'] } })
+    render(<UserButton buttonClass="btn" />)
+    fireEvent.click(screen.getByTestId('header-account'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText('Licence number (optional)'), { target: { value: '12a3456' } })
+    expect(within(dialog).getByLabelText('Licence number (optional)')).toHaveValue('123456')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(auth.current.updateProfile).toHaveBeenCalledWith({ firstName: 'Anna', lastName: 'Müller', licenseNumber: '123456' }))
+    expect(JSON.stringify(auth.current.updateProfile.mock.calls)).not.toMatch(/dob/)
+  })
+
+  it('a licence number of 1 to 3 digits is refused; a name change alone sends no licence', async () => {
+    auth.current = signedIn({ access: { known: true, isPending: false, roles: ['beach:scorer'] } })
+    render(<UserButton buttonClass="btn" />)
+    fireEvent.click(screen.getByTestId('header-account'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText('Licence number (optional)'), { target: { value: '123' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    expect(await within(dialog).findByText('A licence number has 4 to 7 digits.')).toBeInTheDocument()
+    expect(auth.current.updateProfile).not.toHaveBeenCalled()
+    fireEvent.change(within(dialog).getByLabelText('Licence number (optional)'), { target: { value: '' } })
+    fireEvent.change(within(dialog).getByLabelText('First name'), { target: { value: 'Anne' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(auth.current.updateProfile).toHaveBeenCalledWith({ firstName: 'Anne', lastName: 'Müller' }))
   })
 
   it('an approved account has no pending block', async () => {
