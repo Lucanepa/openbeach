@@ -1,0 +1,5 @@
+OpenBeach 3.1.0
+- Account: an optional licence number instead of the date of birth.
+- Beach sheets: a licence number (or a date of birth) beside each name; the scoresheet's column reads "Licence".
+- Saved teams, the Excel import and the referee directory bring licences only, never birthdates.
+- Birthdates still kept on this device are deleted once, at start-up.
