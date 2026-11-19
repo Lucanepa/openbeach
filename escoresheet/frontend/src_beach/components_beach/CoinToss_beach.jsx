@@ -27,7 +27,8 @@ import { Volleyball } from '@phosphor-icons/react'
 import { cn } from '../ui/volleyui/cn.js'
 import { Button, FOCUS_RING } from '../ui/volleyui/Button.jsx'
 import { SegmentedControl } from '../ui/volleyui/SegmentedControl.jsx'
-import { DateField } from '../ui/volleyui/DateField.jsx'
+import IdValueInput from './IdValueInput_beach'
+import { cleanIdValue, displayIdValue, idValueForSync, isJanuaryFirstDate, readManageLicence } from '../utils_beach/idValue_beach'
 import { Modal as KitModal, modalCancelClass, modalPrimaryClass, modalSaveClass, modalDangerClass } from '../ui/volleyui/Modal.jsx'
 import { NOTICE } from '../ui/volleyui/tones.js'
 import { teamBoxStyle } from '../utils_beach/teamColours_beach'
@@ -87,40 +88,6 @@ function useCompactMode() {
   return isCompact
 }
 
-// Date formatting helpers
-function formatDateToDDMMYYYY(dateStr) {
-  if (!dateStr) return ''
-  const parts = dateStr.split('-')
-  if (parts.length !== 3) return dateStr
-  const [year, month, day] = parts
-  return `${day}.${month}.${year}`
-}
-
-function formatDateToISO(dateStr) {
-  if (!dateStr) return ''
-  // Handle both dot and slash separators (dd.mm.yyyy or dd/mm/yyyy)
-  const separator = dateStr.includes('/') ? '/' : '.'
-  const parts = dateStr.split(separator)
-  if (parts.length !== 3) return dateStr
-  const [day, month, year] = parts
-  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
-}
-
-// Normalize DOB to dd.mm.yyyy format
-function normalizeDob(dob) {
-  if (!dob) return ''
-  // If already in ISO format (yyyy-mm-dd), convert to dd.mm.yyyy
-  if (dob.includes('-') && dob.length === 10 && dob.indexOf('-') === 4) {
-    const [year, month, day] = dob.split('-')
-    return `${day}.${month}.${year}`
-  }
-  // If using slashes (dd/mm/yyyy), convert to dots
-  if (dob.includes('/')) {
-    return dob.replace(/\//g, '.')
-  }
-  return dob
-}
-
 export default function CoinToss({ matchId, onConfirm, onBack }) {
   const { t, i18n } = useTranslation()
   const { showAlert } = useAlert()
@@ -128,7 +95,8 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
 
   // Check if compact mode
   const isCompact = useCompactMode()
-  const manageDob = localStorage.getItem('manageDob') === 'true'
+  // The licence column (a licence, or a date of birth typed dd.mm.yyyy)
+  const manageLicence = readManageLicence()
 
   // Responsive sizing
   const sizes = isCompact ? {
@@ -278,7 +246,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               number: player.number,
               firstName: player.firstName,
               lastName: player.lastName,
-              dob: player.dob,
+              dob: cleanIdValue(player.dob),
               isCaptain: player.isCaptain
             })
           } else {
@@ -287,7 +255,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               number: player.number,
               firstName: player.firstName,
               lastName: player.lastName,
-              dob: player.dob,
+              dob: cleanIdValue(player.dob),
               isCaptain: player.isCaptain || false
             })
           }
@@ -328,7 +296,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                 number: p.number || null,
                 first_name: p.firstName || '',
                 last_name: p.lastName || '',
-                dob: p.dob || null,
+                dob: idValueForSync(p.dob),
                 is_captain: !!p.isCaptain
               }))
             })
@@ -423,7 +391,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             number: p.number,
             lastName: p.lastName || (p.name ? p.name.split(' ')[0] : ''),
             firstName: p.firstName || (p.name ? p.name.split(' ').slice(1).join(' ') : ''),
-            dob: normalizeDob(p.dob) || '',
+            dob: displayIdValue(p.dob),
             isCaptain: p.isCaptain || false
           })).sort((a, b) => (a.number || 999) - (b.number || 999))
           setTeam1Roster(sortedTeam1)
@@ -442,7 +410,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             number: p.number,
             lastName: p.lastName || (p.name ? p.name.split(' ')[0] : ''),
             firstName: p.firstName || (p.name ? p.name.split(' ').slice(1).join(' ') : ''),
-            dob: normalizeDob(p.dob) || '',
+            dob: displayIdValue(p.dob),
             isCaptain: p.isCaptain || false
           })).sort((a, b) => (a.number || 999) - (b.number || 999))
           setTeam2Roster(sortedTeam2)
@@ -828,14 +796,14 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               number: p.number,
               first_name: p.firstName,
               last_name: p.lastName,
-              dob: p.dob || null,
+              dob: idValueForSync(p.dob),
               is_captain: !!p.isCaptain
             })),
             players_team2: team2Roster.map(p => ({
               number: p.number,
               first_name: p.firstName,
               last_name: p.lastName,
-              dob: p.dob || null,
+              dob: idValueForSync(p.dob),
               is_captain: !!p.isCaptain
             })),
             officials: updatedMatch.officials || []
@@ -856,7 +824,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               name: `${p.lastName} ${p.firstName}`,
               lastName: p.lastName,
               firstName: p.firstName,
-              dob: p.dob || null,
+              dob: cleanIdValue(p.dob) || null,
               isCaptain: !!p.isCaptain
             })
           } else {
@@ -866,7 +834,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               name: `${p.lastName} ${p.firstName}`,
               lastName: p.lastName,
               firstName: p.firstName,
-              dob: p.dob || null,
+              dob: cleanIdValue(p.dob) || null,
               isCaptain: !!p.isCaptain,
               role: null,
               createdAt: new Date().toISOString()
@@ -894,7 +862,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               name: `${p.lastName} ${p.firstName}`,
               lastName: p.lastName,
               firstName: p.firstName,
-              dob: p.dob || null,
+              dob: cleanIdValue(p.dob) || null,
               isCaptain: !!p.isCaptain
             })
           } else {
@@ -904,7 +872,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               name: `${p.lastName} ${p.firstName}`,
               lastName: p.lastName,
               firstName: p.firstName,
-              dob: p.dob || null,
+              dob: cleanIdValue(p.dob) || null,
               isCaptain: !!p.isCaptain,
               role: null,
               createdAt: new Date().toISOString()
@@ -1365,7 +1333,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
       // The checks (utils_beach/coinTossChecks_beach), in the scorer's
       // language, with the team's name put in
       const teamWord = { team1: team1Name || t('common.team1'), team2: team2Name || t('common.team2') }
-      const validationErrors = coinTossConfirmIssues({ match, team1Name, team2Name, team1Roster, team2Roster, manageDob })
+      const validationErrors = coinTossConfirmIssues({ match, team1Name, team2Name, team1Roster, team2Roster, manageLicence })
         .map(({ key, params }) => t(key, params?.team ? { ...params, team: teamWord[params.team] } : params))
       const allRosterPlayers = [...team1Roster, ...team2Roster]
 
@@ -1375,12 +1343,12 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
         return
       }
 
-      // 11. Check for dates that might be import errors (01.01.yyyy for any year) - ask for confirmation
-      if (manageDob) {
+      // 11. A date of birth on 1 January (often an import error; a licence never asks) - ask for confirmation
+      if (manageLicence) {
         const suspiciousDates = []
         allRosterPlayers.forEach(p => {
-          if (p.dob && (p.dob.startsWith('01.01.') || p.dob.startsWith('01/01/'))) {
-            suspiciousDates.push(`${p.lastName || ''} ${p.firstName || ''}: ${p.dob}`)
+          if (isJanuaryFirstDate(p.dob)) {
+            suspiciousDates.push(`${p.lastName || ''} ${p.firstName || ''}: ${displayIdValue(p.dob)}`)
           }
         })
         if (suspiciousDates.length > 0) {
@@ -1453,14 +1421,14 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               number: p.number,
               first_name: p.firstName,
               last_name: p.lastName,
-              dob: p.dob || null,
+              dob: idValueForSync(p.dob),
               is_captain: !!p.isCaptain
             })),
             players_team2: team2Roster.map(p => ({
               number: p.number,
               first_name: p.firstName,
               last_name: p.lastName,
-              dob: p.dob || null,
+              dob: idValueForSync(p.dob),
               is_captain: !!p.isCaptain
             })),
             officials: matchData.officials || []
@@ -1931,7 +1899,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                       <tr>
                         <th className="px-2 py-2 text-left">{t('roster.number')}</th>
                         <th className="px-2 py-2 text-left">{t('roster.name')}</th>
-                        {manageDob && <th className="w-[140px] px-2 py-2 text-left">{t('roster.dob')}</th>}
+                        {manageLicence && <th className="w-[140px] px-2 py-2 text-left" title={t('licence.hint')}>{t('licence.label')}</th>}
                         <th className="px-2 py-2 text-center">{t('coinToss.captain')}</th>
                         <th className="w-12"></th>
                       </tr>
@@ -1986,19 +1954,17 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                                 className={cellInput}
                               />
                             </td>
-                            {manageDob && <td className="w-[140px] px-2 py-1 align-middle">
-                              <DateField
+                            {manageLicence && <td className="w-[140px] px-2 py-1 align-middle">
+                              <IdValueInput
                                 size="bare"
-                                // 140px column: typed only (DD.MM.YYYY); the Add player dialog has the calendar
-                                calendar={false}
-                                aria-label={t('roster.dob')}
-                                value={p.dob ? formatDateToISO(p.dob) : ''}
-                                onChange={v => {
-                                  const value = v ? formatDateToDDMMYYYY(v) : ''
-                                  const updated = [...roster]
-                                  updated[originalIdx] = { ...updated[originalIdx], dob: value }
-                                  setRoster(updated)
-                                }}
+                                aria-label={t('licence.label')}
+                                title={t('licence.hint')}
+                                value={p.dob}
+                                onChange={v => setRoster(list => {
+                                  const updated = [...list]
+                                  updated[originalIdx] = { ...updated[originalIdx], dob: v }
+                                  return updated
+                                })}
                                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
                                 className={cn('tabular-nums', cellInput)}
                               />
@@ -2100,7 +2066,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
             showAlert(t('roster.enterNames'), 'warning')
             return
           }
-          const newPlayer = { number: num ? Number(num) : null, lastName: last, firstName: first, dob, isCaptain: captain }
+          const newPlayer = { number: num ? Number(num) : null, lastName: last, firstName: first, dob: cleanIdValue(dob), isCaptain: captain }
 
           if (currentTeam === 'team1') {
             setTeam1Roster(list => {
@@ -2170,18 +2136,18 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
                     className={cn(FIELD_INPUT, 'capitalize')}
                   />
                 </div>
-                {manageDob && <div>
-                  <label htmlFor="ob-ct-add-dob" className={FIELD_LABEL}>{t('roster.dateOfBirth')}</label>
-                  <DateField
-                    id="ob-ct-add-dob"
-                    size="lg"
-                    value={dob ? formatDateToISO(dob) : ''}
-                    onChange={v => {
-                      const value = v ? formatDateToDDMMYYYY(v) : ''
-                      currentTeam === 'team1' ? setTeam1Dob(value) : setTeam2Dob(value)
-                    }}
+                {manageLicence && <div>
+                  <label htmlFor="ob-ct-add-licence" className={FIELD_LABEL}>{t('licence.label')}</label>
+                  <IdValueInput
+                    id="ob-ct-add-licence"
+                    size="bare"
+                    className={cn(FIELD_INPUT, 'tabular-nums')}
+                    aria-describedby="ob-ct-add-licence-hint"
+                    value={dob}
+                    onChange={v => currentTeam === 'team1' ? setTeam1Dob(v) : setTeam2Dob(v)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
                   />
+                  <span id="ob-ct-add-licence-hint" className="mt-1 block text-xs text-stone-500">{t('licence.hint')}</span>
                 </div>}
                 <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-stone-700">
                   <input

@@ -11,6 +11,8 @@ import { randomUuid } from '../utils_beach/deviceId_beach'
 import { sanctionLabel } from '../utils_beach/corrections_beach'
 import { swapTeamDesignation as swapTeamDesignationPatch, coinTossCloud } from '../utils_beach/coinToss_beach'
 import CorrectionsPanel from './corrections/CorrectionsPanel_beach'
+import IdValueInput from './IdValueInput_beach'
+import { cleanIdValue, idValueForSync } from '../utils_beach/idValue_beach'
 import { isCustomColour } from '../utils_beach/teamColours_beach'
 
 // Standard volleyball team colors - keys for translation
@@ -55,32 +57,12 @@ function localDateTime(value) {
   return { date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, time: `${p(d.getHours())}:${p(d.getMinutes())}` }
 }
 
-/**
- * Convert various date formats to ISO yyyy-MM-dd for the date fields
- * Handles: DD.MM.YYYY, DD/MM/YYYY, MM/DD/YYYY, ISO format
- */
-function toISODate(dateStr) {
-  if (!dateStr) return ''
-
-  // Already in ISO format (yyyy-MM-dd)
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    return dateStr
-  }
-
-  // European format: DD.MM.YYYY or DD/MM/YYYY
-  const euroMatch = dateStr.match(/^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})$/)
-  if (euroMatch) {
-    const [, day, month, year] = euroMatch
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
-  }
-
-  // Try parsing as Date object
-  const date = new Date(dateStr)
-  if (!isNaN(date.getTime())) {
-    return date.toISOString().split('T')[0]
-  }
-
-  return ''
+/** The officials as saved: each value (licence or date of birth) cleaned, or as the cloud copy keeps it. */
+function officialsWithValues(officials, forCloud = false) {
+  return Object.fromEntries(Object.entries(officials || {}).map(([role, o]) => [
+    role,
+    { ...o, dob: forCloud ? idValueForSync(o?.dob) : cleanIdValue(o?.dob) }
+  ]))
 }
 
 /**
@@ -130,7 +112,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
   const [deletedEventIds, setDeletedEventIds] = useState([])
   const [newEvents, setNewEvents] = useState([])
 
-  // Editable state - Officials (with DOB)
+  // Editable state - Officials (with the licence value: a licence, or a date of birth)
   const [editedOfficials, setEditedOfficials] = useState({
     ref1: { firstName: '', lastName: '', country: '', dob: '' },
     ref2: { firstName: '', lastName: '', country: '', dob: '' },
@@ -475,7 +457,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
             set3LeftTeam: editedMatch.set3LeftTeam ?? null,
             setLeftTeamOverrides: editedMatch.setLeftTeamOverrides
           } : {}),
-          officials: editedOfficials,
+          officials: officialsWithValues(editedOfficials),
           manualChanges: [...existingChanges, ...changes]
         })
       }
@@ -486,6 +468,8 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
           await db.players.update(player.id, {
             name: player.name,
             number: player.number,
+            // the licence (or date of birth) beside the name
+            dob: cleanIdValue(player.dob),
             isCaptain: player.isCaptain
           })
         }
@@ -498,6 +482,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
             teamId: player.teamId,
             name: player.name,
             number: player.number,
+            dob: cleanIdValue(player.dob),
             isCaptain: player.isCaptain,
             createdAt: new Date().toISOString()
           })
@@ -572,6 +557,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
         number: p.number,
         first_name: p.firstName || p.name?.split(' ')[0] || '',
         last_name: p.lastName || p.name?.split(' ').slice(1).join(' ') || '',
+        dob: idValueForSync(p.dob),
         is_captain: p.isCaptain || false
       }))
 
@@ -579,6 +565,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
         number: p.number,
         first_name: p.firstName || p.name?.split(' ')[0] || '',
         last_name: p.lastName || p.name?.split(' ').slice(1).join(' ') || '',
+        dob: idValueForSync(p.dob),
         is_captain: p.isCaptain || false
       }))
 
@@ -614,7 +601,7 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
           players_team2: playersTeam2,
           team1_data: team1Data,
           team2_data: team2Data,
-          officials: editedOfficials,
+          officials: officialsWithValues(editedOfficials, true),
           // the first server the swap kept, in the cloud coin toss
           ...(editedMatch._designationSwapped ? { coin_toss: coinTossCloud(editedMatch) } : {}),
           manual_changes: [...(editedMatch.manualChanges || []), ...changes]
@@ -879,13 +866,13 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                               placeholder={t('manualAdjustmentsEditor.lastName', 'Last Name')}
                               style={{ ...inputStyle, padding: '6px 8px' }}
                             />
-                            <DateField
+                            <IdValueInput
                               size="bare"
-                              // 90px column: typed only (DD.MM.YYYY)
-                              calendar={false}
-                              value={toISODate(player.dob)}
+                              value={player.dob}
                               onChange={(v) => updatePlayer(player.id, 'dob', v, true)}
-                              aria-label={`#${player.number} ${t('roster.dateOfBirth')}`}
+                              aria-label={`#${player.number} ${t('licence.label')}`}
+                              placeholder={t('licence.label')}
+                              title={t('licence.hint')}
                               style={{ ...inputStyle, padding: '4px', fontSize: '11px' }}
                             />
                           </div>
@@ -1004,13 +991,13 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                               placeholder={t('manualAdjustmentsEditor.lastName', 'Last Name')}
                               style={{ ...inputStyle, padding: '6px 8px' }}
                             />
-                            <DateField
+                            <IdValueInput
                               size="bare"
-                              // 90px column: typed only (DD.MM.YYYY)
-                              calendar={false}
-                              value={toISODate(player.dob)}
+                              value={player.dob}
                               onChange={(v) => updatePlayer(player.id, 'dob', v, false)}
-                              aria-label={`#${player.number} ${t('roster.dateOfBirth')}`}
+                              aria-label={`#${player.number} ${t('licence.label')}`}
+                              placeholder={t('licence.label')}
+                              title={t('licence.hint')}
                               style={{ ...inputStyle, padding: '4px', fontSize: '11px' }}
                             />
                           </div>
@@ -1190,11 +1177,13 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                       onChange={(e) => updateOfficial('ref1', 'country', e.target.value)}
                       style={{ ...inputStyle, padding: '6px 8px' }}
                     />
-                    <DateField
+                    <IdValueInput
                       size="bare"
-                      value={toISODate(editedOfficials.ref1.dob)}
+                      value={editedOfficials.ref1.dob}
                       onChange={(v) => updateOfficial('ref1', 'dob', v)}
-                      aria-label={`${t('manualAdjustmentsEditor.firstReferee', '1st referee')} ${t('roster.dateOfBirth')}`}
+                      aria-label={`${t('manualAdjustmentsEditor.firstReferee', '1st referee')} ${t('licence.label')}`}
+                      placeholder={t('licence.label')}
+                      title={t('licence.hint')}
                       style={{ ...inputStyle, padding: '4px', fontSize: '11px' }}
                     />
                   </div>
@@ -1225,11 +1214,13 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                       onChange={(e) => updateOfficial('ref2', 'country', e.target.value)}
                       style={{ ...inputStyle, padding: '6px 8px' }}
                     />
-                    <DateField
+                    <IdValueInput
                       size="bare"
-                      value={toISODate(editedOfficials.ref2.dob)}
+                      value={editedOfficials.ref2.dob}
                       onChange={(v) => updateOfficial('ref2', 'dob', v)}
-                      aria-label={`${t('manualAdjustmentsEditor.secondReferee', '2nd referee')} ${t('roster.dateOfBirth')}`}
+                      aria-label={`${t('manualAdjustmentsEditor.secondReferee', '2nd referee')} ${t('licence.label')}`}
+                      placeholder={t('licence.label')}
+                      title={t('licence.hint')}
                       style={{ ...inputStyle, padding: '4px', fontSize: '11px' }}
                     />
                   </div>
@@ -1253,11 +1244,13 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                       onChange={(e) => updateOfficial('scorer', 'lastName', e.target.value)}
                       style={{ ...inputStyle, padding: '6px 8px' }}
                     />
-                    <DateField
+                    <IdValueInput
                       size="bare"
-                      value={toISODate(editedOfficials.scorer.dob)}
+                      value={editedOfficials.scorer.dob}
                       onChange={(v) => updateOfficial('scorer', 'dob', v)}
-                      aria-label={`${t('manualAdjustmentsEditor.scorer', 'Scorer')} ${t('roster.dateOfBirth')}`}
+                      aria-label={`${t('manualAdjustmentsEditor.scorer', 'Scorer')} ${t('licence.label')}`}
+                      placeholder={t('licence.label')}
+                      title={t('licence.hint')}
                       style={{ ...inputStyle, padding: '4px', fontSize: '11px' }}
                     />
                   </div>
@@ -1281,11 +1274,13 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
                       onChange={(e) => updateOfficial('asstScorer', 'lastName', e.target.value)}
                       style={{ ...inputStyle, padding: '6px 8px' }}
                     />
-                    <DateField
+                    <IdValueInput
                       size="bare"
-                      value={toISODate(editedOfficials.asstScorer.dob)}
+                      value={editedOfficials.asstScorer.dob}
                       onChange={(v) => updateOfficial('asstScorer', 'dob', v)}
-                      aria-label={`${t('manualAdjustmentsEditor.assistantScorer', 'Assistant scorer')} ${t('roster.dateOfBirth')}`}
+                      aria-label={`${t('manualAdjustmentsEditor.assistantScorer', 'Assistant scorer')} ${t('licence.label')}`}
+                      placeholder={t('licence.label')}
+                      title={t('licence.hint')}
                       style={{ ...inputStyle, padding: '4px', fontSize: '11px' }}
                     />
                   </div>

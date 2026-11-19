@@ -34,7 +34,7 @@ describe('coinTossConfirmIssues', () => {
       match: { ...ready.match, hall: '', officials: [] },
       team1Roster: [{ number: 1, lastName: 'Müller', firstName: 'A' }, { number: 1, lastName: 'müller', firstName: 'a' }],
       team2Roster: [{ number: '', lastName: 'Schmidt', firstName: 'S', isCaptain: true }, { number: 120, lastName: 'Fischer', firstName: 'M', dob: '01.01.1900' }],
-      manageDob: true
+      manageLicence: true
     })
     expect(issues).toEqual([
       { key: 'validation.team1NotSet' },
@@ -45,22 +45,33 @@ describe('coinTossConfirmIssues', () => {
       { key: 'validation.captainNotSet', params: { team: 'team1' } },
       { key: 'validation.duplicateNumbers', params: { team: 'team1', numbers: '1' } },
       { key: 'validation.duplicatePlayers', params: { team: 'team1', names: 'müller a' } },
-      { key: 'validation.invalidBirthdate' },
+      { key: 'validation.placeholderLicence' },
       // the blank number is not invalid too
       { key: 'validation.invalidJerseyNumbers', params: { team: 'team2', numbers: '120' } },
       { key: 'validation.playersWithoutNumbers', params: { team: 'team2', count: 1 } }
     ])
   })
 
-  it('01.01.1900 counts only when dates of birth are kept', () => {
+  it('01.01.1900 counts only when the licence column is kept', () => {
     const roster = [{ ...ready.team1Roster[0], dob: '01.01.1900' }, ready.team1Roster[1]]
     expect(coinTossConfirmIssues({ ...ready, team1Roster: roster })).toEqual([])
+  })
+
+  it('a licence or a real date of birth passes; the placeholder in any form does not', () => {
+    const withValues = (a, b) => [{ ...ready.team1Roster[0], dob: a }, { ...ready.team1Roster[1], dob: b }]
+    expect(coinTossConfirmIssues({ ...ready, team1Roster: withValues('123456', '14.03.2008'), manageLicence: true })).toEqual([])
+    // an empty value is not refused (Match setup only notes it)
+    expect(coinTossConfirmIssues({ ...ready, team1Roster: withValues('', null), manageLicence: true })).toEqual([])
+    for (const placeholder of ['01.01.1900', '01/01/1900', '1900-01-01']) {
+      expect(coinTossConfirmIssues({ ...ready, team1Roster: withValues(placeholder, '123456'), manageLicence: true }))
+        .toEqual([{ key: 'validation.placeholderLicence' }])
+    }
   })
 
   it('every key it gives is translated in all five locales (not the English text)', () => {
     const en = locale('en').validation
     const keys = ['team1NotSet', 'team2NotSet', 'refereeNotSet', 'scorerNotSet', 'hallNotSet', 'cityNotSet', 'leagueNotSet', 'dateNotSet',
-      'needMorePlayers', 'captainNotSet', 'duplicateNumbers', 'duplicatePlayers', 'invalidBirthdate', 'invalidJerseyNumbers', 'playersWithoutNumbers']
+      'needMorePlayers', 'captainNotSet', 'duplicateNumbers', 'duplicatePlayers', 'placeholderLicence', 'invalidJerseyNumbers', 'playersWithoutNumbers']
     for (const l of ['de', 'de-CH', 'fr', 'it']) {
       const v = locale(l).validation
       for (const k of keys) {
@@ -74,7 +85,7 @@ describe('coinTossConfirmIssues', () => {
   it('the coin toss puts no English literal in its checks, and the team\'s name in them', () => {
     const src = readFileSync(resolve(__dirname, '../../components_beach/CoinToss_beach.jsx'), 'utf8')
     expect(src).not.toMatch(/validationErrors\.push\(/)
-    expect(src).toMatch(/coinTossConfirmIssues\(\{ match, team1Name, team2Name, team1Roster, team2Roster, manageDob \}\)/)
+    expect(src).toMatch(/coinTossConfirmIssues\(\{ match, team1Name, team2Name, team1Roster, team2Roster, manageLicence \}\)/)
     expect(src).toMatch(/team: teamWord\[params\.team\]/)
   })
 })

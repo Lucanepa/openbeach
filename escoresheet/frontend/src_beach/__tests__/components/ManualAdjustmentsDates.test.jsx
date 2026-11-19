@@ -35,7 +35,7 @@ beforeEach(async () => {
   const team2Id = await db.teams.add({ name: 'Rossi / Bianchi' })
   await db.players.bulkAdd([
     { teamId: team1Id, number: 1, firstName: 'Anna', lastName: 'Müller', dob: '1990-02-14' },
-    { teamId: team1Id, number: 2, firstName: 'Lea', lastName: 'Weber', dob: '' }
+    { teamId: team1Id, number: 2, firstName: 'Lea', lastName: 'Weber', dob: '123456' }
   ])
   matchId = await db.matches.add({
     team1Id, team2Id, status: 'ended',
@@ -89,19 +89,29 @@ describe('ManualAdjustments_beach dates', () => {
     expect(screen.getByLabelText('Scheduled time (24 h)')).toHaveValue('18:30')
   })
 
-  it('officials: a kit date field (DD.MM.YYYY with the calendar), no native picker', async () => {
+  // The value beside a name is the licence, or a date of birth typed with
+  // dots (owner 19.11.2026): a text field with a full keyboard (an iPad's
+  // numeric keypad has no "."), never a native date picker
+  it('officials: the licence field, a stored date shown as dd.mm.yyyy, no native picker', async () => {
     await openTab('Match info')
-    const dob = await screen.findByLabelText('1st referee Date of birth')
-    expect(dob).toHaveAttribute('type', 'text')
-    expect(dob).toHaveValue('01.05.1980')
+    const value = await screen.findByLabelText('1st referee Licence')
+    expect(value).toHaveAttribute('type', 'text')
+    expect(value).toHaveAttribute('inputmode', 'text')
+    expect(value).toHaveValue('01.05.1980')
     expect(document.querySelector('input[type="date"], input[type="time"], input[type="datetime-local"]')).toBeNull()
   })
 
-  it('players: typed dates of birth, no native picker', async () => {
+  it('players: a licence or a date of birth, typed; no native picker', async () => {
     await openTab('Teams & players')
-    const dob = await screen.findByLabelText('#1 Date of birth')
-    expect(dob).toHaveValue('14.02.1990')
+    expect(await screen.findByLabelText('#1 Licence')).toHaveValue('14.02.1990')
+    const licence = screen.getByLabelText('#2 Licence')
+    expect(licence).toHaveValue('123456')
     expect(document.querySelector('input[type="date"]')).toBeNull()
+    // a date typed with slashes is kept as dd.mm.yyyy once the field is left
+    fireEvent.focus(licence)
+    await act(async () => { fireEvent.change(licence, { target: { value: '4/3/2008' } }) })
+    await act(async () => { fireEvent.blur(licence) })
+    expect(screen.getByLabelText('#2 Licence')).toHaveValue('04.03.2008')
   })
 })
 

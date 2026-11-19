@@ -43,8 +43,8 @@ const matchOptions = (over = {}) => ({
   setAccidentalPointAwardDuration: vi.fn(),
   keybindingsEnabled: false,
   setKeybindingsEnabled: vi.fn(),
-  manageDob: false,
-  setManageDob: vi.fn(),
+  manageLicence: false,
+  setManageLicence: vi.fn(),
   scoreFont: 'default',
   setScoreFont: vi.fn(),
   ...over
@@ -77,10 +77,10 @@ describe('Home → Options', () => {
     const opts = renderHome()
     const rally = screen.getByRole('switch', { name: 'Check accidental rally start' })
     expect(rally).toHaveAttribute('aria-checked', 'true')
-    const dob = screen.getByRole('switch', { name: 'Manage date of birth' })
-    expect(dob).toHaveAttribute('aria-checked', 'false')
-    fireEvent.click(dob)
-    expect(opts.setManageDob).toHaveBeenCalledWith(true)
+    const licence = screen.getByRole('switch', { name: 'Licence numbers' })
+    expect(licence).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(licence)
+    expect(opts.setManageLicence).toHaveBeenCalledWith(true)
     for (const sw of screen.getAllByRole('switch')) expect(sw).toHaveAccessibleName()
     // explanations open on tap: real buttons with a name
     expect(screen.getAllByRole('button', { name: 'Show explanation' }).length).toBeGreaterThan(3)

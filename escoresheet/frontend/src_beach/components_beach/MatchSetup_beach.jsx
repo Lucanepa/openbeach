@@ -10,6 +10,8 @@ import SignaturePad from './SignaturePad_beach'
 import RefereeSelector from './RefereeSelector_beach'
 import CountrySelect from './CountrySelect_beach'
 import CountryFlag from './CountryFlag_beach'
+import IdValueInput from './IdValueInput_beach'
+import { cleanIdValue, displayIdValue, idValueForSync, isPlaceholderValue, licenceOf, readManageLicence } from '../utils_beach/idValue_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
 import { isBackendAvailable, isRelayOriginPage, getCloudApiUrl, BEACH_DESKTOP_HTTP_PORT } from '../utils_beach/backendConfig_beach'
@@ -71,58 +73,17 @@ const DIALOG_LAYER = { position: 'relative', zIndex: 1000 }
 // kept from the legacy green), a quiet outline otherwise.
 const CAPTAIN_ON = 'border-emerald-600 bg-emerald-50 text-emerald-700'
 const CAPTAIN_OFF = 'border-stone-300 bg-white text-stone-400 hover:bg-stone-50'
-// One roster row: number toggles, last / first name, (date of birth), C,
+// One roster row: number toggles, last / first name, (licence), C,
 // Clear. On a phone the row stacks: numbers, C and Clear on top, one field
 // per line under them (the fields carry their names as placeholders).
 // The captain column fits its header word ("Captain", not a bare "C")
 const ROSTER_GRID = 'grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)_84px_auto]'
-const ROSTER_GRID_DOB = 'sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)_170px_84px_auto]'
+// With the licence column (a licence, or a date of birth typed dd.mm.yyyy)
+const ROSTER_GRID_LICENCE = 'sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)_170px_84px_auto]'
 // A player's row: on a phone the numbers, C and Clear in a row that wraps
 // (at 130 % text the three ran past the card, Clear and the name fields with
 // them, OpenVolley 7ef94cdb), the name fields a line each; the grid from sm up
 const ROSTER_ROW = 'flex flex-wrap items-center gap-2 sm:grid sm:grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)_84px_auto]'
-
-// Date formatting helpers (outside component to avoid recreation)
-function formatDateToDDMMYYYY(dateStr) {
-  if (!dateStr) return ''
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) return dateStr
-  if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateStr)) {
-    return dateStr.replace(/\./g, '/')
-  }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    const [year, month, day] = dateStr.split('-')
-    return `${day}/${month}/${year}`
-  }
-  const date = new Date(dateStr)
-  if (!isNaN(date.getTime())) {
-    const day = String(date.getDate()).padStart(2, '0')
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const year = date.getFullYear()
-    return `${day}/${month}/${year}`
-  }
-  return dateStr
-}
-
-function formatDateToISO(dateStr) {
-  if (!dateStr) return ''
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
-    const [day, month, year] = dateStr.split('/')
-    return `${year}-${month}-${day}`
-  }
-  if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateStr)) {
-    const [day, month, year] = dateStr.split('.')
-    return `${year}-${month}-${day}`
-  }
-  const date = new Date(dateStr)
-  if (!isNaN(date.getTime())) {
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }
-  return dateStr
-}
 
 // Helper to safely parse a date and extract components for input fields
 // Uses UTC methods to avoid timezone conversion - time is stored and displayed as-entered
@@ -136,19 +97,22 @@ function buildOfficialsArray(ref1, ref2, scorer, asst, lineJudges = {}, useSnake
   const officials = []
   const fnKey = useSnakeCase ? 'first_name' : 'firstName'
   const lnKey = useSnakeCase ? 'last_name' : 'lastName'
+  // The value beside the name (licence or date of birth): kept clean on the
+  // device; in the cloud copy a licence verbatim and a date as YYYY-MM-DD
+  const idValue = (o) => (useSnakeCase ? idValueForSync(o.dob) : (cleanIdValue(o.dob) || null))
 
   // Add main officials only if they have a name
   if (ref1?.firstName || ref1?.lastName || ref1?.first_name || ref1?.last_name) {
-    officials.push({ role: '1st referee', [fnKey]: ref1.firstName || ref1.first_name || '', [lnKey]: ref1.lastName || ref1.last_name || '', country: ref1.country || null, dob: ref1.dob || null })
+    officials.push({ role: '1st referee', [fnKey]: ref1.firstName || ref1.first_name || '', [lnKey]: ref1.lastName || ref1.last_name || '', country: ref1.country || null, dob: idValue(ref1) })
   }
   if (ref2?.firstName || ref2?.lastName || ref2?.first_name || ref2?.last_name) {
-    officials.push({ role: '2nd referee', [fnKey]: ref2.firstName || ref2.first_name || '', [lnKey]: ref2.lastName || ref2.last_name || '', country: ref2.country || null, dob: ref2.dob || null })
+    officials.push({ role: '2nd referee', [fnKey]: ref2.firstName || ref2.first_name || '', [lnKey]: ref2.lastName || ref2.last_name || '', country: ref2.country || null, dob: idValue(ref2) })
   }
   if (scorer?.firstName || scorer?.lastName || scorer?.first_name || scorer?.last_name) {
-    officials.push({ role: 'scorer', [fnKey]: scorer.firstName || scorer.first_name || '', [lnKey]: scorer.lastName || scorer.last_name || '', country: scorer.country || null, dob: scorer.dob || null })
+    officials.push({ role: 'scorer', [fnKey]: scorer.firstName || scorer.first_name || '', [lnKey]: scorer.lastName || scorer.last_name || '', country: scorer.country || null, dob: idValue(scorer) })
   }
   if (asst?.firstName || asst?.lastName || asst?.first_name || asst?.last_name) {
-    officials.push({ role: 'assistant scorer', [fnKey]: asst.firstName || asst.first_name || '', [lnKey]: asst.lastName || asst.last_name || '', country: asst.country || null, dob: asst.dob || null })
+    officials.push({ role: 'assistant scorer', [fnKey]: asst.firstName || asst.first_name || '', [lnKey]: asst.lastName || asst.last_name || '', country: asst.country || null, dob: idValue(asst) })
   }
 
   // Add line judges if present
@@ -281,7 +245,7 @@ const OfficialCard = memo(function OfficialCard({
   isExpanded,
   onToggleExpanded,
   onOpenDatabase,
-  manageDob = false,
+  manageLicence = false,
   t
 }) {
   const displayName = lastName || firstName
@@ -336,7 +300,7 @@ const OfficialCard = memo(function OfficialCard({
           <Field tone="compact" className={FIELD} label={t('matchSetup.lastName')}><Input size="lg" className="capitalize" value={lastName} onChange={e => setLastName(e.target.value)} /></Field>
           <Field tone="compact" className={FIELD} label={t('matchSetup.firstName')}><Input size="lg" className="capitalize" value={firstName} onChange={e => setFirstName(e.target.value)} /></Field>
           <Field tone="compact" className={FIELD} label={t('matchSetup.country')}><Input size="lg" value={country} onChange={e => setCountry(e.target.value)} /></Field>
-          {manageDob && <Field tone="compact" className={FIELD} label={t('matchSetup.dateOfBirth')}><Input size="lg" type="date" value={dob ? formatDateToISO(dob) : ''} onChange={e => setDob(e.target.value ? formatDateToDDMMYYYY(e.target.value) : '')} /></Field>}
+          {manageLicence && <Field tone="compact" className={FIELD} label={t('licence.label')} hint={t('licence.hint')}><IdValueInput size="lg" value={dob} onChange={setDob} data-testid={officialKey ? `${officialKey}-licence` : undefined} /></Field>}
         </div>
       )}
     </div>
@@ -409,26 +373,6 @@ function generateShortName(name) {
   return name.trim().toUpperCase()
 }
 
-// Helper to convert DOB from DD.MM.YYYY to YYYY-MM-DD for Supabase date columns
-function formatDobForSync(dob) {
-  if (!dob) return null
-  // Already in ISO format (YYYY-MM-DD)?
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dob)) return dob
-  // DD.MM.YYYY format?
-  const match = dob.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/)
-  if (match) {
-    const [, day, month, year] = match
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
-  }
-  // DD/MM/YYYY format?
-  const match2 = dob.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (match2) {
-    const [, day, month, year] = match2
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
-  }
-  return null // Unknown format, don't sync
-}
-
 // What Match Setup shows of a stored match, read in one go: the match, its
 // teams and their players
 function readSetup(matchId) {
@@ -491,7 +435,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   const [court, setCourt] = useState('') // Court
   const [type2, setType2] = useState('men') // Gender: men | women
   const [hasCoach, setHasCoach] = useState(false) // Whether coaches are present
-  const manageDob = localStorage.getItem('manageDob') === 'true'
+  // The licence column beside each name (Options > Licence numbers)
+  const manageLicence = readManageLicence()
   const [phase, setPhase] = useState('main') // Phase: main (Main Draw) | qualification
   const [round, setRound] = useState('pool') // Round: pool | winner | class | semifinals | finals
   const [team1Color, setTeam1Color] = useState(DEFAULT_TEAM1_COLOUR)
@@ -557,35 +502,33 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   const [team1Num, setTeam1Num] = useState('')
   const [team1First, setTeam1First] = useState('')
   const [team1Last, setTeam1Last] = useState('')
-  const [team1Dob, setTeam1Dob] = useState('')
   const [team1CaptainForm, setTeam1CaptainForm] = useState(false)
 
   const [team2Num, setTeam2Num] = useState('')
   const [team2First, setTeam2First] = useState('')
   const [team2Last, setTeam2Last] = useState('')
-  const [team2Dob, setTeam2Dob] = useState('')
   const [team2CaptainForm, setTeam2CaptainForm] = useState(false)
 
   // Officials
   const [ref1First, setRef1First] = useState('')
   const [ref1Last, setRef1Last] = useState('')
   const [ref1Country, setRef1Country] = useState('CHE')
-  const [ref1Dob, setRef1Dob] = useState('01.01.1900')
+  const [ref1Dob, setRef1Dob] = useState('')
 
   const [ref2First, setRef2First] = useState('')
   const [ref2Last, setRef2Last] = useState('')
   const [ref2Country, setRef2Country] = useState('CHE')
-  const [ref2Dob, setRef2Dob] = useState('01.01.1900')
+  const [ref2Dob, setRef2Dob] = useState('')
 
   const [scorerFirst, setScorerFirst] = useState('')
   const [scorerLast, setScorerLast] = useState('')
   const [scorerCountry, setScorerCountry] = useState('CHE')
-  const [scorerDob, setScorerDob] = useState('01.01.1900')
+  const [scorerDob, setScorerDob] = useState('')
 
   const [asstFirst, setAsstFirst] = useState('')
   const [asstLast, setAsstLast] = useState('')
   const [asstCountry, setAsstCountry] = useState('CHE')
-  const [asstDob, setAsstDob] = useState('01.01.1900')
+  const [asstDob, setAsstDob] = useState('')
 
   // Line Judges (only names needed)
   const [lineJudge1, setLineJudge1] = useState('')
@@ -1148,28 +1091,28 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             setRef1First(ref1.firstName || '')
             setRef1Last(ref1.lastName || '')
             setRef1Country(ref1.country || 'CHE')
-            setRef1Dob(ref1.dob || '01.01.1900')
+            setRef1Dob(displayIdValue(ref1.dob))
           }
           const ref2 = match.officials.find(o => o.role === '2nd referee')
           if (ref2) {
             setRef2First(ref2.firstName || '')
             setRef2Last(ref2.lastName || '')
             setRef2Country(ref2.country || 'CHE')
-            setRef2Dob(ref2.dob || '01.01.1900')
+            setRef2Dob(displayIdValue(ref2.dob))
           }
           const scorer = match.officials.find(o => o.role === 'scorer')
           if (scorer) {
             setScorerFirst(scorer.firstName || '')
             setScorerLast(scorer.lastName || '')
             setScorerCountry(scorer.country || 'CHE')
-            setScorerDob(scorer.dob || '01.01.1900')
+            setScorerDob(displayIdValue(scorer.dob))
           }
           const asst = match.officials.find(o => o.role === 'assistant scorer')
           if (asst) {
             setAsstFirst(asst.firstName || '')
             setAsstLast(asst.lastName || '')
             setAsstCountry(asst.country || 'CHE')
-            setAsstDob(asst.dob || '01.01.1900')
+            setAsstDob(displayIdValue(asst.dob))
           }
           // Load line judges
           const lj1 = match.officials.find(o => o.role === 'line judge 1')
@@ -1322,13 +1265,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
     if (userProfile.first_name) setScorerFirst(userProfile.first_name)
     if (userProfile.last_name) setScorerLast(userProfile.last_name)
     if (userProfile.country) setScorerCountry(userProfile.country)
-    if (userProfile.dob) {
-      // Convert ISO date (YYYY-MM-DD) to DD.MM.YYYY format used by the app
-      const dobParts = userProfile.dob.split('-')
-      if (dobParts.length === 3) {
-        setScorerDob(`${dobParts[2]}.${dobParts[1]}.${dobParts[0]}`)
-      }
-    }
+    // The account's licence number (accounts carry no date of birth)
+    if (userProfile.license_number) setScorerDob(licenceOf(userProfile.license_number))
   }, [profile, scorerFirst, scorerLast])
 
   // Server management - Only check in Electron
@@ -2182,28 +2120,22 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       return
     }
 
-    // Validate birthdates - check for suspicious dates (only when DOB management is enabled)
-    if (manageDob) {
+    // The licence column (only when it is kept): the 01.01.1900 placeholder
+    // stands for a missing licence (an import error) and blocks; a missing
+    // value is only noted (the count, never a name)
+    if (manageLicence) {
       const allPlayers = [...team1Roster, ...team2Roster]
-      const playersWithBadDate = allPlayers.filter(p =>
-        p.dob === '01.01.1900' || p.dob === '01/01/1900' || p.dob === '1900-01-01'
-      )
-      if (playersWithBadDate.length > 0) {
-        const badNames = playersWithBadDate.map(p => `${p.lastName || ''} ${p.firstName || ''} (#${p.number})`).join('\n')
+      const playersWithPlaceholder = allPlayers.filter(p => isPlaceholderValue(p.dob))
+      if (playersWithPlaceholder.length > 0) {
+        const badNames = playersWithPlaceholder.map(p => `${p.lastName || ''} ${p.firstName || ''} (#${p.number})`).join('\n')
         setNoticeModal({
-          message: `Some players have invalid birthdate (01.01.1900):\n\n${badNames}\n\nPlease correct these dates before proceeding.`
+          message: `${t('validation.placeholderLicence')}\n\n${badNames}`
         })
         return
       }
 
-      // Check for missing birthdates (warning, not blocking)
-      const playersWithoutDob = allPlayers.filter(p => !p.dob && (p.firstName || p.lastName))
-      if (playersWithoutDob.length > 0) {
-        const missingNames = playersWithoutDob.slice(0, 5).map(p => `${p.lastName || ''} ${p.firstName || ''} (#${p.number})`).join('\n')
-        const moreCount = playersWithoutDob.length > 5 ? `\n...and ${playersWithoutDob.length - 5} more` : ''
-        // This is just a warning - show it but continue
-        console.warn(`[MatchSetup] Players missing birthdate:\n${missingNames}${moreCount}`)
-      }
+      const withoutValue = allPlayers.filter(p => !cleanIdValue(p.dob) && (p.firstName || p.lastName)).length
+      if (withoutValue > 0) console.warn(`[MatchSetup] ${withoutValue} player(s) without a licence`)
     }
 
     // Match PIN code (for opening/continuing match), in the app's own dialog
@@ -2340,14 +2272,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             number: p.number,
             first_name: p.firstName,
             last_name: p.lastName,
-            dob: formatDobForSync(p.dob),
+            dob: idValueForSync(p.dob),
             is_captain: !!p.isCaptain
           })),
           players_team2: team2Roster.map(p => ({
             number: p.number,
             first_name: p.firstName,
             last_name: p.lastName,
-            dob: formatDobForSync(p.dob),
+            dob: idValueForSync(p.dob),
             is_captain: !!p.isCaptain
           })),
           officials: buildOfficialsArray(
@@ -2395,7 +2327,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             name: `${p.lastName} ${p.firstName}`,
             lastName: p.lastName,
             firstName: p.firstName,
-            dob: p.dob || null,
+            dob: cleanIdValue(p.dob) || null,
             isCaptain: !!p.isCaptain,
             role: null,
             createdAt: new Date().toISOString()
@@ -2410,7 +2342,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             name: `${p.lastName} ${p.firstName}`,
             lastName: p.lastName,
             firstName: p.firstName,
-            dob: p.dob || null,
+            dob: cleanIdValue(p.dob) || null,
             isCaptain: !!p.isCaptain,
             role: null,
             createdAt: new Date().toISOString()
@@ -3131,7 +3063,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             isExpanded={expandedOfficialId === 'ref1'}
             onToggleExpanded={() => toggleOfficialExpanded('ref1')}
             onOpenDatabase={handleOpenDatabase}
-            manageDob={manageDob}
+            manageLicence={manageLicence}
             t={t}
           />
           <OfficialCard
@@ -3150,7 +3082,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             isExpanded={expandedOfficialId === 'ref2'}
             onToggleExpanded={() => toggleOfficialExpanded('ref2')}
             onOpenDatabase={handleOpenDatabase}
-            manageDob={manageDob}
+            manageLicence={manageLicence}
             t={t}
           />
           <OfficialCard
@@ -3169,7 +3101,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             isExpanded={expandedOfficialId === 'scorer'}
             onToggleExpanded={() => toggleOfficialExpanded('scorer')}
             onOpenDatabase={handleOpenDatabase}
-            manageDob={manageDob}
+            manageLicence={manageLicence}
             t={t}
           />
           <OfficialCard
@@ -3186,7 +3118,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             isExpanded={expandedOfficialId === 'asst'}
             onToggleExpanded={() => toggleOfficialExpanded('asst')}
             onOpenDatabase={handleOpenDatabase}
-            manageDob={manageDob}
+            manageLicence={manageLicence}
             t={t}
           />
           <LineJudgesCard
@@ -3212,17 +3144,17 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               setRef1First(referee.firstName || '')
               setRef1Last(referee.lastName || '')
               setRef1Country(referee.country || 'CHE')
-              setRef1Dob(referee.dob || '01.01.1900')
+              setRef1Dob('')
             } else if (showRefereeSelector === 'ref2') {
               setRef2First(referee.firstName || '')
               setRef2Last(referee.lastName || '')
               setRef2Country(referee.country || 'CHE')
-              setRef2Dob(referee.dob || '01.01.1900')
+              setRef2Dob('')
             } else if (showRefereeSelector === 'scorer') {
               setScorerFirst(referee.firstName || '')
               setScorerLast(referee.lastName || '')
               setScorerCountry(referee.country || 'CHE')
-              setScorerDob(referee.dob || '01.01.1900')
+              setScorerDob('')
             }
           }}
           position={refereeSelectorPosition}
@@ -3267,10 +3199,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                   payload: {
                     id: matchForOfficials.seed_key,
                     officials: buildOfficialsArray(
-                      { firstName: ref1First, lastName: ref1Last, country: ref1Country, dob: formatDobForSync(ref1Dob) },
-                      { firstName: ref2First, lastName: ref2Last, country: ref2Country, dob: formatDobForSync(ref2Dob) },
-                      { firstName: scorerFirst, lastName: scorerLast, country: scorerCountry, dob: formatDobForSync(scorerDob) },
-                      { firstName: asstFirst, lastName: asstLast, country: asstCountry, dob: formatDobForSync(asstDob) },
+                      { firstName: ref1First, lastName: ref1Last, country: ref1Country, dob: idValueForSync(ref1Dob) },
+                      { firstName: ref2First, lastName: ref2Last, country: ref2Country, dob: idValueForSync(ref2Dob) },
+                      { firstName: scorerFirst, lastName: scorerLast, country: scorerCountry, dob: idValueForSync(scorerDob) },
+                      { firstName: asstFirst, lastName: asstLast, country: asstCountry, dob: idValueForSync(asstDob) },
                       { lj1: lineJudge1, lj2: lineJudge2, lj3: lineJudge3, lj4: lineJudge4 },
                       true // useSnakeCase for Supabase
                     )
@@ -3411,11 +3343,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
         <div className="rounded-lg border border-stone-200 bg-white">
           {/* Roster Header Row (landscape; on a phone each row stacks and the fields carry placeholders) */}
-          <div className={cn(ROSTER_GRID, manageDob && ROSTER_GRID_DOB, 'hidden rounded-t-[7px] border-b border-stone-200 bg-stone-50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-stone-500 sm:grid')}>
+          <div className={cn(ROSTER_GRID, manageLicence && ROSTER_GRID_LICENCE, 'hidden rounded-t-[7px] border-b border-stone-200 bg-stone-50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-stone-500 sm:grid')}>
             <div className="text-center">#</div>
             <div>{t('matchSetup.lastName')}</div>
             <div>{t('matchSetup.firstName')}</div>
-            {manageDob && <div>{t('matchSetup.dateOfBirth')}</div>}
+            {manageLicence && <div>{t('licence.label')}</div>}
             <div className="text-center" data-testid="roster-captain-header">{t('matchSetup.captain')}</div>
             <div />
           </div>
@@ -3425,7 +3357,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             const isCaptain = p.isCaptain || false
 
             return (
-              <div key={`h-${i}`} className={cn(ROSTER_ROW, manageDob && ROSTER_GRID_DOB, 'px-3 py-2.5', isCaptain && 'bg-emerald-50/60 ring-2 ring-inset ring-emerald-600', i === team1Roster.length - 1 && 'rounded-b-[7px]')}>
+              <div key={`h-${i}`} className={cn(ROSTER_ROW, manageLicence && ROSTER_GRID_LICENCE, 'px-3 py-2.5', isCaptain && 'bg-emerald-50/60 ring-2 ring-inset ring-emerald-600', i === team1Roster.length - 1 && 'rounded-b-[7px]')}>
                 {/* Shirt number: 1 or 2 (the other player takes the other number) */}
                 <div className="order-1 flex gap-1 sm:order-none" role="group" aria-label={t('roster.numberLabel')}>
                   {[1, 2].map(num => {
@@ -3487,19 +3419,20 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     setTeam1Roster(updated)
                   }}
                 />
-                {manageDob && <Input
+                {manageLicence && <IdValueInput
                   size="lg"
                   className="order-6 col-span-full sm:order-none sm:col-span-1"
-                  aria-label={t('matchSetup.dateOfBirth')}
-                  placeholder={t('matchSetup.dateOfBirthPlaceholder')}
-                  type="date"
-                  value={p.dob ? formatDateToISO(p.dob) : ''}
+                  aria-label={`#${p.number} ${t('licence.label')}`}
+                  placeholder={t('licence.placeholder')}
+                  title={t('licence.hint')}
+                  data-testid={`team1-licence-${i}`}
+                  value={p.dob}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-                  onChange={e => {
-                    const updated = [...team1Roster]
-                    updated[i] = { ...updated[i], dob: e.target.value ? formatDateToDDMMYYYY(e.target.value) : '' }
-                    setTeam1Roster(updated)
-                  }}
+                  onChange={v => setTeam1Roster(prev => {
+                    const updated = [...prev]
+                    updated[i] = { ...updated[i], dob: v }
+                    return updated
+                  })}
                 />}
                 <div className="order-2 flex flex-1 justify-end sm:order-none sm:justify-center">
                   <button
@@ -3620,7 +3553,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                       name: `${rosterPlayer.lastName} ${rosterPlayer.firstName}`,
                       lastName: rosterPlayer.lastName,
                       firstName: rosterPlayer.firstName,
-                      dob: rosterPlayer.dob || null,
+                      dob: cleanIdValue(rosterPlayer.dob) || null,
                       isCaptain: !!rosterPlayer.isCaptain
                     })
                   } else {
@@ -3631,7 +3564,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                       name: `${rosterPlayer.lastName} ${rosterPlayer.firstName}`,
                       lastName: rosterPlayer.lastName,
                       firstName: rosterPlayer.firstName,
-                      dob: rosterPlayer.dob || null,
+                      dob: cleanIdValue(rosterPlayer.dob) || null,
                       isCaptain: !!rosterPlayer.isCaptain,
                       role: null,
                       createdAt: new Date().toISOString()
@@ -3672,7 +3605,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                       number: p.number || null,
                       first_name: p.firstName || '',
                       last_name: p.lastName || '',
-                      dob: formatDobForSync(p.dob),
+                      dob: idValueForSync(p.dob),
                       is_captain: !!p.isCaptain
                     })),
                   },
@@ -3863,11 +3796,11 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
         <div className="rounded-lg border border-stone-200 bg-white">
           {/* Roster Header Row (landscape; on a phone each row stacks and the fields carry placeholders) */}
-          <div className={cn(ROSTER_GRID, manageDob && ROSTER_GRID_DOB, 'hidden rounded-t-[7px] border-b border-stone-200 bg-stone-50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-stone-500 sm:grid')}>
+          <div className={cn(ROSTER_GRID, manageLicence && ROSTER_GRID_LICENCE, 'hidden rounded-t-[7px] border-b border-stone-200 bg-stone-50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-stone-500 sm:grid')}>
             <div className="text-center">#</div>
             <div>{t('matchSetup.lastName')}</div>
             <div>{t('matchSetup.firstName')}</div>
-            {manageDob && <div>{t('matchSetup.dateOfBirth')}</div>}
+            {manageLicence && <div>{t('licence.label')}</div>}
             <div className="text-center" data-testid="roster-captain-header">{t('matchSetup.captain')}</div>
             <div />
           </div>
@@ -3877,7 +3810,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             const isCaptain = p.isCaptain || false
 
             return (
-              <div key={`a-${i}`} className={cn(ROSTER_ROW, manageDob && ROSTER_GRID_DOB, 'px-3 py-2.5', isCaptain && 'bg-emerald-50/60 ring-2 ring-inset ring-emerald-600', i === team2Roster.length - 1 && 'rounded-b-[7px]')}>
+              <div key={`a-${i}`} className={cn(ROSTER_ROW, manageLicence && ROSTER_GRID_LICENCE, 'px-3 py-2.5', isCaptain && 'bg-emerald-50/60 ring-2 ring-inset ring-emerald-600', i === team2Roster.length - 1 && 'rounded-b-[7px]')}>
                 {/* Shirt number: 1 or 2 (the other player takes the other number) */}
                 <div className="order-1 flex gap-1 sm:order-none" role="group" aria-label={t('roster.numberLabel')}>
                   {[1, 2].map(num => {
@@ -3939,19 +3872,20 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     setTeam2Roster(updated)
                   }}
                 />
-                {manageDob && <Input
+                {manageLicence && <IdValueInput
                   size="lg"
                   className="order-6 col-span-full sm:order-none sm:col-span-1"
-                  aria-label={t('matchSetup.dateOfBirth')}
-                  placeholder={t('matchSetup.dateOfBirthPlaceholder')}
-                  type="date"
-                  value={p.dob ? formatDateToISO(p.dob) : ''}
+                  aria-label={`#${p.number} ${t('licence.label')}`}
+                  placeholder={t('licence.placeholder')}
+                  title={t('licence.hint')}
+                  data-testid={`team2-licence-${i}`}
+                  value={p.dob}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-                  onChange={e => {
-                    const updated = [...team2Roster]
-                    updated[i] = { ...updated[i], dob: e.target.value ? formatDateToDDMMYYYY(e.target.value) : '' }
-                    setTeam2Roster(updated)
-                  }}
+                  onChange={v => setTeam2Roster(prev => {
+                    const updated = [...prev]
+                    updated[i] = { ...updated[i], dob: v }
+                    return updated
+                  })}
                 />}
                 <div className="order-2 flex flex-1 justify-end sm:order-none sm:justify-center">
                   <button
@@ -4072,7 +4006,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                       name: `${rosterPlayer.lastName} ${rosterPlayer.firstName}`,
                       lastName: rosterPlayer.lastName,
                       firstName: rosterPlayer.firstName,
-                      dob: rosterPlayer.dob || null,
+                      dob: cleanIdValue(rosterPlayer.dob) || null,
                       isCaptain: !!rosterPlayer.isCaptain
                     })
                   } else {
@@ -4083,7 +4017,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                       name: `${rosterPlayer.lastName} ${rosterPlayer.firstName}`,
                       lastName: rosterPlayer.lastName,
                       firstName: rosterPlayer.firstName,
-                      dob: rosterPlayer.dob || null,
+                      dob: cleanIdValue(rosterPlayer.dob) || null,
                       isCaptain: !!rosterPlayer.isCaptain,
                       role: null,
                       createdAt: new Date().toISOString()
@@ -4124,7 +4058,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                       number: p.number || null,
                       first_name: p.firstName || '',
                       last_name: p.lastName || '',
-                      dob: formatDobForSync(p.dob),
+                      dob: idValueForSync(p.dob),
                       is_captain: !!p.isCaptain
                     }))
                   },
@@ -4889,7 +4823,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                         name: `${p.lastName} ${p.firstName}`,
                         lastName: p.lastName,
                         firstName: p.firstName,
-                        dob: p.dob || null,
+                        dob: cleanIdValue(p.dob) || null,
                         isCaptain: !!p.isCaptain,
                         role: null,
                         createdAt: new Date().toISOString()
@@ -4906,7 +4840,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                         name: `${p.lastName} ${p.firstName}`,
                         lastName: p.lastName,
                         firstName: p.firstName,
-                        dob: p.dob || null,
+                        dob: cleanIdValue(p.dob) || null,
                         isCaptain: !!p.isCaptain,
                         role: null,
                         createdAt: new Date().toISOString()
@@ -4989,7 +4923,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                 <tr>
                   <th className="w-16 px-3 py-2 text-left">#</th>
                   <th className="px-3 py-2 text-left">{t('roster.name')}</th>
-                  {manageDob && <th className="px-3 py-2 text-left">{t('roster.dob')}</th>}
+                  {manageLicence && <th className="px-3 py-2 text-left">{t('licence.label')}</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -5008,10 +4942,10 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                         <td className="px-3 py-2 font-medium text-stone-800">
                           {player.lastName || ''} {player.firstName || ''}
                         </td>
-                        {manageDob && <td className="px-3 py-2 text-stone-500 tabular-nums">{player.dob || '—'}</td>}
+                        {manageLicence && <td className="px-3 py-2 text-stone-500 tabular-nums">{displayIdValue(player.dob) || '—'}</td>}
                       </>
                     ) : (
-                      <td colSpan={manageDob ? 3 : 2}>&nbsp;</td>
+                      <td colSpan={manageLicence ? 3 : 2}>&nbsp;</td>
                     )}
                   </tr>
                 ))}

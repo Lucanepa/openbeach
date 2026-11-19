@@ -73,6 +73,7 @@ import { Button } from './ui/volleyui/Button.jsx'
 import { cn } from './ui/volleyui/cn.js'
 import { confirmDialog, toast } from './ui/volleyui/uiStore.js'
 import { DEFAULT_TEAM1_COLOUR, DEFAULT_TEAM2_COLOUR } from './utils_beach/teamColours_beach'
+import { readManageLicence, cleanIdValue, licenceOf } from './utils_beach/idValue_beach'
 
 function parseDateTime(dateTime) {
   const [datePart, timePart] = dateTime.split(' ')
@@ -206,10 +207,9 @@ export default function App() {
     const saved = localStorage.getItem('keybindingsEnabled')
     return saved === 'true' // default false
   })
-  const [manageDob, setManageDob] = useState(() => {
-    const saved = localStorage.getItem('manageDob')
-    return saved === 'true' // default false
-  })
+  // The licence column (licence number or date of birth) beside each name;
+  // default off. The setting kept its first key (utils_beach/idValue_beach).
+  const [manageLicence, setManageLicence] = useState(() => readManageLicence())
 
   // Wake lock refs and state
   const wakeLockRef = useRef(null)
@@ -1395,27 +1395,9 @@ export default function App() {
   const firstNames = ['Max', 'Luca', 'Tom', 'Jonas', 'Felix', 'Noah', 'David', 'Simon', 'Daniel', 'Michael', 'Anna', 'Sarah', 'Lisa', 'Emma', 'Sophie', 'Laura', 'Julia', 'Maria', 'Nina', 'Sara']
   const lastNames = ['Müller', 'Schmidt', 'Schneider', 'Fischer', 'Weber', 'Meyer', 'Wagner', 'Becker', 'Schulz', 'Hoffmann', 'Koch', 'Bauer', 'Richter', 'Klein', 'Wolf', 'Schröder', 'Neumann', 'Schwarz', 'Zimmermann', 'Braun']
 
-  function randomDate(start, end) {
-    const startDate = new Date(start).getTime()
-    const endDate = new Date(end).getTime()
-    const randomTime = startDate + Math.random() * (endDate - startDate)
-    const date = new Date(randomTime)
-    const day = String(date.getDate()).padStart(2, '0')
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const year = date.getFullYear()
-    return `${day}/${month}/${year}`
-  }
-
-  function formatISODateToDisplay(dateString) {
-    if (!dateString) return null
-    const date = new Date(dateString)
-    if (Number.isNaN(date.getTime())) {
-      return dateString
-    }
-    const day = String(date.getDate()).padStart(2, '0')
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const year = date.getFullYear()
-    return `${day}/${month}/${year}`
+  // A made-up licence number (6 digits) beside a test player's name
+  function randomLicence() {
+    return String(100000 + Math.floor(Math.random() * 900000))
   }
 
   function generateRandomPlayers(teamId) {
@@ -1425,7 +1407,7 @@ export default function App() {
     return numbers.map((number, idx) => {
       const firstName = firstNames[Math.floor(Math.random() * firstNames.length)]
       const lastName = lastNames[Math.floor(Math.random() * lastNames.length)]
-      const dob = randomDate('1990-01-01', '2005-12-31')
+      const dob = randomLicence()
 
       return {
         teamId,
@@ -1676,7 +1658,8 @@ export default function App() {
         number: p.number || '',
         firstName: p.first_name || '',
         lastName: p.last_name || '',
-        dob: p.dob || '',
+        // a competition match imports the licence only, never a date of birth
+        dob: licenceOf(p.dob),
         isCaptain: p.is_captain || false,
         createdAt: now
       })
@@ -1687,7 +1670,8 @@ export default function App() {
         number: p.number || '',
         firstName: p.first_name || '',
         lastName: p.last_name || '',
-        dob: p.dob || '',
+        // a competition match imports the licence only, never a date of birth
+        dob: licenceOf(p.dob),
         isCaptain: p.is_captain || false,
         createdAt: now
       })
@@ -1699,7 +1683,7 @@ export default function App() {
       firstName: o.firstName || o.first_name || '',
       lastName: o.lastName || o.last_name || '',
       country: o.country || '',
-      dob: o.dob || ''
+      dob: licenceOf(o.dob)
     }))
 
     // Parse scheduled_at
@@ -2067,28 +2051,28 @@ export default function App() {
         firstName: firstRef?.firstName || 'Claudia',
         lastName: firstRef?.lastName || 'Moser',
         country: firstRef?.country || 'CHE',
-        dob: firstRef?.dob ? formatISODateToDisplay(firstRef.dob) : formatISODateToDisplay('1982-04-19')
+        dob: cleanIdValue(firstRef?.dob) || TEST_REFEREE_SEED_DATA[0].dob
       },
       {
         role: '2nd referee',
         firstName: secondRef?.firstName || 'Martin',
         lastName: secondRef?.lastName || 'Kunz',
         country: secondRef?.country || 'CHE',
-        dob: secondRef?.dob ? formatISODateToDisplay(secondRef.dob) : formatISODateToDisplay('1979-09-02')
+        dob: cleanIdValue(secondRef?.dob) || (TEST_REFEREE_SEED_DATA[1] || TEST_REFEREE_SEED_DATA[0]).dob
       },
       {
         role: 'scorer',
         firstName: primaryScorer?.firstName || 'Petra',
         lastName: primaryScorer?.lastName || 'Schneider',
         country: primaryScorer?.country || 'CHE',
-        dob: primaryScorer?.dob ? formatISODateToDisplay(primaryScorer.dob) : formatISODateToDisplay('1990-01-15')
+        dob: cleanIdValue(primaryScorer?.dob) || TEST_SCORER_SEED_DATA[0].dob
       },
       {
         role: 'assistant scorer',
         firstName: assistantScorer?.firstName || 'Lukas',
         lastName: assistantScorer?.lastName || 'Baumann',
         country: assistantScorer?.country || 'CHE',
-        dob: assistantScorer?.dob ? formatISODateToDisplay(assistantScorer.dob) : formatISODateToDisplay('1988-06-27')
+        dob: cleanIdValue(assistantScorer?.dob) || (TEST_SCORER_SEED_DATA[1] || TEST_SCORER_SEED_DATA[0]).dob
       },
       { role: 'line judge 1', name: 'Andrea Müller' },
       { role: 'line judge 2', name: 'Thomas Fischer' }
@@ -3224,8 +3208,8 @@ export default function App() {
                 setManageCaptainOnCourt,
                 keybindingsEnabled,
                 setKeybindingsEnabled,
-                manageDob,
-                setManageDob
+                manageLicence,
+                setManageLicence
               }}
               displayOptions={{
                 displayMode,
