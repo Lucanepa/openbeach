@@ -26,7 +26,7 @@ describe('Match setup at large text on a phone', () => {
 
   it('a player\'s row in the roster editor wraps on a phone, a grid from sm up', () => {
     expect(setup).toMatch(/const ROSTER_ROW = 'flex flex-wrap items-center gap-2 sm:grid sm:grid-cols-\[96px_minmax\(0,1fr\)_minmax\(0,1fr\)_84px_auto\]'/)
-    expect(setup.match(/className=\{cn\(ROSTER_ROW, manageDob && ROSTER_GRID_DOB, 'px-3 py-2\.5'/g)).toHaveLength(2)
+    expect(setup.match(/className=\{cn\(ROSTER_ROW, manageLicence && ROSTER_GRID_LICENCE, 'px-3 py-2\.5'/g)).toHaveLength(2)
     expect(setup.match(/<div className="order-2 flex flex-1 justify-end sm:order-none sm:justify-center">/g)).toHaveLength(2)
     expect(setup.match(/<div className="order-3 ml-auto sm:order-none">/g)).toHaveLength(2)
   })

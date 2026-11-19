@@ -19,6 +19,7 @@ import { installDiagnostics } from './diagnostics_beach/index_beach'
 import { startActivityLog } from './utils_beach/activity/index_beach'
 import { applyUpdateAtStart } from './hooks_beach/useServiceWorker_beach'
 import { isDesktopScoretable, resolveDesktopWindow } from './utils_beach/appLifecycle_beach'
+import { runDobCleanupOnce } from './db_beach/dobCleanup_beach'
 
 // Diagnostics mode (off unless Options, ?diag=1 or OPENVOLLEY_DIAGNOSTICS=1
 // in the desktop app): first, so it sees this load and the database opening
@@ -42,6 +43,12 @@ initLogger()
 // The match activity log (scoring, corrections, sync, app start/quit, errors):
 // on this device, uploaded, and a daily file in the apps (utils_beach/activity)
 startActivityLog({ db })
+
+// Once per device: the dates of birth this device still keeps go (the cached
+// profile and saved teams, and the people of every match that is over;
+// licences stay, a match in progress is left alone). In the background:
+// never awaited, never throws.
+runDobCleanupOnce({ db })
 
 initTheme()
 createRoot(document.getElementById('root')).render(

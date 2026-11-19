@@ -84,8 +84,8 @@ export const TEST_TEAM_SEED_DATA = [
     color: '#3b82f6',
     country: 'CHE',
     players: [
-      { number: 1, firstName: 'Anna', lastName: 'Müller', dob: '05/01/1998', isCaptain: true },
-      { number: 2, firstName: 'Sara', lastName: 'Weber', dob: '12/03/1997', isCaptain: false },
+      { number: 1, firstName: 'Anna', lastName: 'Müller', dob: '100101', isCaptain: true },
+      { number: 2, firstName: 'Sara', lastName: 'Weber', dob: '100102', isCaptain: false },
     ]
   },
   {
@@ -95,8 +95,8 @@ export const TEST_TEAM_SEED_DATA = [
     color: '#a855f7',
     country: 'DEU',
     players: [
-      { number: 1, firstName: 'Julia', lastName: 'Schmidt', dob: '11/01/1998', isCaptain: true },
-      { number: 2, firstName: 'Nina', lastName: 'Fischer', dob: '24/03/1996', isCaptain: false },
+      { number: 1, firstName: 'Julia', lastName: 'Schmidt', dob: '100201', isCaptain: true },
+      { number: 2, firstName: 'Nina', lastName: 'Fischer', dob: '100202', isCaptain: false },
     ]
   }
 ]
@@ -124,14 +124,14 @@ export const TEST_REFEREE_SEED_DATA = [
     firstName: 'Claudia',
     lastName: 'Moser',
     country: 'CHE',
-    dob: '1982-04-19'
+    dob: '200301'
   },
   {
     seedKey: 'test-referee-bravo',
     firstName: 'Martin',
     lastName: 'Kunz',
     country: 'CHE',
-    dob: '1979-09-02'
+    dob: '200302'
   }
 ]
 
@@ -141,13 +141,13 @@ export const TEST_SCORER_SEED_DATA = [
     firstName: 'Petra',
     lastName: 'Schneider',
     country: 'CHE',
-    dob: '1990-01-15'
+    dob: '300401'
   },
   {
     seedKey: 'test-scorer-bravo',
     firstName: 'Lukas',
     lastName: 'Baumann',
     country: 'CHE',
-    dob: '1988-06-27'
+    dob: '300402'
   }
 ]

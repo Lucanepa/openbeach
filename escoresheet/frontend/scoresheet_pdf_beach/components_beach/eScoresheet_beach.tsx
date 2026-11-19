@@ -8,6 +8,8 @@ import { medicalChartMarks } from '../../src_beach/utils_beach/medicalRemarks_be
 // REMARKS: the scorer's own, MTO / RIT, a set past the 44 boxes (shared with MatchEnd)
 import { sheetRemarksText } from '../../src_beach/utils_beach/sheetRemarks_beach.js';
 import { gameNumberValue } from '../../src_beach/utils_beach/gameNumber_beach.js';
+// @ts-ignore - JS module
+import { displayIdValue } from '../../src_beach/utils_beach/idValue_beach.js';
 
 // The sheet's many debug lines (whole match objects) only when asked for:
 // localStorage obScoresheetDebug = '1'. Logging them always slowed the
@@ -708,6 +710,18 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
         set('b_t1_coach_name', match?.team1CoachName || '');
         set('b_t2_coach_name', match?.team2CoachName || '');
       }
+
+      // The value beside each player's name: the licence, or a date of birth
+      // (printed dd.mm.yyyy), verbatim. The TEAMS box gets its Licence column
+      // only when the match carries a value (the FIVB layout stays otherwise).
+      const licenceFields: Record<string, string> = {
+        b_t1_p1_lic: displayIdValue(team1Players?.[0]?.dob),
+        b_t1_p2_lic: displayIdValue(team1Players?.[1]?.dob),
+        b_t2_p1_lic: displayIdValue(team2Players?.[0]?.dob),
+        b_t2_p2_lic: displayIdValue(team2Players?.[1]?.dob)
+      };
+      for (const [key, value] of Object.entries(licenceFields)) if (value) set(key, value);
+      if (Object.values(licenceFields).some(Boolean)) set('teams_licence_col', 'true');
 
       // Sets data - process ALL sets (including current unfinished set)
       // Determine current set number first (needed in multiple places)
@@ -3950,22 +3964,26 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                 <div className="flex text-[9px] h-4 border-b border-black">
                   <div className="w-6 border border-b-0 border-black text-center">No.</div>
                   <div className="flex-1 pl-1 border border-b-0 border-l-0 border-black">Player's Name</div>
+                  {get('teams_licence_col') === 'true' && <div data-teams-licence-head="t1" className="w-16 pl-1 border border-b-0 border-l-0 border-black">Licence</div>}
                 </div>
                 {/* Player 1 */}
                 <div className="flex text-[9px] h-5">
                   <div className="w-6 border border-black" style={centerStyle}><Input value={get('b_t1_p1_no')} onChange={v => set('b_t1_p1_no', v)} className="w-full text-center" /></div>
                   <div className="flex-1 border border-l-0 border-black"><Input value={get('b_t1_p1_name')} onChange={v => set('b_t1_p1_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
+                  {get('teams_licence_col') === 'true' && <div className="w-16 border border-l-0 border-black"><Input value={get('b_t1_p1_lic')} onChange={v => set('b_t1_p1_lic', v)} className="w-full px-0.5 tabular-nums" style={{ textAlign: 'left' }} /></div>}
                 </div>
                 {/* Player 2 */}
                 <div className="flex text-[9px] h-5">
                   <div className="w-6 border border-t-0 border-black" style={centerStyle}><Input value={get('b_t1_p2_no')} onChange={v => set('b_t1_p2_no', v)} className="w-full text-center" /></div>
                   <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t1_p2_name')} onChange={v => set('b_t1_p2_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
+                  {get('teams_licence_col') === 'true' && <div className="w-16 border border-l-0 border-t-0 border-black"><Input value={get('b_t1_p2_lic')} onChange={v => set('b_t1_p2_lic', v)} className="w-full px-0.5 tabular-nums" style={{ textAlign: 'left' }} /></div>}
                 </div>
                 {/* Coach row - only when hasCoach */}
                 {currentMatchData?.match?.hasCoach && (
                   <div className="flex text-[9px] h-5">
                     <div className="w-6 border border-t-0 border-black" style={centerStyle}><span className="text-[8px] font-bold">C</span></div>
                     <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t1_coach_name')} onChange={v => set('b_t1_coach_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
+                    {get('teams_licence_col') === 'true' && <div className="w-16 border border-l-0 border-t-0 border-black" />}
                   </div>
                 )}
                 <div className="text-[4px]" style={{ height: '8px', lineHeight: '8px' }}>Captain's pre-match signature:</div>
@@ -4011,22 +4029,26 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                 <div className="flex text-[9px] h-4 border-b border-black">
                   <div className="w-6 border border-b-0 border-black text-center">No.</div>
                   <div className="flex-1 pl-1 border border-b-0 border-l-0 border-black">Player's Name</div>
+                  {get('teams_licence_col') === 'true' && <div data-teams-licence-head="t2" className="w-16 pl-1 border border-b-0 border-l-0 border-black">Licence</div>}
                 </div>
                 {/* Player 1 */}
                 <div className="flex text-[9px] h-5">
                   <div className="w-6 border border-t-0 border-black" style={centerStyle}><Input value={get('b_t2_p1_no')} onChange={v => set('b_t2_p1_no', v)} className="w-full text-center" /></div>
                   <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_p1_name')} onChange={v => set('b_t2_p1_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
+                  {get('teams_licence_col') === 'true' && <div className="w-16 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_p1_lic')} onChange={v => set('b_t2_p1_lic', v)} className="w-full px-0.5 tabular-nums" style={{ textAlign: 'left' }} /></div>}
                 </div>
                 {/* Player 2 */}
                 <div className="flex text-[9px] h-5">
                   <div className="w-6 border border-t-0 border-black" style={centerStyle}><Input value={get('b_t2_p2_no')} onChange={v => set('b_t2_p2_no', v)} className="w-full text-center" /></div>
                   <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_p2_name')} onChange={v => set('b_t2_p2_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
+                  {get('teams_licence_col') === 'true' && <div className="w-16 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_p2_lic')} onChange={v => set('b_t2_p2_lic', v)} className="w-full px-0.5 tabular-nums" style={{ textAlign: 'left' }} /></div>}
                 </div>
                 {/* Coach row - only when hasCoach */}
                 {currentMatchData?.match?.hasCoach && (
                   <div className="flex text-[9px] h-5">
                     <div className="w-6 border border-t-0 border-black" style={centerStyle}><span className="text-[8px] font-bold">C</span></div>
                     <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_coach_name')} onChange={v => set('b_t2_coach_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
+                    {get('teams_licence_col') === 'true' && <div className="w-16 border border-l-0 border-t-0 border-black" />}
                   </div>
                 )}
                 <div className="text-[4px]" style={{ height: '8px', lineHeight: '8px' }}>Captain's pre-match signature:</div>

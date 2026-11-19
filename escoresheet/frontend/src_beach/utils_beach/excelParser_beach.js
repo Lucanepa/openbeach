@@ -1,4 +1,5 @@
 import { readSheet } from 'read-excel-file/browser'
+import { licenceOf } from './idValue_beach'
 
 /**
  * Parse a CSV string into an array of arrays (rows of cells).
@@ -144,7 +145,18 @@ function combineDateTime(dateVal, timeVal) {
 }
 
 /**
- * Map a single Excel row to a beach_competition_matches record.
+ * A licence cell: its digits (a number cell is read as one). A date (a
+ * birthdate in the licence column, or a date cell) is never imported.
+ */
+function importLicence(val) {
+  if (val == null || val === '' || val instanceof Date) return ''
+  return licenceOf(typeof val === 'number' ? String(Math.trunc(val)) : val)
+}
+
+/**
+ * Map a single Excel row to a beach_competition_matches record. The value
+ * beside a person's name is the licence (columns "T1 Player 1 Licence",
+ * "1st Referee Licence", ...), never a date of birth.
  */
 export function mapExcelRowToCompMatch(row, userId) {
   const n = buildNormalizedMap(row)
@@ -168,9 +180,11 @@ export function mapExcelRowToCompMatch(row, userId) {
   const t1P1Num = findCol(row, n, 'T1 Player 1 #', 'T1 P1 #', 'Team1 Player1 Number', 'T1P1Num')
   const t1P1Last = findCol(row, n, 'T1 Player 1 Last', 'T1 P1 Last Name', 'Team1 Player1 Last', 'T1P1Last')
   const t1P1First = findCol(row, n, 'T1 Player 1 First', 'T1 P1 First Name', 'Team1 Player1 First', 'T1P1First')
+  const t1P1Lic = findCol(row, n, 'T1 Player 1 Licence', 'T1 P1 Licence', 'Team1 Player1 Licence', 'T1P1Licence', 'T1 Player 1 License', 'T1P1License')
   const t1P2Num = findCol(row, n, 'T1 Player 2 #', 'T1 P2 #', 'Team1 Player2 Number', 'T1P2Num')
   const t1P2Last = findCol(row, n, 'T1 Player 2 Last', 'T1 P2 Last Name', 'Team1 Player2 Last', 'T1P2Last')
   const t1P2First = findCol(row, n, 'T1 Player 2 First', 'T1 P2 First Name', 'Team1 Player2 First', 'T1P2First')
+  const t1P2Lic = findCol(row, n, 'T1 Player 2 Licence', 'T1 P2 Licence', 'Team1 Player2 Licence', 'T1P2Licence', 'T1 Player 2 License', 'T1P2License')
 
   // Team 2
   const t2Name = findCol(row, n, 'Team 2 Name', 'Team 2', 'Team2', 'Away Team')
@@ -179,17 +193,22 @@ export function mapExcelRowToCompMatch(row, userId) {
   const t2P1Num = findCol(row, n, 'T2 Player 1 #', 'T2 P1 #', 'Team2 Player1 Number', 'T2P1Num')
   const t2P1Last = findCol(row, n, 'T2 Player 1 Last', 'T2 P1 Last Name', 'Team2 Player1 Last', 'T2P1Last')
   const t2P1First = findCol(row, n, 'T2 Player 1 First', 'T2 P1 First Name', 'Team2 Player1 First', 'T2P1First')
+  const t2P1Lic = findCol(row, n, 'T2 Player 1 Licence', 'T2 P1 Licence', 'Team2 Player1 Licence', 'T2P1Licence', 'T2 Player 1 License', 'T2P1License')
   const t2P2Num = findCol(row, n, 'T2 Player 2 #', 'T2 P2 #', 'Team2 Player2 Number', 'T2P2Num')
   const t2P2Last = findCol(row, n, 'T2 Player 2 Last', 'T2 P2 Last Name', 'Team2 Player2 Last', 'T2P2Last')
   const t2P2First = findCol(row, n, 'T2 Player 2 First', 'T2 P2 First Name', 'Team2 Player2 First', 'T2P2First')
+  const t2P2Lic = findCol(row, n, 'T2 Player 2 Licence', 'T2 P2 Licence', 'Team2 Player2 Licence', 'T2P2Licence', 'T2 Player 2 License', 'T2P2License')
 
   // Officials
   const ref1Last = findCol(row, n, '1st Referee Last', '1st Ref Last', 'Ref1 Last', '1stRefLast')
   const ref1First = findCol(row, n, '1st Referee First', '1st Ref First', 'Ref1 First', '1stRefFirst')
+  const ref1Lic = findCol(row, n, '1st Referee Licence', '1st Ref Licence', 'Ref1 Licence', '1stRefLicence', '1st Referee License', 'Ref1 License')
   const ref2Last = findCol(row, n, '2nd Referee Last', '2nd Ref Last', 'Ref2 Last', '2ndRefLast')
   const ref2First = findCol(row, n, '2nd Referee First', '2nd Ref First', 'Ref2 First', '2ndRefFirst')
+  const ref2Lic = findCol(row, n, '2nd Referee Licence', '2nd Ref Licence', 'Ref2 Licence', '2ndRefLicence', '2nd Referee License', 'Ref2 License')
   const scorerLast = findCol(row, n, 'Scorer Last', 'Scorer Last Name', 'ScorerLast')
   const scorerFirst = findCol(row, n, 'Scorer First', 'Scorer First Name', 'ScorerFirst')
+  const scorerLic = findCol(row, n, 'Scorer Licence', 'ScorerLicence', 'Scorer License', 'ScorerLicense')
 
   // Normalize gender
   const genderNorm = norm(gender)
@@ -218,19 +237,20 @@ export function mapExcelRowToCompMatch(row, userId) {
   else roundVal = String(round || '').toLowerCase()
 
   // Build players arrays
-  const buildPlayer = (num, first, last) => {
+  // `dob` is the value beside the name: the licence (OpenVolley's Swiss sheet keeps it there too)
+  const buildPlayer = (num, first, last, lic) => {
     if (!first && !last && !num) return null
     return {
       number: num ? parseInt(num, 10) || '' : '',
       first_name: String(first || ''),
       last_name: String(last || ''),
-      dob: '',
+      dob: importLicence(lic),
       is_captain: false
     }
   }
 
-  const playersTeam1 = [buildPlayer(t1P1Num, t1P1First, t1P1Last), buildPlayer(t1P2Num, t1P2First, t1P2Last)].filter(Boolean)
-  const playersTeam2 = [buildPlayer(t2P1Num, t2P1First, t2P1Last), buildPlayer(t2P2Num, t2P2First, t2P2Last)].filter(Boolean)
+  const playersTeam1 = [buildPlayer(t1P1Num, t1P1First, t1P1Last, t1P1Lic), buildPlayer(t1P2Num, t1P2First, t1P2Last, t1P2Lic)].filter(Boolean)
+  const playersTeam2 = [buildPlayer(t2P1Num, t2P1First, t2P1Last, t2P1Lic), buildPlayer(t2P2Num, t2P2First, t2P2Last, t2P2Lic)].filter(Boolean)
 
   // Infer team name from player last names if not provided
   const inferName = (players) => {
@@ -241,9 +261,9 @@ export function mapExcelRowToCompMatch(row, userId) {
   // Build officials array
   const DEFAULT_COUNTRY = 'CHE'
   const officials = []
-  if (ref1First || ref1Last) officials.push({ role: '1st referee', firstName: String(ref1First || ''), lastName: String(ref1Last || ''), country: DEFAULT_COUNTRY, dob: '' })
-  if (ref2First || ref2Last) officials.push({ role: '2nd referee', firstName: String(ref2First || ''), lastName: String(ref2Last || ''), country: DEFAULT_COUNTRY, dob: '' })
-  if (scorerFirst || scorerLast) officials.push({ role: 'scorer', firstName: String(scorerFirst || ''), lastName: String(scorerLast || ''), country: DEFAULT_COUNTRY, dob: '' })
+  if (ref1First || ref1Last) officials.push({ role: '1st referee', firstName: String(ref1First || ''), lastName: String(ref1Last || ''), country: DEFAULT_COUNTRY, dob: importLicence(ref1Lic) })
+  if (ref2First || ref2Last) officials.push({ role: '2nd referee', firstName: String(ref2First || ''), lastName: String(ref2Last || ''), country: DEFAULT_COUNTRY, dob: importLicence(ref2Lic) })
+  if (scorerFirst || scorerLast) officials.push({ role: 'scorer', firstName: String(scorerFirst || ''), lastName: String(scorerLast || ''), country: DEFAULT_COUNTRY, dob: importLicence(scorerLic) })
 
   // Build has_coach boolean
   const hasCoachVal = hasCoach === true || norm(hasCoach) === 'yes' || norm(hasCoach) === 'true' || hasCoach === 1

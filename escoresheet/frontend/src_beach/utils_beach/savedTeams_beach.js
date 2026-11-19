@@ -8,6 +8,8 @@
  * and per-player country codes. Nothing here touches the DOM or the database.
  */
 
+import { licenceOf } from './idValue_beach'
+
 /** Lower-case, NFC, collapsed whitespace: the key two spellings share. */
 export function normalizeName(v) {
   return String(v ?? '').normalize('NFC').trim().replace(/\s+/g, ' ').toLowerCase()
@@ -48,12 +50,6 @@ export function teamKeys(team) {
   }
 }
 
-/** 'YYYY-MM-DD…' → 'DD/MM/YYYY' (MatchSetup_beach's format); anything else → ''. */
-export function isoToBeachDob(iso) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso ?? ''))
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : ''
-}
-
 /** The country of the pair when the players share exactly one, else ''. */
 export function teamCountry(players) {
   const set = new Set()
@@ -89,7 +85,8 @@ export function savedTeamToBeachRoster(team) {
     slots[free] = p
   }
   const roster = slots.map((p, i) => (p
-    ? { number: i + 1, firstName: p.first_name || '', lastName: p.last_name || '', dob: isoToBeachDob(p.dob), isCaptain: false }
+    // The value beside the name is the saved licence (never a date of birth)
+    ? { number: i + 1, firstName: p.first_name || '', lastName: p.last_name || '', dob: licenceOf(p.license_number), isCaptain: false }
     : emptySlot(i + 1)))
 
   const name = team?.name || ''

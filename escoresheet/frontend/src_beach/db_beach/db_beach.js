@@ -395,7 +395,7 @@ db.version(18).stores({
 
 // Version 19: offline cache of the saved beach teams (db_beach/savedTeams_beach.js).
 // New tables only, no upgrade function: nothing to migrate, so it cannot reject.
-// The rows hold personal data (DOB, licence, country); they are cleared on
+// The rows hold personal data (licence, country; no date of birth); they are cleared on
 // sign-out, account switch, account deletion and a rejected or expired login.
 db.version(19).stores({
   saved_teams: 'id, competitionId, nameKey, pairKey',

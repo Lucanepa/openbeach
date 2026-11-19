@@ -23,6 +23,7 @@ import { confirmDialog } from '../../ui/volleyui/uiStore.js'
 import { timeLabel } from '../../ui/volleyui/format.js'
 import { cn } from '../../ui/volleyui/cn.js'
 import DiagnosticsSection from '../../diagnostics_beach/DiagnosticsSection_beach'
+import { LICENCE_OPTION_KEY } from '../../utils_beach/idValue_beach'
 
 const currentVersion = __APP_VERSION__
 
@@ -97,8 +98,8 @@ export default function HomeOptionsModal({
     setAccidentalPointAwardDuration,
     keybindingsEnabled,
     setKeybindingsEnabled,
-    manageDob,
-    setManageDob
+    manageLicence,
+    setManageLicence
   } = matchOptions
 
   const { displayMode, setDisplayMode, detectedDisplayMode, enterDisplayMode, exitDisplayMode } = displayOptions
@@ -194,10 +195,10 @@ export default function HomeOptionsModal({
             )}
           />
           <OptionSwitch
-            label={t('options.manageDob')}
-            info={t('options.manageDobInfo')}
-            checked={manageDob}
-            onChange={persist('manageDob', setManageDob)}
+            label={t('options.manageLicence')}
+            info={t('options.manageLicenceInfo')}
+            checked={manageLicence}
+            onChange={persist(LICENCE_OPTION_KEY, setManageLicence)}
           />
         </OptionSection>
 

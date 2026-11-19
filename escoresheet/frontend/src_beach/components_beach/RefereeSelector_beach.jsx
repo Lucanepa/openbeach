@@ -12,7 +12,8 @@ const SPORT_TYPE = 'beach'
 
 /**
  * Reusable RefereeSelector component for selecting referees from history
- * Uses Supabase referee_database table for suggestions
+ * Uses the backend's referee_database table for suggestions: name and
+ * country only, never a date of birth (the licence is typed in Match Setup)
  * @param {boolean} open - Whether dropdown is open
  * @param {function} onClose - Function to call when closing
  * @param {function} onSelect - Function to call when a referee is selected: (referee) => void
@@ -42,7 +43,7 @@ export default function RefereeSelector({ open, onClose, onSelect, position = {}
 
       // The whole directory, paged past the server's row cap, by last name
       const { data, error } = await selectAll(() => apiFrom('referee_database')
-        .select('id, first_name, last_name, country, dob, created_at')
+        .select('id, first_name, last_name, country, created_at')
         .contains('sport_type', JSON.stringify([SPORT_TYPE])), { order: [{ column: 'last_name' }] })
 
       if (error) {
@@ -56,8 +57,7 @@ export default function RefereeSelector({ open, onClose, onSelect, position = {}
         id: `${ref.last_name}_${ref.first_name}`.toLowerCase(),
         firstName: ref.first_name || '',
         lastName: ref.last_name || '',
-        country: ref.country || 'CHE',
-        dob: ref.dob || ''
+        country: ref.country || 'CHE'
       }))
 
       setReferees(uniqueReferees)

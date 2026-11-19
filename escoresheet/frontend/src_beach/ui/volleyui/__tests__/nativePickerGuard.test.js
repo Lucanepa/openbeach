@@ -16,7 +16,6 @@ const ROOT = path.resolve(__dirname, '../../../..'); // escoresheet/frontend
 const DIRS = ['src_beach', 'scoresheet_pdf_beach'];
 
 const PENDING = {
-  'src_beach/components_beach/MatchSetup_beach.jsx': 3, // dates of birth (not batch C)
   'src_beach/components_beach/Scoreboard_beach.jsx': 2, // set start / end times (batch B owns the file)
   'src_beach/components_beach/admin/CompMatchEditor_beach.jsx': 2, // competition admin date + time
 };
@@ -85,10 +84,20 @@ describe('native date/time picker guard', () => {
   }, 60_000);
 
   it('the converted screens use the kit fields', () => {
-    for (const rel of ['src_beach/components_beach/CoinToss_beach.jsx', 'src_beach/components_beach/ManualAdjustments_beach.jsx']) {
+    const rel = 'src_beach/components_beach/ManualAdjustments_beach.jsx';
+    const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    expect(findNativePickers(src), rel).toEqual([]);
+    expect(src, rel).toMatch(/<DateField\b/);
+  });
+
+  // The value beside a person's name is a licence, or a date of birth typed
+  // with dots (owner 19.11.2026): a text field everywhere, no date field
+  it('a person\'s licence (or date of birth) is a text field, never a date field', () => {
+    for (const rel of ['src_beach/components_beach/CoinToss_beach.jsx', 'src_beach/components_beach/MatchSetup_beach.jsx', 'src_beach/components_beach/ManualAdjustments_beach.jsx', 'src_beach/components_beach/RosterSetup_beach.jsx']) {
       const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
       expect(findNativePickers(src), rel).toEqual([]);
-      expect(src, rel).toMatch(/<DateField\b/);
+      expect(src, rel).toMatch(/<IdValueInput\b/);
     }
+    expect(fs.readFileSync(path.join(ROOT, 'src_beach/components_beach/CoinToss_beach.jsx'), 'utf8')).not.toMatch(/<DateField\b/);
   });
 });

@@ -90,6 +90,7 @@ import { dayLabel, timeSecondsLabel } from '../ui/volleyui/format.js'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
 import { TEAM_COLOUR_MARK, discPaint, effectiveTeamColour, isLightColour, teamBoxStyle } from '../utils_beach/teamColours_beach'
 import { preload, usePreloaded } from '../utils_beach/preload_beach'
+import { displayIdValue, readManageLicence } from '../utils_beach/idValue_beach'
 
 // ── volleyui chrome for the scoring screen ───────────────────────────────────
 // Only the chrome around the court takes these: the toolbar, the side columns,
@@ -397,7 +398,8 @@ export default function Scoreboard({ matchId, scorerAttentionTrigger = null, onF
     const saved = localStorage.getItem('manageCaptainOnCourt')
     return saved === 'true'
   })
-  const manageDob = localStorage.getItem('manageDob') === 'true'
+  // The licence column (a licence, or a date of birth) in the roster view
+  const manageLicence = readManageLicence()
   const [checkAccidentalRallyStart, setCheckAccidentalRallyStart] = useState(() => {
     const saved = localStorage.getItem('checkAccidentalRallyStart')
     return saved === 'true' // default false
@@ -8512,7 +8514,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         <tr>
                           <th>{t('roster.number')}</th>
                           <th>{t('roster.name')}</th>
-                          {manageDob && <th>{t('roster.dob')}</th>}
+                          {manageLicence && <th>{t('licence.label')}</th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -8529,10 +8531,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <td className="roster-name">
                                   {player.lastName || player.name} {player.firstName}
                                 </td>
-                                {manageDob && <td className="roster-dob">{player.dob || '—'}</td>}
+                                {manageLicence && <td className="roster-dob">{displayIdValue(player.dob) || '—'}</td>}
                               </>
                             ) : (
-                              <td colSpan={manageDob ? 3 : 2} style={{ height: '40px' }}></td>
+                              <td colSpan={manageLicence ? 3 : 2} style={{ height: '40px' }}></td>
                             )}
                           </tr>
                         ))}
@@ -8546,7 +8548,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         <tr>
                           <th>{t('roster.number')}</th>
                           <th>{t('roster.name')}</th>
-                          {manageDob && <th>{t('roster.dob')}</th>}
+                          {manageLicence && <th>{t('licence.label')}</th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -8563,10 +8565,10 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                                 <td className="roster-name">
                                   {player.lastName || player.name} {player.firstName}
                                 </td>
-                                {manageDob && <td className="roster-dob">{player.dob || '—'}</td>}
+                                {manageLicence && <td className="roster-dob">{displayIdValue(player.dob) || '—'}</td>}
                               </>
                             ) : (
-                              <td colSpan={manageDob ? 3 : 2} style={{ height: '40px' }}></td>
+                              <td colSpan={manageLicence ? 3 : 2} style={{ height: '40px' }}></td>
                             )}
                           </tr>
                         ))}
@@ -8584,7 +8586,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           <th>Role</th>
                           <th>Name</th>
                           <th>Country</th>
-                          {manageDob && <th>DOB</th>}
+                          {manageLicence && <th>{t('licence.label')}</th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -8593,7 +8595,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                             <td style={{ textTransform: 'capitalize', fontWeight: 500 }}>{official.role || '—'}</td>
                             <td>{official.lastName || ''} {official.firstName || ''}</td>
                             <td>{official.country || '—'}</td>
-                            {manageDob && <td>{official.dob || '—'}</td>}
+                            {manageLicence && <td>{displayIdValue(official.dob) || '—'}</td>}
                           </tr>
                         ))}
                       </tbody>

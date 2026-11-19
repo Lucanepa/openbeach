@@ -5,11 +5,14 @@ import { getMatchData } from '../utils_beach/serverDataSync_beach'
 import { useRealtimeConnection } from '../hooks_beach/useRealtimeConnection_beach'
 import { db } from '../db_beach/db_beach'
 import SignaturePad from './SignaturePad_beach'
+import IdValueInput from './IdValueInput_beach'
+import { cleanIdValue, readManageLicence } from '../utils_beach/idValue_beach'
 
 export default function RosterSetup({ matchId, team, onBack, embedded = false, useSupabaseConnection = false, matchData = null }) {
   const { t } = useTranslation()
   const { showAlert } = useAlert()
-  const manageDob = localStorage.getItem('manageDob') === 'true'
+  // The licence column (a licence, or a date of birth typed dd.mm.yyyy)
+  const manageLicence = readManageLicence()
   const [players, setPlayers] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -175,7 +178,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
               firstName: player.firstName,
               lastName: player.lastName,
               name: `${player.lastName} ${player.firstName}`,
-              dob: player.dob || null,
+              dob: cleanIdValue(player.dob) || null,
               isCaptain: !!player.isCaptain
             })
           } else {
@@ -186,7 +189,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
               firstName: player.firstName,
               lastName: player.lastName,
               name: `${player.lastName} ${player.firstName}`,
-              dob: player.dob || null,
+              dob: cleanIdValue(player.dob) || null,
               isCaptain: !!player.isCaptain,
               role: null,
               createdAt: new Date().toISOString()
@@ -212,7 +215,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
             firstName: p.firstName,
             lastName: p.lastName,
             name: `${p.lastName} ${p.firstName}`,
-            dob: p.dob || null,
+            dob: cleanIdValue(p.dob) || null,
             isCaptain: !!p.isCaptain,
             role: null,
             createdAt: new Date().toISOString()
@@ -344,7 +347,7 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.number')}</th>
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.firstName')}</th>
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.lastName')}</th>
-                  {manageDob && <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.dob')}</th>}
+                  {manageLicence && <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: 600 }}>{t('licence.label')}</th>}
                   <th style={{ padding: '12px', textAlign: 'center', fontSize: '14px', fontWeight: 600 }}>C</th>
                   <th style={{ padding: '12px', textAlign: 'center', fontSize: '14px', fontWeight: 600 }}>{t('rosterSetup.actions')}</th>
                 </tr>
@@ -404,13 +407,15 @@ export default function RosterSetup({ matchId, team, onBack, embedded = false, u
                         }}
                       />
                     </td>
-                    {manageDob && <td style={{ padding: '12px' }}>
-                      <input
-                        type="text"
+                    {manageLicence && <td style={{ padding: '12px' }}>
+                      <IdValueInput
+                        size="bare"
                         value={player.dob}
-                        onChange={(e) => handleUpdatePlayer(index, 'dob', e.target.value)}
+                        onChange={(v) => setPlayers(prev => prev.map((p, idx) => (idx === index ? { ...p, dob: v } : p)))}
                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur() } }}
-                        placeholder="DD/MM/YYYY"
+                        aria-label={`#${player.number} ${t('licence.label')}`}
+                        placeholder={t('licence.placeholder')}
+                        title={t('licence.hint')}
                         style={{
                           width: '120px',
                           padding: '6px',

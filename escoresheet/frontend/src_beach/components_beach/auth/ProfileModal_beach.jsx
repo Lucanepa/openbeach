@@ -12,6 +12,7 @@ import AuthLayer from './AuthLayer_beach'
 import InviteCodeForm from './InviteCodeForm_beach'
 import ApprovalPinSection from './ApprovalPinSection_beach'
 import { displayedRoles } from '../../lib_beach/access_beach'
+import { ACCOUNT_LICENCE } from '../../utils_beach/idValue_beach'
 
 /**
  * "Join OpenBeach": an OpenVolley account (the login both apps share) that
@@ -79,14 +80,17 @@ export function roleLabels(roles, t) {
 
 /**
  * The account of this device: who is signed in, the approval state (with
- * the invite code for a pending account), the name, sign out (court tablets
- * are shared) and delete account.
+ * the invite code for a pending account), the name and the optional licence
+ * number (no date of birth), sign out (court tablets are shared) and delete
+ * account.
  */
 export default function ProfileModal({ open, onClose }) {
   const { t } = useTranslation()
   const { user, profile, access, updateProfile, signOut, deleteAccount } = useAuth()
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+  const [licence, setLicence] = useState('')
+  const [licenceError, setLicenceError] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [busy, setBusy] = useState(null) // 'signout' | 'delete'
@@ -96,6 +100,8 @@ export default function ProfileModal({ open, onClose }) {
     if (!open) return
     setFirstName(profile?.first_name || '')
     setLastName(profile?.last_name || '')
+    setLicence(profile?.license_number || '')
+    setLicenceError('')
     setSaveError('')
     setActionError('')
   }, [open, profile])
@@ -104,18 +110,31 @@ export default function ProfileModal({ open, onClose }) {
 
   const email = user.email || profile?.email || ''
   const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ')
-  const changed = firstName.trim() !== (profile?.first_name || '') || lastName.trim() !== (profile?.last_name || '')
+  const licenceChanged = licence.trim() !== (profile?.license_number || '')
+  const changed = firstName.trim() !== (profile?.first_name || '') || lastName.trim() !== (profile?.last_name || '') || licenceChanged
   const roles = roleLabels(displayedRoles(access), t)
 
   const save = async (e) => {
     e.preventDefault()
     if (!changed || saving) return
+    const lic = licence.trim()
+    if (lic !== '' && !ACCOUNT_LICENCE.test(lic)) {
+      setLicenceError(t('account.licenceInvalid', 'A licence number has 4 to 7 digits.'))
+      return
+    }
+    setLicenceError('')
     setSaving(true)
     setSaveError('')
-    const { error } = await updateProfile({ firstName: firstName.trim(), lastName: lastName.trim() })
+    // The licence only when it changed: an older backend without the column
+    // still saves a new name
+    const { error } = await updateProfile({
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      ...(licenceChanged ? { licenseNumber: lic } : {})
+    })
     setSaving(false)
     if (error) {
-      setSaveError(error.message || t('account.errors.saveFailed', 'Your name was not saved.'))
+      setSaveError(error.message || t('account.errors.saveFailed', 'Not saved. Try again.'))
       return
     }
     toast.success(t('account.saved', 'Saved.'))
@@ -209,7 +228,7 @@ export default function ProfileModal({ open, onClose }) {
           {/* Referees and scorers: the personal PIN to approve results with the account (OpenVolley 0fc2661a) */}
           <ApprovalPinSection />
 
-          {/* Name */}
+          {/* Name and licence number (no date of birth) */}
           <form onSubmit={save} className="space-y-3" noValidate>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label={t('account.firstName', 'First name')}>
@@ -219,9 +238,25 @@ export default function ProfileModal({ open, onClose }) {
                 <Input value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" />
               </Field>
             </div>
+            <Field
+              label={t('account.licence', 'Licence number (optional)')}
+              hint={t('account.licenceHint', '4 to 7 digits. Match setup fills it in as the scorer’s licence.')}
+              error={licenceError || undefined}
+            >
+              <Input
+                value={licence}
+                onChange={(e) => { setLicence(e.target.value.replace(/\D/g, '').slice(0, 7)); setLicenceError('') }}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={7}
+                autoComplete="off"
+                className="sm:max-w-[12rem]"
+                data-testid="account-licence"
+              />
+            </Field>
             {saveError && <FormError>{saveError}</FormError>}
             <Button type="submit" loading={saving} disabled={!changed}>
-              {t('account.saveName', 'Save name')}
+              {t('account.save', 'Save')}
             </Button>
           </form>
 

@@ -6,14 +6,16 @@
  * duplicate jersey numbers: ...") in every language (OpenVolley 80166421).
  */
 
+import { isPlaceholderValue } from './idValue_beach'
+
 const hasNumber = (p) => p.number != null && p.number !== ''
 
 /**
  * @param {{ match?: object, team1Name?: string, team2Name?: string, team1Roster?: object[],
- *   team2Roster?: object[], manageDob?: boolean }} input
+ *   team2Roster?: object[], manageLicence?: boolean }} input
  * @returns {{ key: string, params?: object }[]}
  */
-export function coinTossConfirmIssues({ match = {}, team1Name = '', team2Name = '', team1Roster = [], team2Roster = [], manageDob = false } = {}) {
+export function coinTossConfirmIssues({ match = {}, team1Name = '', team2Name = '', team1Roster = [], team2Roster = [], manageLicence = false } = {}) {
   const issues = []
   const add = (key, params) => issues.push(params ? { key, params } : { key })
   const teams = [['team1', team1Roster], ['team2', team2Roster]]
@@ -55,9 +57,11 @@ export function coinTossConfirmIssues({ match = {}, team1Name = '', team2Name = 
     const dup = [...new Set(names.filter((n, i) => n && names.indexOf(n) !== i))]
     if (dup.length > 0) add('validation.duplicatePlayers', { team, names: dup.join(', ') })
   }
-  // 8. No date of birth 01.01.1900 (a placeholder / import error), when dates of birth are kept
-  if (manageDob && [...team1Roster, ...team2Roster].some(p => p.dob === '01.01.1900' || p.dob === '01/01/1900')) {
-    add('validation.invalidBirthdate')
+  // 8. No player whose value is the 01.01.1900 placeholder (an import error:
+  // the licence, or the date of birth, is missing), when the licence column
+  // is kept. The value is a licence or a date (utils_beach/idValue_beach).
+  if (manageLicence && [...team1Roster, ...team2Roster].some(p => isPlaceholderValue(p.dob))) {
+    add('validation.placeholderLicence')
   }
   // 9. Shirt numbers 1-99 (a blank one is "without a number", not invalid)
   for (const [team, roster] of teams) {
