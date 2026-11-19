@@ -1547,7 +1547,10 @@
     "thankYouRequest": "Grazie per la tua richiesta di funzionalità! La considererò per i futuri aggiornamenti.",
     "fillRequired": "Compila tutti i campi obbligatori.",
     "sendError": "Invio del messaggio fallito. Riprova o invia un'email direttamente.",
-    "removeFile": "Rimuovi {{name}}"
+    "removeFile": "Rimuovi {{name}}",
+    "autoReports": "Invia automaticamente le segnalazioni di errore",
+    "autoReportsHint": "Quando qualcosa va storto, l'app invia al server di OpenVolley cosa non ha funzionato e dove (mai ciò che hai digitato), anche senza accesso. Informativa sulla privacy, sezione 5.",
+    "deviceId": "Identificativo di questo dispositivo (per una richiesta di cancellazione):"
   },
   "rosterSetup": {
     "title": "Rosa",

@@ -11,6 +11,9 @@ import { Select } from '../ui/volleyui/Select.jsx'
 import { Input } from '../ui/volleyui/Input.jsx'
 import { Textarea } from '../ui/volleyui/Textarea.jsx'
 import { NOTICE } from '../ui/volleyui/tones.js'
+import { Checkbox } from '../ui/volleyui/Checkbox.jsx'
+import { errorReportsEnabled, setErrorReportsEnabled } from '../utils_beach/errorReport_beach/index_beach'
+import { deviceId } from '../utils_beach/deviceId_beach'
 
 const CONTACT_TYPES = ['support', 'feedback', 'request']
 
@@ -115,6 +118,8 @@ export default function SupportFeedbackModal({ open, onClose, currentPage = 'mai
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState(null)
+  // The automatic error reports (errorReport_beach, privacy 1.22 section 5): on unless switched off here
+  const [autoReports, setAutoReports] = useState(() => errorReportsEnabled())
 
   const resetForm = () => {
     setContactType('')
@@ -335,6 +340,20 @@ ${files.length > 0 ? `\nNote: ${files.length} file(s) were selected but cannot b
       )}
 
       {error && <div role="alert" className={NOTICE.error}>{error}</div>}
+
+      {/* The automatic error reports: on by default, switched off here; the
+          device id is what a request to delete them names */}
+      <div className="border-t border-stone-200 pt-4" data-testid="support-error-reports">
+        <Checkbox
+          label={t('supportFeedback.autoReports')}
+          hint={t('supportFeedback.autoReportsHint')}
+          checked={autoReports}
+          onChange={(e) => { setErrorReportsEnabled(e.target.checked); setAutoReports(e.target.checked) }}
+        />
+        <p className="mt-1.5 break-all text-[11px] text-stone-500">
+          {t('supportFeedback.deviceId')} <span className="font-mono">{(() => { try { return deviceId() } catch { return '' } })()}</span>
+        </p>
+      </div>
     </form>,
     <>
       <Button variant="secondary" size="lg" onClick={handleClose}>{t('common.cancel')}</Button>
