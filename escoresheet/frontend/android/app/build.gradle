@@ -1,10 +1,12 @@
 apply plugin: 'com.android.application'
 
-// versionName = the web app version in package.json (MAJOR.MINOR.PATCH).
+// versionName = the web app version in package.json: a calendar version YY.M.N
+// since 20.11.2026 (26.11.0 = November 2026's first release; 2.x to 3.1.1 before;
+// scripts/bump-version.js sets it). The formula below works for both:
 // versionCode = (MAJOR * 1000000 + MINOR * 1000 + PATCH) * 10 + androidBuild
 //   2.0.0 -> 20000000; 2.0.1 -> 20000010; 2.0.2 -> 20000020; 2.0.3 -> 20000030; 2.0.4 -> 20000040; 2.0.5 -> 20000050; 2.0.6 -> 20000060; 2.0.7 -> 20000070; 2.0.8 -> 20000080; 2.0.9 -> 20000090; 2.0.10 -> 20000100; 2.0.11 -> 20000110; 2.1.0 -> 20010000; 3.0.0 -> 30000000; 3.0.1 -> 30000010; 3.0.2 -> 30000020; 3.0.3 -> 30000030; 3.0.4 -> 30000040; 3.0.5 -> 30000050; 3.1.0 -> 30010000; 3.1.1 -> 30010010
 // The same rule as OpenVolley's app. androidBuild stays 0: every Android
-// release, a native-only fix included, bumps PATCH in package.json, so each
+// release, a native-only fix included, gets a new version in package.json, so each
 // release has its own android-v<versionName> tag (F-Droid builds tags, and a
 // tag it has built must never move). Monotonic while MINOR/PATCH stay below
 // 1000. See ANDROID.md.
