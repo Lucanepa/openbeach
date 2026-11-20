@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
 import Dexie from 'dexie'
 import { IDBFactory, IDBKeyRange } from 'fake-indexeddb'
-import { beachBundle, COOP_ID, OLD_TOUR_ID, MUELLER_WEBER_ID, ROSSI_ID } from '../fixtures/beachBundle'
+import { beachBundle, TOUR_ID, OLD_TOUR_ID, MUELLER_WEBER_ID, ROSSI_ID } from '../fixtures/beachBundle'
 
 vi.mock('../../lib_beach/apiClient_beach', () => ({
   savedTeamsApi: { fetchBundle: vi.fn() }
@@ -53,9 +53,9 @@ describe('saved beach teams cache', () => {
     expect(rows.map(r => r.id).sort()).toEqual([MUELLER_WEBER_ID, ROSSI_ID])
     const mw = rows.find(r => r.id === MUELLER_WEBER_ID)
     expect(mw).toMatchObject({
-      competitionId: COOP_ID, name: 'Müller / Weber', shortName: 'MÜLLER/WEBER', club: 'BC Zürich', color: '#3b82f6',
+      competitionId: TOUR_ID, name: 'Müller / Weber', shortName: 'MÜLLER/WEBER', club: 'BC Seeblick', color: '#3b82f6',
       nameKey: 'müller/weber', pairKey: 'müller/weber', updatedAt: '2026-10-06T08:00:00.000Z',
-      competition: { id: COOP_ID, name: 'Coop Beachtour', season: '2026', gender: 'women', archived: false, sport: 'beach' }
+      competition: { id: TOUR_ID, name: 'Sunset Beachtour', season: '2026', gender: 'women', archived: false, sport: 'beach' }
     })
     expect(mw.players[0]).toMatchObject({ number: 1, first_name: 'Anna', license_number: 'B-1', country: 'CHE' })
     expect(mw.staff[0]).toMatchObject({ role: 'Coach', last_name: 'Kunz' })
@@ -66,7 +66,7 @@ describe('saved beach teams cache', () => {
     expect((await db.saved_teams.where('pairKey').equals('müller/weber').toArray()).map(r => r.id)).toEqual([MUELLER_WEBER_ID])
     const meta = await cache.getSavedTeamsMeta()
     expect(meta).toMatchObject({ version: '2026-10-06T08:00:00.000Z', fetchedAt: '2026-10-06T08:00:05.000Z', userId: 'u1' })
-    expect(cache.competitionsOf(rows, meta).map(c => c.id).sort()).toEqual([COOP_ID, OLD_TOUR_ID])
+    expect(cache.competitionsOf(rows, meta).map(c => c.id).sort()).toEqual([TOUR_ID, OLD_TOUR_ID])
   })
 
   it('is fresh for 10 minutes; force or an older cache refetches', async () => {
@@ -145,7 +145,7 @@ describe('saved beach teams cache', () => {
     savedTeamsApi.fetchBundle.mockResolvedValue(ok(b))
     await cache.refreshSavedTeams({ access: scorer, userId: 'u1', online: true })
     expect((await db.saved_teams.toArray()).map(r => r.id).sort()).toEqual([MUELLER_WEBER_ID, ROSSI_ID])
-    expect((await cache.getSavedTeamsMeta()).competitions.map(c => c.id).sort()).toEqual([COOP_ID, OLD_TOUR_ID])
+    expect((await cache.getSavedTeamsMeta()).competitions.map(c => c.id).sort()).toEqual([TOUR_ID, OLD_TOUR_ID])
   })
 
   it('does not ask the server without read access, a user or a backend', async () => {

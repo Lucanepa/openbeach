@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import '../../i18n'
-import { beachBundle, MUELLER_WEBER_ID, ROSSI_ID, COOP_ID, OLD_TOUR_ID } from '../fixtures/beachBundle'
+import { beachBundle, MUELLER_WEBER_ID, ROSSI_ID, TOUR_ID, OLD_TOUR_ID } from '../fixtures/beachBundle'
 
 const hook = vi.hoisted(() => ({ value: null, args: null }))
 vi.mock('../../hooks_beach/useSavedTeams_beach', () => ({
@@ -23,7 +23,7 @@ function fixtureState({ loading = false } = {}) {
   })
   // and a second open competition to filter by
   b.competitions.push({ id: 'c-men', name: 'Swiss Beach Men', season: '2026', gender: 'men', archived: false, sport: 'beach', vm_leagues: [] })
-  b.teams.push({ id: 'men-team', competition_id: 'c-men', name: 'Keller / Huber', club: 'BC Bern', updated_at: '2026-08-01T00:00:00Z',
+  b.teams.push({ id: 'men-team', competition_id: 'c-men', name: 'Keller / Huber', club: 'BC Bergtal', updated_at: '2026-08-01T00:00:00Z',
     players: [{ id: 'm1', number: 1, first_name: 'Tim', last_name: 'Keller' }, { id: 'm2', number: 2, first_name: 'Leo', last_name: 'Huber' }], staff: [] })
   const teams = bundleToRows(b)
   const meta = { key: 'bundle', userId: 'u1', fetchedAt: '2026-10-06T08:00:05.000Z', competitions: bundleCompetitions(b) }
@@ -63,7 +63,7 @@ describe('SavedTeamPickerModal_beach', () => {
     expect(screen.getByText('Load saved team')).toBeInTheDocument()
     expect(names()).toEqual(['Keller / Huber', 'Müller / Weber', 'Rossi'])
     const mw = rows()[1]
-    expect(within(mw).getByText('Müller / Weber · BC Zürich · Coop Beachtour')).toBeInTheDocument()
+    expect(within(mw).getByText('Müller / Weber · BC Seeblick · Sunset Beachtour')).toBeInTheDocument()
     expect(within(mw).getByText('Coach: Eva Kunz')).toBeInTheDocument()
     expect(within(mw).getByText('2/2 players')).toBeInTheDocument()
     expect(within(rows()[2]).getByText('1/2 players')).toBeInTheDocument()
@@ -74,8 +74,8 @@ describe('SavedTeamPickerModal_beach', () => {
     renderPicker()
     const select = screen.getByLabelText('Competition')
     const options = within(select).getAllByRole('option').map(o => o.value)
-    expect(options).toEqual(['', COOP_ID, 'c-men'])
-    fireEvent.change(select, { target: { value: COOP_ID } })
+    expect(options).toEqual(['', TOUR_ID, 'c-men'])
+    fireEvent.change(select, { target: { value: TOUR_ID } })
     expect(names()).toEqual(['Müller / Weber', 'Rossi'])
     fireEvent.change(select, { target: { value: 'c-men' } })
     expect(names()).toEqual(['Keller / Huber'])
@@ -86,7 +86,7 @@ describe('SavedTeamPickerModal_beach', () => {
     const search = screen.getByLabelText('Search teams or players')
     fireEvent.change(search, { target: { value: 'weber' } })
     expect(names()).toEqual(['Müller / Weber'])
-    fireEvent.change(search, { target: { value: 'bc bern' } })
+    fireEvent.change(search, { target: { value: 'bc bergtal' } })
     expect(names()).toEqual(['Keller / Huber'])
     fireEvent.change(search, { target: { value: 'nobody' } })
     expect(rows()).toHaveLength(0)

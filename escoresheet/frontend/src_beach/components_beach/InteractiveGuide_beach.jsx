@@ -895,7 +895,7 @@ function MatchSetupMockup({ t }) {
               {t('interactiveGuide.mockups.teamA')}
             </div>
             <div style={{ background: '#3b82f6', color: 'var(--ov-text)', padding: '6px 10px', borderRadius: 4, fontSize: 14, fontWeight: 600, textAlign: 'center', marginBottom: 8 }}>
-              VBC Zürich
+              VBC Seeblick
             </div>
             <div style={{ fontSize: 11, opacity: 0.7, display: 'flex', justifyContent: 'space-between' }}>
               <span><Users /> 12 {t('interactiveGuide.mockups.players')}</span>
@@ -909,7 +909,7 @@ function MatchSetupMockup({ t }) {
               {t('interactiveGuide.mockups.teamB')}
             </div>
             <div style={{ background: '#ef4444', color: 'var(--ov-text)', padding: '6px 10px', borderRadius: 4, fontSize: 14, fontWeight: 600, textAlign: 'center', marginBottom: 8 }}>
-              Volley Luzern
+              Volley Bergtal
             </div>
             <div style={{ fontSize: 11, opacity: 0.7, display: 'flex', justifyContent: 'space-between' }}>
               <span><Users /> 11 {t('interactiveGuide.mockups.players')}</span>
@@ -988,7 +988,7 @@ function CoinTossMockup({ t }) {
               margin: '0 auto 8px',
               border: '3px solid #60a5fa'
             }}>
-              VBC Zürich
+              VBC Seeblick
             </div>
             <div style={{ fontSize: 11, opacity: 0.7 }}>{t('interactiveGuide.mockups.teamA')}</div>
           </div>
@@ -1009,7 +1009,7 @@ function CoinTossMockup({ t }) {
               margin: '0 auto 8px',
               border: '3px solid var(--ov-hairline)'
             }}>
-              Volley Luzern
+              Volley Bergtal
             </div>
             <div style={{ fontSize: 11, opacity: 0.7 }}>{t('interactiveGuide.mockups.teamB')}</div>
           </div>
@@ -1019,11 +1019,11 @@ function CoinTossMockup({ t }) {
         <div style={{ width: '100%', background: 'var(--ov-sunken)', borderRadius: 8, padding: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
             <span style={{ opacity: 0.6 }}>{t('interactiveGuide.mockups.serve')}:</span>
-            <span style={{ color: 'var(--ov-info-text)', fontWeight: 600 }}>VBC Zürich <Volleyball /></span>
+            <span style={{ color: 'var(--ov-info-text)', fontWeight: 600 }}>VBC Seeblick <Volleyball /></span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
             <span style={{ opacity: 0.6 }}>{t('interactiveGuide.mockups.leftSide')}:</span>
-            <span style={{ color: 'var(--ov-info-text)', fontWeight: 600 }}>VBC Zürich ←</span>
+            <span style={{ color: 'var(--ov-info-text)', fontWeight: 600 }}>VBC Seeblick ←</span>
           </div>
         </div>
 
@@ -1099,7 +1099,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16 }}>
           {/* Team 1 Team */}
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>VBC Zürich</div>
+            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>VBC Seeblick</div>
             <div style={{
               fontSize: 48,
               fontWeight: 700,
@@ -1127,7 +1127,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
 
           {/* team2 Team */}
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Volley Luzern</div>
+            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Volley Bergtal</div>
             <div style={{
               fontSize: 48,
               fontWeight: 700,
@@ -1265,7 +1265,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             textAlign: 'center'
           }}>
             <div style={{ fontSize: 40, fontWeight: 700, color: 'var(--ov-warning-text)' }}>0:25</div>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>VBC Zürich - Timeout 1/1</div>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>VBC Seeblick - Timeout 1/1</div>
             <button style={{
               marginTop: 12,
               padding: '8px 24px',
@@ -1321,18 +1321,18 @@ function MatchEndMockup({ t }) {
           textAlign: 'center'
         }}>
           <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>{t('interactiveGuide.mockups.winner')}</div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--ov-success-text)' }}>VBC Zürich</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--ov-success-text)' }}>VBC Seeblick</div>
         </div>
 
         {/* Final Score - Beach volleyball is best-of-3 */}
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 24 }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>VBC Zürich</div>
+            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>VBC Seeblick</div>
             <div style={{ fontSize: 48, fontWeight: 700, color: 'var(--ov-info-text)' }}>2</div>
           </div>
           <div style={{ fontSize: 20, opacity: 0.3 }}>:</div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Volley Luzern</div>
+            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Volley Bergtal</div>
             <div style={{ fontSize: 48, fontWeight: 700, color: 'var(--ov-danger-text)' }}>1</div>
           </div>
         </div>
