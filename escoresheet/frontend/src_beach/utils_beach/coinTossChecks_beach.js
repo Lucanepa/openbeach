@@ -7,6 +7,7 @@
  */
 
 import { isPlaceholderValue } from './idValue_beach'
+import { findOfficial } from './officials_beach'
 
 const hasNumber = (p) => p.number != null && p.number !== ''
 
@@ -25,8 +26,9 @@ export function coinTossConfirmIssues({ match = {}, team1Name = '', team2Name = 
   if (!team2Name || team2Name === 'Team 2' || team2Name.trim() === '') add('validation.team2NotSet')
 
   // 2. The 1st referee and the scorer, with names
-  const ref1 = match?.officials?.find(o => o.role === '1st referee')
-  const scorer = match?.officials?.find(o => o.role === 'scorer')
+  // (an older manual adjustment stored them as an object: officials_beach)
+  const ref1 = findOfficial(match?.officials, '1st referee')
+  const scorer = findOfficial(match?.officials, 'scorer')
   if (!ref1?.lastName || !ref1?.firstName) add('validation.refereeNotSet')
   if (!scorer?.lastName || !scorer?.firstName) add('validation.scorerNotSet')
 

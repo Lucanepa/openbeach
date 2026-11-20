@@ -36,6 +36,7 @@ import { waitForScoresheetPdf, PDF_FAIL, PDF_REQUEST_PARAM } from '../utils_beac
 import { logScoresheetPdf } from '../utils_beach/scoresheetPdfLog_beach'
 import { sheetRemarksText } from '../utils_beach/sheetRemarks_beach'
 import { compareEvents } from '../utils_beach/medicalRemarks_beach'
+import { findOfficial } from '../utils_beach/officials_beach'
 import { plausibleMinutes } from '../../scoresheet_pdf_beach/components_beach/sheetFormat_beach'
 import { isoOf, matchTimes, setEndMs, setStartMs } from '../../scoresheet_pdf_beach/components_beach/matchTimes_beach'
 import { formatTimeLocal } from '../utils_beach/timeUtils_beach'
@@ -764,14 +765,9 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
 
   // Check if optional fields exist
   // Check if officials array has these roles
-  const hasAsstScorer = match.asstScorerSignature !== undefined ||
-    (Array.isArray(match.officials) && match.officials.some(o =>
-      o.role?.toLowerCase() === 'assistant scorer' || o.role?.toLowerCase() === 'assistant_scorer'
-    ))
-  const hasRef2 = match.ref2Signature !== undefined || !!approvalFor(match, 'ref2') ||
-    (Array.isArray(match.officials) && match.officials.some(o =>
-      o.role?.toLowerCase() === '2nd referee' || o.role?.toLowerCase() === '2nd_referee'
-    ))
+  // (either stored shape: an older manual adjustment saved an object, officials_beach)
+  const hasAsstScorer = match.asstScorerSignature !== undefined || !!findOfficial(match.officials, 'assistant scorer')
+  const hasRef2 = match.ref2Signature !== undefined || !!approvalFor(match, 'ref2') || !!findOfficial(match.officials, '2nd referee')
 
   // Signature status checks - use POST-GAME captain signatures (not pre-match)
   // For forfait matches, skip captain signatures (forfeiting team captain may not be present)

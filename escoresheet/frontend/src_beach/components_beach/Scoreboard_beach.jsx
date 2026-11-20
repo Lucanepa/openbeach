@@ -91,6 +91,8 @@ import { openAppWindow } from '../utils_beach/openAppWindow_beach'
 import { TEAM_COLOUR_MARK, discPaint, effectiveTeamColour, isLightColour, teamBoxStyle } from '../utils_beach/teamColours_beach'
 import { preload, usePreloaded } from '../utils_beach/preload_beach'
 import { displayIdValue, readManageLicence } from '../utils_beach/idValue_beach'
+// a match's officials as one list, whatever shape it stored (an older manual adjustment saved an object)
+import { findOfficial, officialFullName, officialsList } from '../utils_beach/officials_beach'
 
 // ── volleyui chrome for the scoring screen ───────────────────────────────────
 // Only the chrome around the court takes these: the toolbar, the side columns,
@@ -8577,7 +8579,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                   </div>
                 </div>
 
-                {(data?.match?.officials && data.match.officials.length > 0) && (
+                {officialsList(data?.match?.officials).length > 0 && (
                   <div className="officials-section" style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid var(--ov-hairline)' }}>
                     <h3 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 600, color: 'var(--text)' }}>Match Officials</h3>
                     <table className="roster-table">
@@ -8590,10 +8592,11 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                         </tr>
                       </thead>
                       <tbody>
-                        {data.match.officials.map((official, idx) => (
+                        {officialsList(data.match.officials).map((official, idx) => (
                           <tr key={idx}>
                             <td style={{ textTransform: 'capitalize', fontWeight: 500 }}>{official.role || '—'}</td>
-                            <td>{official.lastName || ''} {official.firstName || ''}</td>
+                            {/* a line judge has one name field */}
+                            <td>{`${official.lastName || ''} ${official.firstName || ''}`.trim() || official.name || ''}</td>
                             <td>{official.country || '—'}</td>
                             {manageLicence && <td>{displayIdValue(official.dob) || '—'}</td>}
                           </tr>
@@ -9597,8 +9600,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                       <div ref={breakColumnRef} data-testid="court-column" style={{ flex: '0 0 71.43%', display: 'flex', flexDirection: 'column', alignItems: 'center', ...(breakPanelShown ? { alignSelf: 'stretch', minHeight: 0, overflowX: 'hidden', overflowY: breakPanelScrolls ? 'auto' : 'hidden', overscrollBehavior: 'contain' } : null) }}>
                     {/* 1R above court */}
                     {!isCompactMode && !isBetweenSets && (() => {
-                      const ref1 = data?.match?.officials?.find(o => o.role === '1st referee' || o.role === '1st Referee')
-                      const ref1Name = ref1 ? `${ref1.firstName || ''} ${ref1.lastName || ''}`.trim() : null
+                      const ref1Name = officialFullName(findOfficial(data?.match?.officials, '1st referee')) || null
                       if (!ref1Name) return null
                       return (
                         <div style={{
@@ -10508,8 +10510,7 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
 
                     {/* 2nd Referee - below court */}
                     {!isCompactMode && !isBetweenSets && (() => {
-                      const ref2 = data?.match?.officials?.find(o => o.role === '2nd referee' || o.role === '2nd Referee')
-                      const ref2Name = ref2 ? `${ref2.firstName || ''} ${ref2.lastName || ''}`.trim() : null
+                      const ref2Name = officialFullName(findOfficial(data?.match?.officials, '2nd referee')) || null
                       if (!ref2Name) return null
                       return (
                         <span style={{

@@ -12,6 +12,7 @@ import CountrySelect from './CountrySelect_beach'
 import CountryFlag from './CountryFlag_beach'
 import IdValueInput from './IdValueInput_beach'
 import { cleanIdValue, displayIdValue, idValueForSync, isPlaceholderValue, licenceOf, readManageLicence } from '../utils_beach/idValue_beach'
+import { findOfficial, officialsList } from '../utils_beach/officials_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
 import { isBackendAvailable, isRelayOriginPage, getCloudApiUrl, BEACH_DESKTOP_HTTP_PORT } from '../utils_beach/backendConfig_beach'
@@ -1084,30 +1085,32 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           })))
         }
 
-        // Load match officials
-        if (match.officials && match.officials.length > 0) {
-          const ref1 = match.officials.find(o => o.role === '1st referee')
+        // Load match officials (either stored shape: an older manual
+        // adjustment saved an object, and Match Setup then showed and saved none)
+        const storedOfficials = officialsList(match.officials)
+        if (storedOfficials.length > 0) {
+          const ref1 = findOfficial(storedOfficials, '1st referee')
           if (ref1) {
             setRef1First(ref1.firstName || '')
             setRef1Last(ref1.lastName || '')
             setRef1Country(ref1.country || 'CHE')
             setRef1Dob(displayIdValue(ref1.dob))
           }
-          const ref2 = match.officials.find(o => o.role === '2nd referee')
+          const ref2 = findOfficial(storedOfficials, '2nd referee')
           if (ref2) {
             setRef2First(ref2.firstName || '')
             setRef2Last(ref2.lastName || '')
             setRef2Country(ref2.country || 'CHE')
             setRef2Dob(displayIdValue(ref2.dob))
           }
-          const scorer = match.officials.find(o => o.role === 'scorer')
+          const scorer = findOfficial(storedOfficials, 'scorer')
           if (scorer) {
             setScorerFirst(scorer.firstName || '')
             setScorerLast(scorer.lastName || '')
             setScorerCountry(scorer.country || 'CHE')
             setScorerDob(displayIdValue(scorer.dob))
           }
-          const asst = match.officials.find(o => o.role === 'assistant scorer')
+          const asst = findOfficial(storedOfficials, 'assistant scorer')
           if (asst) {
             setAsstFirst(asst.firstName || '')
             setAsstLast(asst.lastName || '')
@@ -1115,13 +1118,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             setAsstDob(displayIdValue(asst.dob))
           }
           // Load line judges
-          const lj1 = match.officials.find(o => o.role === 'line judge 1')
+          const lj1 = findOfficial(storedOfficials, 'line judge 1')
           if (lj1) setLineJudge1(lj1.name || '')
-          const lj2 = match.officials.find(o => o.role === 'line judge 2')
+          const lj2 = findOfficial(storedOfficials, 'line judge 2')
           if (lj2) setLineJudge2(lj2.name || '')
-          const lj3 = match.officials.find(o => o.role === 'line judge 3')
+          const lj3 = findOfficial(storedOfficials, 'line judge 3')
           if (lj3) setLineJudge3(lj3.name || '')
-          const lj4 = match.officials.find(o => o.role === 'line judge 4')
+          const lj4 = findOfficial(storedOfficials, 'line judge 4')
           if (lj4) setLineJudge4(lj4.name || '')
         }
 

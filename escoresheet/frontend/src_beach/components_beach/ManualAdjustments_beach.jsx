@@ -14,6 +14,7 @@ import CorrectionsPanel from './corrections/CorrectionsPanel_beach'
 import IdValueInput from './IdValueInput_beach'
 import { cleanIdValue, idValueForSync } from '../utils_beach/idValue_beach'
 import { isCustomColour } from '../utils_beach/teamColours_beach'
+import { OFFICIAL_KEY_ROLES, officialRole, officialsList, officialsWithEdits } from '../utils_beach/officials_beach'
 
 // Standard volleyball team colors - keys for translation
 const TEAM_COLORS = [
@@ -55,14 +56,6 @@ function localDateTime(value) {
   if (Number.isNaN(d.getTime())) return { date: '', time: '' }
   const p = (n) => String(n).padStart(2, '0')
   return { date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, time: `${p(d.getHours())}:${p(d.getMinutes())}` }
-}
-
-/** The officials as saved: each value (licence or date of birth) cleaned, or as the cloud copy keeps it. */
-function officialsWithValues(officials, forCloud = false) {
-  return Object.fromEntries(Object.entries(officials || {}).map(([role, o]) => [
-    role,
-    { ...o, dob: forCloud ? idValueForSync(o?.dob) : cleanIdValue(o?.dob) }
-  ]))
 }
 
 /**
@@ -113,6 +106,9 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
   const [newEvents, setNewEvents] = useState([])
 
   // Editable state - Officials (with the licence value: a licence, or a date of birth)
+  // The four main officials are edited here; the match's officials as stored
+  // (Match Setup's list: the line judges too) are what the save starts from
+  const storedOfficialsRef = useRef([])
   const [editedOfficials, setEditedOfficials] = useState({
     ref1: { firstName: '', lastName: '', country: '', dob: '' },
     ref2: { firstName: '', lastName: '', country: '', dob: '' },
@@ -157,23 +153,12 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
       setEditedTeam2Players(data.team2Players.map(p => ({ ...p })))
       setAllEvents(data.events.map(e => ({ ...e })))
 
-      // Initialize officials from match data - handle both array and object formats
-      const officialsData = data.match?.officials
-      let ref1 = {}, ref2 = {}, scorer = {}, asstScorer = {}
-
-      if (Array.isArray(officialsData)) {
-        // Array format: [{ role: '1st referee', firstName, lastName, country, dob }, ...]
-        ref1 = officialsData.find(o => o.role === '1st referee' || o.role === 'ref1') || {}
-        ref2 = officialsData.find(o => o.role === '2nd referee' || o.role === 'ref2') || {}
-        scorer = officialsData.find(o => o.role === 'scorer') || {}
-        asstScorer = officialsData.find(o => o.role === 'assistant scorer' || o.role === 'asstScorer') || {}
-      } else if (officialsData) {
-        // Object format: { ref1: {...}, ref2: {...}, scorer: {...}, asstScorer: {...} }
-        ref1 = officialsData.ref1 || {}
-        ref2 = officialsData.ref2 || {}
-        scorer = officialsData.scorer || {}
-        asstScorer = officialsData.asstScorer || {}
-      }
+      // The officials as Match Setup's list, whatever the match stored (an
+      // older manual adjustment saved an object, utils_beach/officials_beach)
+      const stored = officialsList(data.match?.officials)
+      storedOfficialsRef.current = stored
+      const [ref1, ref2, scorer, asstScorer] = Object.values(OFFICIAL_KEY_ROLES)
+        .map(role => stored.find(o => officialRole(o.role) === role) || {})
 
       setEditedOfficials({
         ref1: { firstName: ref1.firstName || ref1.first_name || '', lastName: ref1.lastName || ref1.last_name || '', country: ref1.country || '', dob: ref1.dob || '' },
@@ -457,7 +442,9 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
             set3LeftTeam: editedMatch.set3LeftTeam ?? null,
             setLeftTeamOverrides: editedMatch.setLeftTeamOverrides
           } : {}),
-          officials: officialsWithValues(editedOfficials),
+          // Match Setup's list: the line judges and the fields not edited
+          // here stay (an object of the four main officials was saved before)
+          officials: officialsWithEdits(storedOfficialsRef.current, editedOfficials),
           manualChanges: [...existingChanges, ...changes]
         })
       }
@@ -601,7 +588,8 @@ export default function ManualAdjustments({ matchId, onClose, onSave }) {
           players_team2: playersTeam2,
           team1_data: team1Data,
           team2_data: team2Data,
-          officials: officialsWithValues(editedOfficials, true),
+          // a list replaces the cloud's (an object was merged into it)
+          officials: officialsWithEdits(storedOfficialsRef.current, editedOfficials, { cloud: true }),
           // the first server the swap kept, in the cloud coin toss
           ...(editedMatch._designationSwapped ? { coin_toss: coinTossCloud(editedMatch) } : {}),
           manual_changes: [...(editedMatch.manualChanges || []), ...changes]
