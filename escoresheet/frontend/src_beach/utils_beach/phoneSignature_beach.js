@@ -12,6 +12,7 @@
  * from a phone and one drawn here end up as the same kind of value in the
  * same field, so the PDF is unchanged.
  */
+import { officialsList } from './officials_beach'
 
 export const PAD_W = 4000
 const PAD_H_MIN = 1000
@@ -234,8 +235,9 @@ export function phoneSignContext({ match, slot, team1, team2, team1Captain = nul
     if (c) name = [c.number != null && c.number !== '' ? `#${c.number}` : '', personName(c)].filter(Boolean).join(' ')
   } else if (/^coach/.test(slot) && side) {
     name = personName(side === 'home' ? team1Coach : team2Coach)
-  } else if (OFFICIAL_ROLES[slot] && Array.isArray(m.officials)) {
-    const o = m.officials.find((x) => OFFICIAL_ROLES[slot].includes(String(x?.role || '').toLowerCase()))
+  } else if (OFFICIAL_ROLES[slot]) {
+    // either stored shape (an older manual adjustment saved an object: officials_beach)
+    const o = officialsList(m.officials).find((x) => OFFICIAL_ROLES[slot].includes(String(x?.role || '').toLowerCase()))
     name = personName(o)
   }
   if (name) ctx.name = name

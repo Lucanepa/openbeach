@@ -20,6 +20,7 @@ import { queueScorerClaim, isScorerMoved, isKnownClosedOnServer, MATCH_CLOSED } 
 import { CLOSING_STATUSES } from './matchReopen_beach'
 import { postMatchSignaturesFromServer } from './signatures_beach'
 import { listMatchBackups } from './logger_beach'
+import { officialsList } from './officials_beach'
 
 // IndexedDB key for storing file system directory handle
 const BACKUP_DB_NAME = 'escoresheet_backup'
@@ -1620,7 +1621,8 @@ export async function importMatchFromSupabase(cloudData) {
       team1ShortName: team1Data.short_name || null,
       team2ShortName: team2Data.short_name || null,
       // JSONB data stored locally
-      officials: match.officials || [],
+      // a list, also from a cloud row that merged an object into it (officials_beach)
+      officials: officialsList(match.officials),
       // Signatures: prefer JSONB, fallback to legacy
       team1CaptainSignature: signatures.team1_captain || match.team1_captain_signature,
       team2CaptainSignature: signatures.team2_captain || match.team2_captain_signature,

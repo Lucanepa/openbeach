@@ -34,6 +34,7 @@ import { NOTICE } from '../ui/volleyui/tones.js'
 import { teamBoxStyle } from '../utils_beach/teamColours_beach'
 import { focusLeaves, steadyOrder } from '../utils_beach/rosterOrder_beach'
 import { coinTossConfirmIssues } from '../utils_beach/coinTossChecks_beach'
+import { officialsList } from '../utils_beach/officials_beach'
 
 // The coin toss page: one kit page card on the stone page (App_beach paints
 // it), full width, in the `.ov-kit` scope.
@@ -806,7 +807,8 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               dob: idValueForSync(p.dob),
               is_captain: !!p.isCaptain
             })),
-            officials: updatedMatch.officials || []
+            // a list (an older manual adjustment stored an object, officials_beach)
+            officials: officialsList(updatedMatch.officials)
           },
           ts: new Date().toISOString(),
           status: 'queued'
@@ -928,7 +930,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
           status: 'live',
           current_set: 1, // Match starts at set 1
           // Officials as JSONB
-          officials: match?.officials || [],
+          officials: officialsList(match?.officials),
           // Connections JSONB - include referee settings
           connections: {
             referee_enabled: match?.refereeConnectionEnabled === true
@@ -1431,7 +1433,7 @@ export default function CoinToss({ matchId, onConfirm, onBack }) {
               dob: idValueForSync(p.dob),
               is_captain: !!p.isCaptain
             })),
-            officials: matchData.officials || []
+            officials: officialsList(matchData.officials)
           },
           ts: new Date().toISOString(),
           status: 'queued'

@@ -63,7 +63,7 @@ export function matchPatch(match) {
     const officials = match.officials.map(scrubPerson)
     if (changedList(match.officials, officials)) patch.officials = officials
   } else if (match?.officials && typeof match.officials === 'object') {
-    // Manual adjustments keep the officials as { ref1, ref2, scorer, asstScorer }
+    // an older manual adjustment kept the officials as { ref1, ref2, scorer, asstScorer }
     const entries = Object.entries(match.officials)
     const scrubbed = entries.map(([role, o]) => [role, scrubPerson(o)])
     if (scrubbed.some(([, o], i) => o !== entries[i][1])) patch.officials = Object.fromEntries(scrubbed)

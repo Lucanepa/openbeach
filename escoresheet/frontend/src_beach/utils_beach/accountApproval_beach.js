@@ -17,6 +17,7 @@
  * finished sets change, the approval is stale: it no longer completes the slot
  * and never prints on the PDF.
  */
+import { officialsList } from './officials_beach'
 
 /** match.officials role spellings of the three approving officials. */
 const OFFICIAL_ALIASES = Object.freeze({
@@ -299,11 +300,11 @@ export function approvalsBySlot(records) {
   return out
 }
 
-/** The match.officials entry of a MatchEnd role (scorer, ref2, ref1), or null. */
+/** The match.officials entry of a MatchEnd role (scorer, ref2, ref1), or null (either stored shape: officials_beach). */
 export function officialFor(match, role) {
   const aliases = OFFICIAL_ALIASES[role]
-  if (!aliases || !Array.isArray(match?.officials)) return null
-  return match.officials.find(o => aliases.includes(String(o?.role || '').toLowerCase()) || aliases.includes(o?.role)) || null
+  if (!aliases) return null
+  return officialsList(match?.officials).find(o => aliases.includes(String(o?.role || '').toLowerCase()) || aliases.includes(o?.role)) || null
 }
 
 /** "Last First", as the PDF's name column shows it. */
