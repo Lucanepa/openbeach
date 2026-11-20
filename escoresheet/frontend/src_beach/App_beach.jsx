@@ -208,7 +208,8 @@ export default function App() {
     return saved === 'true' // default false
   })
   // The licence column (licence number or date of birth) beside each name;
-  // default off. The setting kept its first key (utils_beach/idValue_beach).
+  // default on, a scorer's "off" is kept. The setting kept its first key
+  // (utils_beach/idValue_beach).
   const [manageLicence, setManageLicence] = useState(() => readManageLicence())
 
   // Wake lock refs and state

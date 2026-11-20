@@ -112,3 +112,22 @@ describe('MatchSetup_beach licence column', () => {
     expect(screen.queryByDisplayValue(/1998|1997/)).toBeNull()
   })
 })
+
+// Owner 20.11.2026: "Licence numbers" is on by default. A device that never
+// touched the switch shows the column; a scorer who turned it off keeps it off.
+describe('MatchSetup_beach licence column by default', () => {
+  it('no stored choice (a new install): the Licence column shows', async () => {
+    useMemoryLocalStorage()
+    await openTeam1View()
+    expect(screen.getAllByText('Licence').length).toBeGreaterThan(0)
+    expect(screen.getByTestId('team1-licence-0')).toBeInTheDocument()
+  })
+
+  it('the switch turned off: no Licence column', async () => {
+    const store = useMemoryLocalStorage()
+    store.set('manageDob', 'false')
+    await openTeam1View()
+    expect(screen.queryByTestId('team1-licence-0')).toBeNull()
+    expect(screen.queryByText('Licence')).toBeNull()
+  })
+})
