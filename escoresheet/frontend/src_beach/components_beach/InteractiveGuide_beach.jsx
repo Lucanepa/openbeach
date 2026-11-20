@@ -111,15 +111,31 @@ function QAItem({ question, answer }) {
   )
 }
 
+// A demo's short timeout (a flash, a message) that ends with the demo: one
+// still running when the guide closed set state on an unmounted demo (and a
+// test's 300 ms flash fired after its environment was gone)
+function useLater() {
+  const timers = useRef(new Set())
+  useEffect(() => {
+    const pending = timers.current
+    return () => { pending.forEach(clearTimeout); pending.clear() }
+  }, [])
+  return (fn, ms) => {
+    const id = setTimeout(() => { timers.current.delete(id); fn() }, ms)
+    timers.current.add(id)
+  }
+}
+
 // Interactive Demo Button
 function DemoButton({ label, color = '#3b82f6', onClick, small = false, disabled = false }) {
   const [clicked, setClicked] = useState(false)
+  const later = useLater()
 
   const handleClick = () => {
     if (disabled) return
     setClicked(true)
     onClick?.()
-    setTimeout(() => setClicked(false), 200)
+    later(() => setClicked(false), 200)
   }
 
   return (
@@ -153,11 +169,12 @@ function CourtDemo({ animateRotation = false, highlightPosition = null, t }) {
   ])
 
   const [isRotating, setIsRotating] = useState(false)
+  const later = useLater()
 
   const rotate = () => {
     if (isRotating) return
     setIsRotating(true)
-    setTimeout(() => {
+    later(() => {
       setPositions(prev => {
         const newPositions = [...prev]
         // Swap positions and toggle serve
@@ -251,17 +268,18 @@ function ScoreDemo({ t }) {
   const [team2Score, setteam2Score] = useState(10)
   const [team1Flash, setteam1Flash] = useState(false)
   const [team2Flash, setteam2Flash] = useState(false)
+  const later = useLater()
 
   const addteam1Point = () => {
     setteam1Score(s => Math.min(s + 1, 25))
     setteam1Flash(true)
-    setTimeout(() => setteam1Flash(false), 300)
+    later(() => setteam1Flash(false), 300)
   }
 
   const addteam2Point = () => {
     setteam2Score(s => Math.min(s + 1, 25))
     setteam2Flash(true)
-    setTimeout(() => setteam2Flash(false), 300)
+    later(() => setteam2Flash(false), 300)
   }
 
   return (
@@ -376,10 +394,11 @@ function ButtonStateDemo({ t }) {
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState('info') // 'info', 'success', 'error'
 
+  const later = useLater()
   const showMessage = (msg, type = 'info') => {
     setMessage(msg)
     setMessageType(type)
-    setTimeout(() => setMessage(''), 2500)
+    later(() => setMessage(''), 2500)
   }
 
   const handleStartRally = () => {
@@ -599,10 +618,11 @@ function TimeoutAvailabilityDemo({ t }) {
   const [activeCountdown, setActiveCountdown] = useState(null) // 'team1' or 'team2'
   const [countdown, setCountdown] = useState(30)
 
+  const later = useLater()
   const showMessage = (msg, type) => {
     setMessage(msg)
     setMessageType(type)
-    setTimeout(() => setMessage(''), 2500)
+    later(() => setMessage(''), 2500)
   }
 
   useEffect(() => {
