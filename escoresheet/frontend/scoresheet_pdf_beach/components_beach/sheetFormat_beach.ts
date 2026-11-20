@@ -36,3 +36,26 @@ export function plausibleMinutes(start: string | number | Date | null | undefine
   const minutes = Math.round((e - s) / 60000);
   return minutes <= maxMinutes ? minutes : null;
 }
+
+// The roles of the officials' object form (Manual adjustments saves
+// { ref1, ref2, scorer, asstScorer }) as the array form names them.
+const OFFICIAL_ROLES: Record<string, string> = {
+  ref1: '1st referee',
+  ref2: '2nd referee',
+  scorer: 'scorer',
+  asstScorer: 'assistant scorer'
+};
+
+/**
+ * A match's officials as one list of { role, firstName, lastName, country,
+ * dob, ... }: Match Setup keeps an array, Manual adjustments an object keyed
+ * ref1 / ref2 / scorer / asstScorer. The sheet read only the array, so after
+ * a manual adjustment its APPROVAL box printed no official at all.
+ */
+export function officialsList(officials: unknown): any[] {
+  if (Array.isArray(officials)) return officials.filter(o => o && typeof o === 'object');
+  if (!officials || typeof officials !== 'object') return [];
+  return Object.entries(officials as Record<string, any>)
+    .filter(([key, o]) => OFFICIAL_ROLES[key] && o && typeof o === 'object')
+    .map(([key, o]) => ({ ...o, role: OFFICIAL_ROLES[key] }));
+}
