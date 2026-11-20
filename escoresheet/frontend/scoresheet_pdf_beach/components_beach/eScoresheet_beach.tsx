@@ -10,6 +10,7 @@ import { sheetRemarksText } from '../../src_beach/utils_beach/sheetRemarks_beach
 import { gameNumberValue } from '../../src_beach/utils_beach/gameNumber_beach.js';
 // @ts-ignore - JS module
 import { displayIdValue } from '../../src_beach/utils_beach/idValue_beach.js';
+import { fitPageContent } from './pageFit_beach';
 
 // The sheet's many debug lines (whole match objects) only when asked for:
 // localStorage obScoresheetDebug = '1'. Logging them always slowed the
@@ -253,6 +254,9 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
   const page1Ref = useRef<HTMLDivElement>(null);
   const page2Ref = useRef<HTMLDivElement>(null);
   const page3Ref = useRef<HTMLDivElement>(null);
+  // Pages 1 and 2's content: scaled down when taller than the page (pageFit_beach)
+  const page1FitRef = useRef<HTMLDivElement>(null);
+  const page2FitRef = useRef<HTMLDivElement>(null);
 
   const set = (k: string, v: any) => {
     dataRef.current[k] = v; // Update ref synchronously
@@ -3655,7 +3659,11 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
     }
   };
 
-  const renderSet = (setNum: number) => {
+  // A set's margins are 2 px (were 4): page 1's two sets and page 2's set 3
+  // at their natural height fit the page at full size (pageFit_beach scales
+  // only what is still taller). flushTop: no top margin (page 2's set 3,
+  // right under the page's padding).
+  const renderSet = (setNum: number, flushTop = false) => {
     const prefix = `s${setNum}`;
 
     // Get team_up and team_down for this set
@@ -3667,7 +3675,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
     const teamDownSuffix = teamDown === 'team1' ? 't1' : 't2';
 
     return (
-      <div className="border-2 border-black flex mt-1 mb-1 text-black bg-white" style={{ fontSize: '0.7rem' }}>
+      <div className={`border-2 border-black flex ${flushTop ? 'mt-0' : 'mt-0.5'} mb-0.5 text-black bg-white`} style={{ fontSize: '0.7rem' }}>
         {/* MAIN SCORING AREA */}
         <div className="flex-1 flex flex-col">
 
@@ -3778,6 +3786,19 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
     onRemarksClipped?.(remarksClipped ? { text: remarksValue, page: remarksPage } : null);
   }, [remarksClipped, remarksValue, remarksPage, onRemarksClipped]);
 
+  // Pages 1 and 2 fitted to the page after every render (a coach's rows, a
+  // value that changes a row's height) and once the fonts are in: the PDF
+  // captures the page's box and nothing below it (pageFit_beach)
+  const fitPages = useCallback(() => {
+    for (const el of [page1FitRef.current, page2FitRef.current]) if (el) fitPageContent(el);
+  }, []);
+  useLayoutEffect(fitPages);
+  useEffect(() => {
+    let alive = true;
+    document.fonts?.ready?.then(() => { if (alive) fitPages(); });
+    return () => { alive = false; };
+  }, [fitPages]);
+
   // Auto-refresh every 3 seconds by requesting fresh data from parent window
   useEffect(() => {
     const interval = setInterval(() => {
@@ -3810,13 +3831,15 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
         <div className="print-corner br"></div>
         {/* Page Break Indicator - visible on screen only */}
         <div className="page-break-indicator"></div>
+        {/* The page's content, scaled down when taller than the page (pageFit_beach) */}
+        <div ref={page1FitRef} data-page-fit="1" className="flex flex-col flex-1 min-h-0">
         {/* HEADER */}
         <div className="bg-blue-900 text-white px-2 py-0.5 flex justify-between items-center">
           <span className="text-[9px]">openBeach eScoresheet</span>
         </div>
 
         {/* METADATA ROWS */}
-        <div className="border border-black mb-2">
+        <div className="border border-black mb-1">
           {/* Row 1 */}
           <div className="flex items-center px-1 py-1 border-b border-black h-5">
             <span className="text-[9px] w-28 text-black">Name of Competition:</span>
@@ -3914,6 +3937,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
           <div className="flex-1" style={{ minHeight: 0 }}>{renderSet(1)}</div>
           <div className="flex-1" style={{ minHeight: 0 }}>{renderSet(2)}</div>
         </div>
+        </div>
       </div>
 
       {/* ================= PAGE 2 ================= */}
@@ -3937,9 +3961,17 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
         <div className="print-corner br"></div>
         {/* Page Break Indicator - visible on screen only */}
         <div className="page-break-indicator"></div>
+        {/* The page's content, scaled down when taller than the page (pageFit_beach).
+            It was 19 px taller than the page for every match and the PDF cut
+            off the captains' post-match signatures and the coin toss row; it
+            fits a match without coaches at full size now: set 3's margins
+            (4 + 2 px), the APPROVAL box (6 px over its rows), the RESULTS
+            box's two header rows (line height) and two rows 4 px over their
+            text. */}
+        <div ref={page2FitRef} data-page-fit="2" className="flex flex-col flex-1 min-h-0">
         {/* SET 3 */}
-        <div style={{ marginBottom: '-2px' }}>
-          {renderSet(3)}
+        <div>
+          {renderSet(3, true)}
         </div>
 
         {/* FOOTER GRID */}
@@ -4113,13 +4145,13 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                   2026-10-25): the names end in "..." instead */}
               <div className="flex-1 min-w-0">
                 {/* Which team each half is (A left, B right) */}
-                <div className="flex text-[9px] font-bold border-b border-black text-black">
+                <div className="flex text-[9px] leading-tight font-bold border-b border-black text-black">
                   <div className="flex-[3] min-w-0 border-r border-black px-1 overflow-hidden" style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{get('res_label_a') || 'A'}</div>
                   <div className="w-32 shrink-0 border-r border-black" />
                   <div className="flex-[3] min-w-0 px-1 text-right overflow-hidden" style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{get('res_label_b') || 'B'}</div>
                 </div>
                 {/* Table Header */}
-                <div className="flex text-[9px] text-center font-bold border-b border-black bg-gray-100 text-black">
+                <div className="flex text-[9px] leading-tight text-center font-bold border-b border-black bg-gray-100 text-black">
                   <div className="flex-1 border-r border-black">Time-Outs</div>
                   <div className="flex-1 border-r border-black">Wins</div>
                   <div className="flex-1 border-r border-black">Points</div>
@@ -4160,7 +4192,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                   <div className="flex-1" style={centerStyle}><Input value={get(`res_tot_to_b`)} onChange={v => set(`res_tot_to_b`, v)} className="w-full h-full" /></div>
                 </div>
                 {/* Match Times */}
-                <div className="flex h-6 border-b border-black text-[9px] p-1 items-center justify-around">
+                <div className="flex h-5 border-b border-black text-[9px] p-1 items-center justify-around">
                   <div className="flex  items-center">
                     <span>Match starting time</span>
                     <div className="flex items-center gap-1">
@@ -4190,7 +4222,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                   </div>
                 </div>
                 {/* Winner */}
-                <div className="flex h-6 px-1 items-center bg-gray-400 text-xs leading-none">
+                <div className="flex h-5 px-1 items-center bg-gray-400 text-xs leading-none">
                   <span className="font-bold mr-2 shrink-0">Winning team</span>
                   <Input value={get('winner_name')} onChange={v => set('winner_name', v)} className="flex-1 min-w-0 text-left font-bold text-xs" style={{ padding: 0, height: '100%' }} />
                   <Input value={get('winner_country')} onChange={v => set('winner_country', v)} className="w-12 text-center font-bold text-[10px] ml-2" style={{ padding: 0, height: '100%' }} />
@@ -4204,8 +4236,9 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
             </div>
 
             {/* APPROVAL TABLE */}
-            {/* Height calculation: header 12px + 4 referees 64px + 2 line judges 32px + signatures 30px = 138px */}
-            <div className="border-2 border-black flex h-[150px] overflow-hidden">
+            {/* Height: header 13px + 4 officials 64px + 2 line judges 32px + signatures 30px = 139px, + 4px border:
+                144px (was 150px: page 2 ran 19 px past the page and the PDF cut the signatures off) */}
+            <div className="border-2 border-black flex h-[144px] overflow-hidden">
               <div className="w-8 font-bold text-xs border-r border-black bg-white text-black relative">
                 <span style={{
                   position: 'absolute',
@@ -4496,6 +4529,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
 
           </div>
 
+        </div>
         </div>
       </div>
 
