@@ -21,7 +21,7 @@ export default defineConfig({
     // signatures, 2026-10-08). Every wait ends on the screen or the database
     // (setup.js: 10 s each), so only a stuck test runs this long.
     testTimeout: 30000,
-    include: ['src_beach/**/*.{test,spec}.{js,jsx}'],
+    include: ['src_beach/**/*.{test,spec}.{js,jsx}', 'scripts/**/*.test.js'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

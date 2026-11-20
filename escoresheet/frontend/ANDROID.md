@@ -80,11 +80,15 @@ tablet has to uninstall (and lose its matches) to get updates again.
 
 The same as OpenVolley's app:
 
-- `versionName` = `version` in `package.json` (e.g. `2.0.0`).
-- `versionCode` = `(MAJOR * 1000000 + MINOR * 1000 + PATCH) * 10 + androidBuild`,
-  e.g. 2.0.0 → `20000000`, 2.0.1 → `20000010`. `androidBuild` in
+- `versionName` = `version` in `package.json`. Since 20.11.2026 that is a
+  **calendar version** `YY.M.N`: year, month (no leading zero), the month's
+  release from 0 (`26.11.0` = November 2026's first release, `26.11.1` its
+  second, `26.12.0` December's first). `node scripts/bump-version.js` sets it
+  and the other version files for a release; earlier releases were 2.x to 3.1.1.
+- `versionCode` = `(YY * 1000000 + M * 1000 + N) * 10 + androidBuild`,
+  e.g. 3.1.1 → `30010010`, 26.11.0 → `260110000`. `androidBuild` in
   `android/app/build.gradle` stays **0**.
-- **Every Android release bumps PATCH** in `package.json`, a native-only fix
+- **Every Android release gets a new version** in `package.json`, a native-only fix
   (Gradle, manifest, `MainActivity.java`) included, and is tagged
   `android-v<versionName>`. A tag F-Droid has built must never move.
 - Both values are **literals** in `defaultConfig` of `android/app/build.gradle`
