@@ -80,7 +80,7 @@ Set data from database includes:
 ### Match Info
 Match metadata includes:
 - Teams (A/B designation based on coin toss)
-- Officials (referees, scorer, assistant scorer)
+- Officials (referees, scorer, assistant scorer): `match.officials`, Match Setup's array or Manual adjustments' object (`ref1` / `ref2` / `scorer` / `asstScorer`); each one's `dob` (licence or date of birth) prints under "Licence" in the APPROVAL box, a column the box gets only when an official carries a value. Line judges have a name only.
 - Venue and date information
 - Signatures (captains)
 
