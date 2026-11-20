@@ -5,8 +5,8 @@ const local = (y, mo, d, h = 0, mi = 0) => new Date(y, mo - 1, d, h, mi).toISOSt
 
 describe('beach scoresheet file name (owner 2026-10-13: game<n>_<league>_<YYYY-MM-DD>)', () => {
   it('game<n>_<league>_<day>.pdf, the league left out when there is none', () => {
-    const match = { game_n: 7, league: 'Coop Beachtour', scheduledAt: local(2026, 10, 11, 9) }
-    expect(beachScoresheetFilename({ match })).toBe('game7_Coop-Beachtour_2026-10-11.pdf')
+    const match = { game_n: 7, league: 'Sunset Beachtour', scheduledAt: local(2026, 10, 11, 9) }
+    expect(beachScoresheetFilename({ match })).toBe('game7_Sunset-Beachtour_2026-10-11.pdf')
     expect(beachScoresheetFilename({ match: { ...match, league: '' } })).toBe('game7_2026-10-11.pdf')
   })
 

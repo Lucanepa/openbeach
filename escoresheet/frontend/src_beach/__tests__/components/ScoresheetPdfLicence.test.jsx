@@ -1,6 +1,8 @@
 // The PDF score sheet's TEAMS box (owner 19.11.2026): the value beside each
 // player's name is the licence, or a date of birth printed dd.mm.yyyy, under
 // the heading "Licence". A match without any value keeps the FIVB layout.
+// The APPROVAL box (owner 20.11.2026) prints the officials' licences the same
+// way: they were stored but the box had no column for them.
 import { describe, it, expect, beforeAll } from 'vitest'
 import { render, cleanup } from '@testing-library/react'
 import { buildVideoMatch } from '../fixtures/obVideoMatch20261008'
@@ -48,6 +50,85 @@ describe('score sheet PDF: the Licence column', () => {
     expect(fields.teams_licence_col).toBeUndefined()
     await new Promise(r => setTimeout(r, 0))
     expect(container.querySelector('[data-teams-licence-head]')).toBeNull()
+    cleanup()
+  })
+})
+
+function withOfficials(officials) {
+  const data = buildVideoMatch()
+  data.match.officials = officials
+  return data
+}
+
+const OFFICIALS = [
+  { role: '1st referee', firstName: 'Rita', lastName: 'Referee', country: 'CHE', dob: '204411' },
+  { role: '2nd referee', firstName: 'Remo', lastName: 'Zweiter', country: 'CHE', dob: '2001-02-03' },
+  { role: 'scorer', firstName: 'Sina', lastName: 'Schreiber', country: 'CHE', dob: '0077' },
+  { role: 'assistant scorer', firstName: 'Ada', lastName: 'Assist', country: 'ITA', dob: null },
+  { role: 'line judge 1', name: 'Lia Linie' },
+  { role: 'line judge 2', name: 'Lina Linie' }
+]
+
+describe('score sheet PDF: the officials\' licences in APPROVAL', () => {
+  it('prints each official\'s licence verbatim and a date as dd.mm.yyyy, under "Licence"', async () => {
+    const { fields, container } = sheet(withOfficials(OFFICIALS))
+    expect(fields.ref1_name).toBe('Referee Rita')
+    expect(fields.ref1_lic).toBe('204411')
+    expect(fields.ref2_lic).toBe('03.02.2001')
+    expect(fields.scorer_lic).toBe('0077')
+    expect(fields.asst_scorer_lic).toBeUndefined()
+    expect(fields.approval_licence_col).toBe('true')
+    // the line judges keep their names (they have no licence field)
+    expect(fields.lj1).toBe('Lia Linie')
+    expect(fields.lj2).toBe('Lina Linie')
+    await new Promise(r => setTimeout(r, 0))
+    expect(container.querySelector('[data-approval-licence-head]')?.textContent).toBe('Licence')
+    const cell = (k) => container.querySelector(`[data-approval-licence="${k}"] input`)?.value
+    expect(cell('ref1')).toBe('204411')
+    expect(cell('ref2')).toBe('03.02.2001')
+    expect(cell('scorer')).toBe('0077')
+    expect(cell('asst_scorer')).toBe('')
+    // the column sits between Name and Country; the line judges' rows span it
+    const head = [...container.querySelector('[data-approval-licence-head]').parentElement.children].map(td => td.textContent)
+    expect(head).toEqual(['Officials', 'Name', 'Licence', 'Country', 'Signature'])
+    const table = container.querySelector('[data-approval-licence-head]').closest('table')
+    expect(table.querySelectorAll('colgroup col')).toHaveLength(5)
+    const rows = [...table.querySelectorAll('tbody tr')]
+    const span = (tr) => [...tr.children].reduce((n, td) => n + (Number(td.getAttribute('colspan')) || 1), 0)
+    // four officials, two line judge rows (the first has the rowSpan label), the captains' signatures
+    expect(rows.map(span)).toEqual([5, 5, 5, 5, 5, 4, 5])
+    cleanup()
+  })
+
+  it('no official with a value: the APPROVAL box keeps its four columns', async () => {
+    const { fields, container } = sheet(withOfficials(OFFICIALS.map(o => ({ ...o, dob: o.dob == null ? o.dob : '01.01.1900' }))))
+    expect(fields.ref1_name).toBe('Referee Rita')
+    expect(fields.ref1_lic).toBeUndefined()
+    expect(fields.approval_licence_col).toBeUndefined()
+    await new Promise(r => setTimeout(r, 0))
+    expect(container.querySelector('[data-approval-licence-head]')).toBeNull()
+    expect(container.querySelector('[data-approval-licence]')).toBeNull()
+    const head = [...container.querySelectorAll('thead tr td')].map(td => td.textContent)
+    expect(head).toContain('Officials')
+    expect(head).not.toContain('Licence')
+    cleanup()
+  })
+
+  it('officials saved by Manual adjustments (an object) print too, with their licences', async () => {
+    const { fields } = sheet(withOfficials({
+      ref1: { firstName: 'Rita', lastName: 'Referee', country: 'CHE', dob: '204411' },
+      ref2: { firstName: '', lastName: '', country: '', dob: '' },
+      scorer: { firstName: 'Sina', lastName: 'Schreiber', dob: '14/03/1990' },
+      asstScorer: { firstName: 'Ada', lastName: 'Assist', dob: '' }
+    }))
+    expect(fields.ref1_name).toBe('Referee Rita')
+    expect(fields.ref1_country).toBe('CHE')
+    expect(fields.ref1_lic).toBe('204411')
+    expect(fields.scorer_name).toBe('Schreiber Sina')
+    expect(fields.scorer_lic).toBe('14.03.1990')
+    expect(fields.asst_scorer_name).toBe('Assist Ada')
+    expect(fields.ref2_lic).toBeUndefined()
+    expect(fields.approval_licence_col).toBe('true')
     cleanup()
   })
 })

@@ -3,7 +3,7 @@ import {
   normalizeName, beachNameKey, pairKeyFromName, pairKeyFromPlayers, teamKeys, teamCountry,
   savedTeamToBeachRoster, rosterHasNames, teamMatchesName, findBeachTeamSuggestions, zurichYear, seasonOf
 } from '../../utils_beach/savedTeams_beach'
-import { beachBundle, COOP_ID, MUELLER_WEBER_ID, ROSSI_ID } from '../fixtures/beachBundle'
+import { beachBundle, TOUR_ID, MUELLER_WEBER_ID, ROSSI_ID } from '../fixtures/beachBundle'
 
 // Cache rows as db_beach/savedTeams_beach.js builds them (bundleToRows),
 // built here without Dexie so this file stays pure.
@@ -133,17 +133,17 @@ describe('savedTeamToBeachRoster', () => {
 describe('findBeachTeamSuggestions', () => {
   const base = (over = {}) => ({
     id: 'r', competitionId: 'c', name: 'Müller / Weber', nameKey: 'müller/weber', pairKey: 'müller/weber',
-    competition: { id: 'c', name: 'Coop Beachtour', season: '2026', gender: 'women', archived: false },
+    competition: { id: 'c', name: 'Sunset Beachtour', season: '2026', gender: 'women', archived: false },
     players: [], staff: [], updatedAt: '2026-01-01T00:00:00Z', ...over
   })
-  const comp = (over) => ({ id: 'c', name: 'Coop Beachtour', season: '2026', gender: 'women', archived: false, ...over })
+  const comp = (over) => ({ id: 'c', name: 'Sunset Beachtour', season: '2026', gender: 'women', archived: false, ...over })
 
   it('finds the fixture teams by name on each side', () => {
     const rows = rowsOf(beachBundle())
-    const s = findBeachTeamSuggestions(rows, { team1Name: 'Weber / Müller', team2Name: 'Rossi', league: 'Coop Beachtour', gender: 'women', date: '2026-07-01' })
+    const s = findBeachTeamSuggestions(rows, { team1Name: 'Weber / Müller', team2Name: 'Rossi', league: 'Sunset Beachtour', gender: 'women', date: '2026-07-01' })
     expect(s.team1.id).toBe(MUELLER_WEBER_ID)
     expect(s.team2.id).toBe(ROSSI_ID)
-    expect(s.team1.competition.id).toBe(COOP_ID)
+    expect(s.team1.competition.id).toBe(TOUR_ID)
   })
 
   it('returns null for unmatched or empty names', () => {
@@ -153,9 +153,9 @@ describe('findBeachTeamSuggestions', () => {
   })
 
   it('ranks league first, then gender, then season, then the latest update', () => {
-    const league = base({ id: 'league', competition: comp({ name: 'Coop Beachtour', gender: 'men', season: '2020' }), updatedAt: '2020-01-01T00:00:00Z' })
+    const league = base({ id: 'league', competition: comp({ name: 'Sunset Beachtour', gender: 'men', season: '2020' }), updatedAt: '2020-01-01T00:00:00Z' })
     const gender = base({ id: 'gender', competition: comp({ name: 'Other', gender: 'women', season: '2026' }), updatedAt: '2026-09-01T00:00:00Z' })
-    const ctx = { team1Name: 'Müller / Weber', league: 'coop  beachtour', gender: 'women', date: '2026-07-01' }
+    const ctx = { team1Name: 'Müller / Weber', league: 'sunset  beachtour', gender: 'women', date: '2026-07-01' }
     expect(findBeachTeamSuggestions([gender, league], ctx).team1.id).toBe('league')
 
     const season = base({ id: 'season', competition: comp({ name: 'Other', season: '2026' }), updatedAt: '2020-01-01T00:00:00Z' })
@@ -178,7 +178,7 @@ describe('findBeachTeamSuggestions', () => {
     // the match is dated in the older season
     const past = base({ id: 'past', competition: comp({ id: 'c2019', season: '2019' }), updatedAt: '2019-06-01T00:00:00Z' })
     const current = base({ id: 'current', competition: comp({ id: 'cNow', season: zurichYear() }), updatedAt: '2030-01-01T00:00:00Z' })
-    const ctx = { team1Name: 'Müller / Weber', league: 'Coop Beachtour', gender: 'women' }
+    const ctx = { team1Name: 'Müller / Weber', league: 'Sunset Beachtour', gender: 'women' }
     expect(findBeachTeamSuggestions([current, past], { ...ctx, date: '15.08.2019' }).team1.id).toBe('past')
     expect(findBeachTeamSuggestions([current, past], { ...ctx, date: '2019-08-15' }).team1.id).toBe('past')
     // Half typed: this year

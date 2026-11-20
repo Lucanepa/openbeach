@@ -7,7 +7,7 @@
  *
  * LOCAL throwaway backend only. It needs an approved scorer (roles are granted
  * by SQL or an admin, never by sign-up) and, in the database, a beach
- * competition 'Coop Beachtour' with the pair 'Müller / Weber' (2 players,
+ * competition 'Sunset Beachtour' with the pair 'Müller / Weber' (2 players,
  * country CHE, coach) plus at least one indoor competition with a team.
  * Skipped without OB_BACKEND_URL and OB_SCORER_EMAIL.
  *
@@ -82,7 +82,7 @@ describe.skipIf(!BASE || !EMAIL)('saved beach teams on a local OpenVolley backen
     expect(res.status).toBe('refreshed')
     const rows = await cache.getSavedTeams({ userId })
     const mw = rows.find(r => r.name === 'Müller / Weber')
-    expect(mw).toMatchObject({ nameKey: 'müller/weber', pairKey: 'müller/weber', competition: { name: 'Coop Beachtour', season: '2026', sport: 'beach' } })
+    expect(mw).toMatchObject({ nameKey: 'müller/weber', pairKey: 'müller/weber', competition: { name: 'Sunset Beachtour', season: '2026', sport: 'beach' } })
     const { savedTeamToBeachRoster, findBeachTeamSuggestions } = await import('../../utils_beach/savedTeams_beach')
     const r = savedTeamToBeachRoster(mw)
     expect(r.roster.map(p => [p.number, p.lastName])).toEqual([[1, 'Müller'], [2, 'Weber']])

@@ -125,16 +125,16 @@ describe('stringUtils_beach', () => {
         expect(sanitizeForFilename(longStr, { maxLength: 100 })).toBe('a'.repeat(100))
       })
 
-      it('should handle real-world team names', () => {
-        expect(sanitizeForFilename('FC Zürich')).toBe('FC_Zuerich')
-        expect(sanitizeForFilename('Borussia Mönchengladbach')).toBe('Borussia_Moenchengladbach')
-        expect(sanitizeForFilename('São Paulo FC')).toBe('Sao_Paulo_FC')
+      it('should handle team names with umlauts and accents', () => {
+        expect(sanitizeForFilename('FC Bärental')).toBe('FC_Baerental')
+        expect(sanitizeForFilename('TSV Möwenbach')).toBe('TSV_Moewenbach')
+        expect(sanitizeForFilename('São Lunar FC')).toBe('Sao_Lunar_FC')
       })
 
-      it('should handle real-world player names', () => {
+      it('should handle player names with accents', () => {
         expect(sanitizeForFilename('José García')).toBe('Jose_Garcia')
         // Note: ð (eth) is removed as it's not a combining character, it's a separate letter
-        expect(sanitizeForFilename('Björk Guðmundsdóttir')).toBe('Bjoerk_Gumundsdottir')
+        expect(sanitizeForFilename('Björg Guðnadóttir')).toBe('Bjoerg_Gunadottir')
         expect(sanitizeForFilename('François Müller')).toBe('Francois_Mueller')
       })
     })
@@ -203,7 +203,7 @@ describe('stringUtils_beach', () => {
         expect(sanitizeSimple('!!!')).toBe('')
       })
 
-      it('should handle real-world player names', () => {
+      it('should handle player names with accents', () => {
         expect(sanitizeSimple('Müller')).toBe('MUELLER')
         expect(sanitizeSimple('García')).toBe('GARCIA')
         expect(sanitizeSimple('Björk')).toBe('BJOERK')

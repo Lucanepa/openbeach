@@ -356,7 +356,7 @@ describe('native backup engine', () => {
     Object.assign(m.state.match, {
       gamePin: '111111', refereePin: '222222', team1Pin: '333333', team2Pin: '444444',
       team1UploadPin: '555555', team2UploadPin: '666666', sessionId: 'sess-1',
-      connection_pins: { referee: '222222' }, game_pin: '111111', hall: 'Saalsporthalle'
+      connection_pins: { referee: '222222' }, game_pin: '111111', hall: 'Sporthalle Nord'
     })
     m.point('team1')
     engine.notify(1)
@@ -367,7 +367,7 @@ describe('native backup engine', () => {
     }
     const latest = JSON.parse(text)
     expect(latest.secretsRemoved).toBe(true)
-    expect(latest.match).toMatchObject({ hall: 'Saalsporthalle', seed_key: 'seed1' })
+    expect(latest.match).toMatchObject({ hall: 'Sporthalle Nord', seed_key: 'seed1' })
     expect(m.state.match.gamePin).toBe('111111') // the stored match is untouched
   })
 

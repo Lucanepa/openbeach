@@ -27,11 +27,17 @@ export const ACCOUNT_LICENCE = /^[0-9]{4,7}$/
  */
 export const LICENCE_OPTION_KEY = 'manageDob'
 
+/**
+ * Is the licence column on? On by default (owner 20.11.2026; it was off as
+ * the old date-of-birth column). Only the Options switch ever writes the
+ * key, so a stored 'false' is a scorer who turned it off and stays off; a
+ * device that never touched the switch (no key) gets the column.
+ */
 export function readManageLicence() {
   try {
-    return localStorage.getItem(LICENCE_OPTION_KEY) === 'true'
+    return localStorage.getItem(LICENCE_OPTION_KEY) !== 'false'
   } catch {
-    return false
+    return true
   }
 }
 

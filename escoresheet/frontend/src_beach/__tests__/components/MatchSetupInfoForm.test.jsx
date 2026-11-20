@@ -114,7 +114,7 @@ describe('MatchSetup_beach match info', () => {
     await openInfo()
     const gameN = screen.getByPlaceholderText('e.g. 12')
     await act(async () => { fireEvent.change(gameN, { target: { value: '12' } }) })
-    await act(async () => { fireEvent.change(screen.getByPlaceholderText('Enter the competition'), { target: { value: 'Coop Beachtour' } }) })
+    await act(async () => { fireEvent.change(screen.getByPlaceholderText('Enter the competition'), { target: { value: 'Sunset Beachtour' } }) })
     await act(async () => { fireEvent.change(screen.getByPlaceholderText('Enter the site'), { target: { value: 'Zürich' } }) })
     const confirm = screen.getAllByRole('button', { name: 'Create match' }).at(-1)
     await waitFor(() => expect(confirm).not.toBeDisabled())
@@ -134,7 +134,7 @@ describe('MatchSetup_beach Match No.', () => {
     await openInfo()
     const gameN = screen.getByPlaceholderText('e.g. 12')
     expect(gameN.getAttribute('inputmode')).toBe('numeric')
-    await act(async () => { fireEvent.change(screen.getByPlaceholderText('Enter the competition'), { target: { value: 'Coop Beachtour' } }) })
+    await act(async () => { fireEvent.change(screen.getByPlaceholderText('Enter the competition'), { target: { value: 'Sunset Beachtour' } }) })
     await act(async () => { fireEvent.change(screen.getByPlaceholderText('Enter the site'), { target: { value: 'Zürich' } }) })
     const confirm = () => screen.getAllByRole('button', { name: 'Create match' }).at(-1)
     for (const bad of ['M01', '12.5', '3000000000']) {

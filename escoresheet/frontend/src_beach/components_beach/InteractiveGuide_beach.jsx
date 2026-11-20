@@ -111,15 +111,31 @@ function QAItem({ question, answer }) {
   )
 }
 
+// A demo's short timeout (a flash, a message) that ends with the demo: one
+// still running when the guide closed set state on an unmounted demo (and a
+// test's 300 ms flash fired after its environment was gone)
+function useLater() {
+  const timers = useRef(new Set())
+  useEffect(() => {
+    const pending = timers.current
+    return () => { pending.forEach(clearTimeout); pending.clear() }
+  }, [])
+  return (fn, ms) => {
+    const id = setTimeout(() => { timers.current.delete(id); fn() }, ms)
+    timers.current.add(id)
+  }
+}
+
 // Interactive Demo Button
 function DemoButton({ label, color = '#3b82f6', onClick, small = false, disabled = false }) {
   const [clicked, setClicked] = useState(false)
+  const later = useLater()
 
   const handleClick = () => {
     if (disabled) return
     setClicked(true)
     onClick?.()
-    setTimeout(() => setClicked(false), 200)
+    later(() => setClicked(false), 200)
   }
 
   return (
@@ -153,11 +169,12 @@ function CourtDemo({ animateRotation = false, highlightPosition = null, t }) {
   ])
 
   const [isRotating, setIsRotating] = useState(false)
+  const later = useLater()
 
   const rotate = () => {
     if (isRotating) return
     setIsRotating(true)
-    setTimeout(() => {
+    later(() => {
       setPositions(prev => {
         const newPositions = [...prev]
         // Swap positions and toggle serve
@@ -251,17 +268,18 @@ function ScoreDemo({ t }) {
   const [team2Score, setteam2Score] = useState(10)
   const [team1Flash, setteam1Flash] = useState(false)
   const [team2Flash, setteam2Flash] = useState(false)
+  const later = useLater()
 
   const addteam1Point = () => {
     setteam1Score(s => Math.min(s + 1, 25))
     setteam1Flash(true)
-    setTimeout(() => setteam1Flash(false), 300)
+    later(() => setteam1Flash(false), 300)
   }
 
   const addteam2Point = () => {
     setteam2Score(s => Math.min(s + 1, 25))
     setteam2Flash(true)
-    setTimeout(() => setteam2Flash(false), 300)
+    later(() => setteam2Flash(false), 300)
   }
 
   return (
@@ -376,10 +394,11 @@ function ButtonStateDemo({ t }) {
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState('info') // 'info', 'success', 'error'
 
+  const later = useLater()
   const showMessage = (msg, type = 'info') => {
     setMessage(msg)
     setMessageType(type)
-    setTimeout(() => setMessage(''), 2500)
+    later(() => setMessage(''), 2500)
   }
 
   const handleStartRally = () => {
@@ -599,10 +618,11 @@ function TimeoutAvailabilityDemo({ t }) {
   const [activeCountdown, setActiveCountdown] = useState(null) // 'team1' or 'team2'
   const [countdown, setCountdown] = useState(30)
 
+  const later = useLater()
   const showMessage = (msg, type) => {
     setMessage(msg)
     setMessageType(type)
-    setTimeout(() => setMessage(''), 2500)
+    later(() => setMessage(''), 2500)
   }
 
   useEffect(() => {
@@ -895,7 +915,7 @@ function MatchSetupMockup({ t }) {
               {t('interactiveGuide.mockups.teamA')}
             </div>
             <div style={{ background: '#3b82f6', color: 'var(--ov-text)', padding: '6px 10px', borderRadius: 4, fontSize: 14, fontWeight: 600, textAlign: 'center', marginBottom: 8 }}>
-              VBC Zürich
+              VBC Seeblick
             </div>
             <div style={{ fontSize: 11, opacity: 0.7, display: 'flex', justifyContent: 'space-between' }}>
               <span><Users /> 12 {t('interactiveGuide.mockups.players')}</span>
@@ -909,7 +929,7 @@ function MatchSetupMockup({ t }) {
               {t('interactiveGuide.mockups.teamB')}
             </div>
             <div style={{ background: '#ef4444', color: 'var(--ov-text)', padding: '6px 10px', borderRadius: 4, fontSize: 14, fontWeight: 600, textAlign: 'center', marginBottom: 8 }}>
-              Volley Luzern
+              Volley Bergtal
             </div>
             <div style={{ fontSize: 11, opacity: 0.7, display: 'flex', justifyContent: 'space-between' }}>
               <span><Users /> 11 {t('interactiveGuide.mockups.players')}</span>
@@ -988,7 +1008,7 @@ function CoinTossMockup({ t }) {
               margin: '0 auto 8px',
               border: '3px solid #60a5fa'
             }}>
-              VBC Zürich
+              VBC Seeblick
             </div>
             <div style={{ fontSize: 11, opacity: 0.7 }}>{t('interactiveGuide.mockups.teamA')}</div>
           </div>
@@ -1009,7 +1029,7 @@ function CoinTossMockup({ t }) {
               margin: '0 auto 8px',
               border: '3px solid var(--ov-hairline)'
             }}>
-              Volley Luzern
+              Volley Bergtal
             </div>
             <div style={{ fontSize: 11, opacity: 0.7 }}>{t('interactiveGuide.mockups.teamB')}</div>
           </div>
@@ -1019,11 +1039,11 @@ function CoinTossMockup({ t }) {
         <div style={{ width: '100%', background: 'var(--ov-sunken)', borderRadius: 8, padding: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
             <span style={{ opacity: 0.6 }}>{t('interactiveGuide.mockups.serve')}:</span>
-            <span style={{ color: 'var(--ov-info-text)', fontWeight: 600 }}>VBC Zürich <Volleyball /></span>
+            <span style={{ color: 'var(--ov-info-text)', fontWeight: 600 }}>VBC Seeblick <Volleyball /></span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
             <span style={{ opacity: 0.6 }}>{t('interactiveGuide.mockups.leftSide')}:</span>
-            <span style={{ color: 'var(--ov-info-text)', fontWeight: 600 }}>VBC Zürich ←</span>
+            <span style={{ color: 'var(--ov-info-text)', fontWeight: 600 }}>VBC Seeblick ←</span>
           </div>
         </div>
 
@@ -1099,7 +1119,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16 }}>
           {/* Team 1 Team */}
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>VBC Zürich</div>
+            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>VBC Seeblick</div>
             <div style={{
               fontSize: 48,
               fontWeight: 700,
@@ -1127,7 +1147,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
 
           {/* team2 Team */}
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Volley Luzern</div>
+            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Volley Bergtal</div>
             <div style={{
               fontSize: 48,
               fontWeight: 700,
@@ -1265,7 +1285,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             textAlign: 'center'
           }}>
             <div style={{ fontSize: 40, fontWeight: 700, color: 'var(--ov-warning-text)' }}>0:25</div>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>VBC Zürich - Timeout 1/1</div>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>VBC Seeblick - Timeout 1/1</div>
             <button style={{
               marginTop: 12,
               padding: '8px 24px',
@@ -1321,18 +1341,18 @@ function MatchEndMockup({ t }) {
           textAlign: 'center'
         }}>
           <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>{t('interactiveGuide.mockups.winner')}</div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--ov-success-text)' }}>VBC Zürich</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--ov-success-text)' }}>VBC Seeblick</div>
         </div>
 
         {/* Final Score - Beach volleyball is best-of-3 */}
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 24 }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>VBC Zürich</div>
+            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>VBC Seeblick</div>
             <div style={{ fontSize: 48, fontWeight: 700, color: 'var(--ov-info-text)' }}>2</div>
           </div>
           <div style={{ fontSize: 20, opacity: 0.3 }}>:</div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Volley Luzern</div>
+            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Volley Bergtal</div>
             <div style={{ fontSize: 48, fontWeight: 700, color: 'var(--ov-danger-text)' }}>1</div>
           </div>
         </div>

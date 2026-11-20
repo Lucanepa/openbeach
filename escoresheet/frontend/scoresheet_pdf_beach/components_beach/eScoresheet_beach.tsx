@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import countries from 'i18n-iso-countries';
 import enLocale from 'i18n-iso-countries/langs/en.json';
-import { capitalizeWords, cleanTeamName, plausibleMinutes } from './sheetFormat_beach';
+import { capitalizeWords, cleanTeamName, officialsList, plausibleMinutes } from './sheetFormat_beach';
 import { isoOf, setEndMs, setStartMs } from './matchTimes_beach';
 // MTO / RIT: the chart marks and the remarks lines (shared with MatchEnd)
 import { medicalChartMarks } from '../../src_beach/utils_beach/medicalRemarks_beach.js';
@@ -1049,36 +1049,41 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
         }
       }
 
-      // Officials (from match.officials if available)
-      // match.officials is an array of { role, firstName, lastName, country, position? }
-      if (match?.officials && Array.isArray(match.officials)) {
+      // Officials: match.officials is an array of { role, firstName, lastName,
+      // country, dob, position? } (Match Setup), or an object keyed ref1 /
+      // ref2 / scorer / asstScorer (Manual adjustments)
+      const officials = officialsList(match?.officials);
+      if (officials.length > 0) {
 
         // Process line judges separately to handle positions correctly
         // buildOfficialsArray saves roles as 'line judge 1', 'line judge 2', etc.
-        const lineJudges = match.officials
+        const lineJudges = officials
           .filter((o: any) => o.role && o.role.startsWith('line judge'))
           .sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
 
+        // The APPROVAL box's keys of the four officials with a licence field
+        const approvalKey: Record<string, string> = {
+          '1st referee': 'ref1',
+          '2nd referee': 'ref2',
+          'scorer': 'scorer',
+          'assistant scorer': 'asst_scorer'
+        };
 
         // Process other officials first (Last Name First Name order for scoresheet)
-        match.officials.forEach((official: any) => {
+        officials.forEach((official: any) => {
+          const key = approvalKey[official.role];
+          if (!key) return;
           const firstName = official.firstName || official.first_name || '';
           const lastName = official.lastName || official.last_name || '';
           const fullName = lastName && firstName ? `${lastName} ${firstName}` : (lastName || firstName);
-          const country = official.country || '';
-
-          if (official.role === '1st referee') {
-            set('ref1_name', fullName);
-            set('ref1_country', country);
-          } else if (official.role === '2nd referee') {
-            set('ref2_name', fullName);
-            set('ref2_country', country);
-          } else if (official.role === 'scorer') {
-            set('scorer_name', fullName);
-            set('scorer_country', country);
-          } else if (official.role === 'assistant scorer') {
-            set('asst_scorer_name', fullName);
-            set('asst_scorer_country', country);
+          set(`${key}_name`, fullName);
+          set(`${key}_country`, official.country || '');
+          // the value beside the name, as in the TEAMS box: the licence
+          // verbatim, a date of birth as dd.mm.yyyy (line judges have none)
+          const licence = displayIdValue(official.dob);
+          if (licence) {
+            set(`${key}_lic`, licence);
+            set('approval_licence_col', 'true');
           }
         });
 
@@ -3219,6 +3224,10 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
     justifyContent: 'center'
   };
 
+  // The APPROVAL box's Licence column: only when an official carries a value
+  // (as the TEAMS box's for the players); the FIVB layout stays otherwise
+  const approvalLicenceCol = get('approval_licence_col') === 'true';
+
   // --- Render Helpers ---
 
   // 1. Header Row
@@ -4211,6 +4220,8 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                 <colgroup>
                   <col style={{ width: '70px' }} />
                   <col style={{ width: 'auto' }} />
+                  {/* the officials' licences, as the TEAMS box: only when one carries a value */}
+                  {approvalLicenceCol && <col style={{ width: '54px' }} />}
                   <col style={{ width: '40px' }} />
                   <col style={{ width: 'auto' }} />
                 </colgroup>
@@ -4219,6 +4230,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                   <tr className="bg-gray-100 text-black font-bold text-center h-3">
                     <td className="border-r border-b border-black px-1 py-0">Officials</td>
                     <td className="border-r border-b border-black px-1 py-0">Name</td>
+                    {approvalLicenceCol && <td data-approval-licence-head className="border-r border-b border-black px-1 py-0">Licence</td>}
                     <td className="border-r border-b border-black px-1 py-0">Country</td>
                     <td className="border-b border-black px-1 py-0">Signature</td>
                   </tr>
@@ -4234,6 +4246,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                     <tr key={r.k} className="h-4">
                       <td className="border-r border-b border-black px-1 font-bold text-left">{r.l}</td>
                       <td className="border-r border-b border-black p-0"><Input value={get(`${r.k}_name`)} onChange={v => set(`${r.k}_name`, v)} className="w-full h-full px-1" style={{ textAlign: 'left' }} /></td>
+                      {approvalLicenceCol && <td data-approval-licence={r.k} className="border-r border-b border-black p-0"><Input value={get(`${r.k}_lic`)} onChange={v => set(`${r.k}_lic`, v)} className="w-full h-full px-0.5 tabular-nums" style={{ textAlign: 'left' }} /></td>}
                       <td className="border-r border-b border-black p-0"><Input value={get(`${r.k}_country`)} onChange={v => set(`${r.k}_country`, v)} className="w-full h-full text-center" /></td>
                       <td className="border-b border-black bg-gray-50 p-0" style={{ overflow: 'hidden' }}>
                         {currentMatchData?.match?.[r.sig] && (
@@ -4253,7 +4266,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                   {/* Line Judges - reduced height to h-4 (16px) */}
                   <tr className="h-4">
                     <td rowSpan={2} className="border-r border-b border-black px-1 font-bold text-left align-middle">Line<br />Judges</td>
-                    <td colSpan={3} className="border-b border-black p-0">
+                    <td colSpan={approvalLicenceCol ? 4 : 3} className="border-b border-black p-0">
                       <div className="flex h-4">
                         <div className="flex-1 flex border-r border-black h-full">
                           <span className="w-4 border-r border-black font-bold h-full" style={centerStyle}>1</span>
@@ -4267,7 +4280,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                     </td>
                   </tr>
                   <tr className="h-4">
-                    <td colSpan={3} className="border-b border-black p-0">
+                    <td colSpan={approvalLicenceCol ? 4 : 3} className="border-b border-black p-0">
                       <div className="flex h-4">
                         <div className="flex-1 flex border-r border-black h-full">
                           <span className="w-4 border-r border-black font-bold h-full" style={centerStyle}>3</span>
@@ -4296,7 +4309,7 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                         </div>
                       )}
                     </td>
-                    <td colSpan={2} className="p-0 align-top" style={{ height: '30px', overflow: 'hidden', paddingLeft: '2px' }}>
+                    <td colSpan={approvalLicenceCol ? 3 : 2} className="p-0 align-top" style={{ height: '30px', overflow: 'hidden', paddingLeft: '2px' }}>
                       <span className="text-[4px]">Captain's post-match signature</span>
                       {currentMatchData?.match?.team2PostGameCaptainSignature && (
                         <div style={{ maxHeight: '22px', overflow: 'hidden' }}>

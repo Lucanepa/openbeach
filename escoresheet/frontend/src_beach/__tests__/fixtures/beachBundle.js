@@ -1,17 +1,18 @@
-// The shared beach bundle of beach-saved-teams-spec.md §2.6, verbatim: the
-// answer of GET /api/saved-teams?sport=beach that OpenVolley's backend tests
-// also use. beachBundle() returns a fresh deep copy for each test.
+// The shared beach bundle of beach-saved-teams-spec.md §2.6: the answer of
+// GET /api/saved-teams?sport=beach that OpenVolley's backend tests also use,
+// with made-up tour and club names (no real tour or club in test data).
+// beachBundle() returns a fresh deep copy for each test.
 
 const BUNDLE = JSON.parse(`
 { "version": "2026-10-06T08:00:00.000Z", "fetched_at": "2026-10-06T08:00:05.000Z", "sport": "beach",
   "competitions": [
-    { "id": "11111111-1111-4111-8111-111111111111", "name": "Coop Beachtour", "season": "2026", "gender": "women",
+    { "id": "11111111-1111-4111-8111-111111111111", "name": "Sunset Beachtour", "season": "2026", "gender": "women",
       "category": "A1", "vm_leagues": [], "archived": false, "updated_at": "2026-10-06T08:00:00.000Z", "sport": "beach" },
     { "id": "22222222-2222-4222-8222-222222222222", "name": "Old tour", "season": "2025", "gender": "women",
       "category": null, "vm_leagues": [], "archived": true, "updated_at": "2026-01-01T00:00:00.000Z", "sport": "beach" } ],
   "teams": [
     { "id": "33333333-3333-4333-8333-333333333333", "competition_id": "11111111-1111-4111-8111-111111111111",
-      "name": "Müller / Weber", "short_name": "MÜLLER/WEBER", "club": "BC Zürich", "color": "#3b82f6",
+      "name": "Müller / Weber", "short_name": "MÜLLER/WEBER", "club": "BC Seeblick", "color": "#3b82f6",
       "svrz_team_name": null, "updated_at": "2026-10-06T08:00:00.000Z", "sport": "beach",
       "players": [
         { "id": "44444444-4444-4444-8444-444444444441", "number": 1, "first_name": "Anna", "last_name": "Müller",
@@ -31,7 +32,7 @@ const BUNDLE = JSON.parse(`
       "staff": [] } ] }
 `)
 
-export const COOP_ID = '11111111-1111-4111-8111-111111111111'
+export const TOUR_ID = '11111111-1111-4111-8111-111111111111'
 export const OLD_TOUR_ID = '22222222-2222-4222-8222-222222222222'
 export const MUELLER_WEBER_ID = '33333333-3333-4333-8333-333333333333'
 export const ROSSI_ID = '66666666-6666-4666-8666-666666666666'

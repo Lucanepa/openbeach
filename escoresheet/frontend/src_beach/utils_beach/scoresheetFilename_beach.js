@@ -1,7 +1,7 @@
 // The file name of a saved beach scoresheet (owner, 2026-10-13, as OpenVolley's
 // scoresheet_pdf/utils/sheetFormat.ts buildScoresheetFilename and the
 // manager's download): game<n>_<league>_<YYYY-MM-DD>.pdf, e.g.
-// game7_Coop-Beachtour_2026-10-11.pdf. It was
+// game7_Sunset-Beachtour_2026-10-11.pdf. It was
 // <date>_<time>_<site>_Match<n>_<countries>.pdf.
 
 const TRANSLITERATION = { ä: 'ae', ö: 'oe', ü: 'ue', Ä: 'Ae', Ö: 'Oe', Ü: 'Ue', ß: 'ss' }

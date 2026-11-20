@@ -138,8 +138,27 @@ describe('the licence column setting', () => {
   beforeEach(() => { useMemoryLocalStorage() })
   it('keeps its first key, so a scorer who had dates of birth on keeps the column', () => {
     expect(LICENCE_OPTION_KEY).toBe('manageDob')
+    localStorage.setItem('manageDob', 'true')
+    expect(readManageLicence()).toBe(true)
+  })
+
+  // Owner 20.11.2026: "Licence numbers" on by default. Only the Options
+  // switch writes the key (the old default off was never stored), so no key
+  // is a device that never chose; 'false' is a scorer who turned it off.
+  it('is on for a new install or a device that never touched the switch', () => {
+    expect(localStorage.getItem('manageDob')).toBeNull()
+    expect(readManageLicence()).toBe(true)
+  })
+
+  it('keeps a scorer\'s own choice: off stays off, on stays on', () => {
+    localStorage.setItem('manageDob', 'false')
     expect(readManageLicence()).toBe(false)
     localStorage.setItem('manageDob', 'true')
+    expect(readManageLicence()).toBe(true)
+  })
+
+  it('is on when the storage cannot be read (a private window)', () => {
+    localStorage.getItem.mockImplementation(() => { throw new Error('SecurityError') })
     expect(readManageLicence()).toBe(true)
   })
 })
