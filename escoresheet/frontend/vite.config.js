@@ -180,6 +180,11 @@ export default defineConfig({
   },
   build: {
     ...(isCapacitor ? { outDir: 'dist-capacitor' } : {}),
+    // Hidden source maps on the web build Cloudflare Pages makes (CF_PAGES=1;
+    // OV_SOURCEMAPS=1 by hand): next to each bundle, no sourceMappingURL comment,
+    // so browsers never fetch them; OpenVolley's error tracker reads them for
+    // readable stacks (its backend lib/sourceMaps.js). Never in the apps.
+    sourcemap: !isCapacitor && (process.env.CF_PAGES === '1' || process.env.OV_SOURCEMAPS === '1') ? 'hidden' : false,
     // Use safer build options to avoid eval in production (Vite 8 minifies
     // with Oxc; 'esbuild' is deprecated there)
     target: 'es2015',

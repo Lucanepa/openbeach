@@ -1,3 +1,6 @@
+// First: the error reporter listens while the rest loads (errorReport_beach, privacy 1.22)
+import './utils_beach/errorReport_beach/boot_beach'
+import { setErrorTool } from './utils_beach/errorReport_beach/index_beach'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App_beach'
@@ -20,6 +23,8 @@ import { startActivityLog } from './utils_beach/activity/index_beach'
 import { applyUpdateAtStart } from './hooks_beach/useServiceWorker_beach'
 import { isDesktopScoretable, resolveDesktopWindow } from './utils_beach/appLifecycle_beach'
 import { runDobCleanupOnce } from './db_beach/dobCleanup_beach'
+
+setErrorTool('scorer', 'openbeach')
 
 // Diagnostics mode (off unless Options, ?diag=1 or OPENVOLLEY_DIAGNOSTICS=1
 // in the desktop app): first, so it sees this load and the database opening

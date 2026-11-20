@@ -1,3 +1,6 @@
+// First: the error reporter listens while the rest loads (errorReport_beach, privacy 1.22)
+import './utils_beach/errorReport_beach/boot_beach'
+import { setErrorTool } from './utils_beach/errorReport_beach/index_beach'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import RefereeApp from './RefereeApp_beach'
@@ -12,6 +15,8 @@ import { AuthProvider } from './contexts_beach/AuthContext_beach'
 import { ScaleProvider } from './contexts_beach/ScaleContext_beach'
 import { db } from './db_beach/db_beach'
 import { installDiagnostics } from './diagnostics_beach/index_beach'
+
+setErrorTool('referee', 'openbeach')
 
 // Diagnostics mode (off unless ?diag=1 or this device's Options switch):
 // first, so it sees this load and the database opening

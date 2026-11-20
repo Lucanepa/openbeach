@@ -1547,7 +1547,10 @@
     "thankYouRequest": "Suggestion reçue ! Nous l'étudierons pour les prochaines versions.",
     "fillRequired": "Merci de remplir tous les champs obligatoires.",
     "sendError": "Erreur lors de l'envoi. Réessaie s'il te plaît .",
-    "removeFile": "Retirer {{name}}"
+    "removeFile": "Retirer {{name}}",
+    "autoReports": "Envoyer automatiquement les rapports d'erreur",
+    "autoReportsHint": "Quand quelque chose ne va pas, l'application envoie au serveur d'OpenVolley ce qui n'a pas fonctionné et où (jamais ce que tu as tapé), aussi sans connexion. Politique de confidentialité, section 5.",
+    "deviceId": "Identifiant de cet appareil (pour une demande de suppression) :"
   },
   "rosterSetup": {
     "title": "Effectif",

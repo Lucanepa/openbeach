@@ -1,3 +1,6 @@
+// First: the error reporter listens while the rest loads (errorReport_beach, privacy 1.22)
+import './utils_beach/errorReport_beach/boot_beach'
+import { setErrorTool } from './utils_beach/errorReport_beach/index_beach'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import CompetitionAdminApp from './CompetitionAdminApp_beach'
@@ -11,6 +14,8 @@ import './i18n_beach'
 import { AlertProvider } from './contexts_beach/AlertContext_beach'
 import { AuthProvider } from './contexts_beach/AuthContext_beach'
 import { ScaleProvider } from './contexts_beach/ScaleContext_beach'
+
+setErrorTool('manager', 'openbeach')
 
 // Remove the cache_bust a reload added (Options > Clear cache); the rest of
 // the query stays: ?match= keeps a tablet on its live match.

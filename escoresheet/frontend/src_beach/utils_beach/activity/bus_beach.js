@@ -8,6 +8,14 @@
  */
 
 let sink = null
+// The error reporter (utils_beach/errorReport_beach): sees every entry, keeps
+// what it reports (a failed backup, a dropped upload), with or without a writer
+let errorTap = null
+
+/** Register the error reporter's tap (errorReport_beach installErrorReporter). */
+export function setErrorTap(fn) {
+  errorTap = typeof fn === 'function' ? fn : null
+}
 const early = []
 const EARLY_MAX = 200
 
@@ -18,6 +26,7 @@ const EARLY_MAX = 200
  * @param {{level?:'info'|'warn'|'error', matchId?:any, matchExt?:string, setIndex?:number, eventSeq?:number, eventExt?:string, accountId?:string|null}} [opts]
  */
 export function emitActivity(kind, data = {}, opts = {}) {
+  try { errorTap?.(kind, data, opts) } catch { /* reporting never breaks the app */ }
   try {
     if (sink) sink.record(kind, data, opts)
     else if (early.length < EARLY_MAX) early.push([kind, data, opts, new Date().toISOString()])

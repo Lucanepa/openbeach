@@ -1547,7 +1547,10 @@
     "thankYouRequest": "Vielen Dank für deine Funktionsanfrage! Ich werde sie für zukünftige Updates berücksichtigen.",
     "fillRequired": "Bitte fülle alle erforderlichen Felder aus.",
     "sendError": "Nachricht konnte nicht gesendet werden. Bitte versuche es erneut oder sende eine E-Mail direkt.",
-    "removeFile": "{{name}} entfernen"
+    "removeFile": "{{name}} entfernen",
+    "autoReports": "Fehlerberichte automatisch senden",
+    "autoReportsHint": "Wenn etwas schiefgeht, sendet die App, was schiefging und wo (nie, was du eingetippt hast), an den OpenVolley-Server, auch ohne Anmeldung. Datenschutzerklärung, Abschnitt 5.",
+    "deviceId": "Kennung dieses Geräts (für eine Löschanfrage):"
   },
   "rosterSetup": {
     "title": "Kader",
