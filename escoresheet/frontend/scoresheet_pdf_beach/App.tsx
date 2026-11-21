@@ -18,6 +18,26 @@ const countPages = (): number => {
 
 const t = (key: string, opts?: Record<string, unknown>) => String(i18n.t(key, opts));
 
+// The PDF is A4 landscape (297 x 210 mm) and each 277 x 190 mm page of the
+// sheet is placed on it at its true size, centred (10 mm margins), as
+// OpenVolley places its sheet on A3. It was stretched over the whole A4 page
+// (x 1.072 across, x 1.105 down: out of proportion) with no margin left for a
+// printer's unprintable edge.
+export const PDF_PAGE_MM = { width: 297, height: 210 } as const;
+export const SHEET_PAGE_MM = { width: 277, height: 190 } as const;
+export const SHEET_PAGE_OFFSET_MM = {
+  x: (PDF_PAGE_MM.width - SHEET_PAGE_MM.width) / 2,
+  y: (PDF_PAGE_MM.height - SHEET_PAGE_MM.height) / 2
+} as const;
+
+/**
+ * Draws a captured page of the sheet (a JPEG of the page's 277 x 190 mm box,
+ * so of its proportions) on the PDF's current page, at its true size.
+ */
+export function addSheetPageImage(pdf: any, imgData: string) {
+  pdf.addImage(imgData, 'JPEG', SHEET_PAGE_OFFSET_MM.x, SHEET_PAGE_OFFSET_MM.y, SHEET_PAGE_MM.width, SHEET_PAGE_MM.height, undefined, 'FAST');
+}
+
 /**
  * REMARKS too long for their box on the sheet (OpenVolley 4d4277be): the
  * whole text on pages of their own after the sheet (A4 landscape, as the
@@ -27,13 +47,13 @@ const t = (key: string, opts?: Record<string, unknown>) => String(i18n.t(key, op
 export function addRemarksPages(pdf: any, text: string, title: string) {
   const left = 15;
   const top = 38;
-  const bottom = 210 - 12;
+  const bottom = PDF_PAGE_MM.height - 12;
   const fontPt = 11;
   // jsPDF's line height: the font size times 1.15, in mm
   const lineMm = fontPt * 1.15 * 25.4 / 72;
   const perPage = Math.max(1, Math.floor((bottom - top) / lineMm));
   pdf.setFontSize(fontPt);
-  const lines: string[] = pdf.splitTextToSize(text, 297 - 2 * left);
+  const lines: string[] = pdf.splitTextToSize(text, PDF_PAGE_MM.width - 2 * left);
   for (let i = 0; i === 0 || i < lines.length; i += perPage) {
     pdf.addPage();
     pdf.setFontSize(14);
@@ -413,7 +433,7 @@ export default function App({ matchData }: { matchData?: any }) {
         await rasterizeHTML.drawHTML(htmlContent, canvas, { width, height });
 
         const imgData = canvas.toDataURL('image/jpeg', 0.85);
-        pdf.addImage(imgData, 'JPEG', 0, 0, 297, 210, undefined, 'FAST');
+        addSheetPageImage(pdf, imgData);
       }
       const clippedRemarks = remarksClippedRef.current;
       if (clippedRemarks) addRemarksPages(pdf, clippedRemarks.text, generateFilename().replace(/\.pdf$/i, ''));
