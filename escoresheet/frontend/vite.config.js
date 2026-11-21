@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
 import { PWA_INCLUDE_ASSETS, PWA_ICONS, THEME_COLOR } from './pwa-icons.js'
 import { IGNORE_URL_PARAMETERS } from './pwa-workbox.js'
+import { APP_PAGES } from './scripts/subdomain-pages.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -191,14 +192,11 @@ export default defineConfig({
     // card's heading got a margin, the header buttons padding).
     cssTarget: ['chrome111', 'edge111', 'firefox128', 'safari16.4'],
     rolldownOptions: {
+      // The pages next to index.html: one list with beach.openvolley.app's
+      // build (scripts/subdomain-pages.js, scripts/build-subdomains.js)
       input: {
         main: './index.html',
-        referee: './referee_beach.html',
-        livescore: './livescore_beach.html',
-        scoresheet: './scoresheet_beach.html',
-        scoresheetArchive: './scoresheet_archive_beach.html',
-        admin: './admin_beach.html',
-        scoreboard: './scoreboard_beach.html',
+        ...APP_PAGES,
       },
       output: {
         // Avoid eval in production builds
