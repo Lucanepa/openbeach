@@ -11,6 +11,7 @@ import { gameNumberValue } from '../../src_beach/utils_beach/gameNumber_beach.js
 // @ts-ignore - JS module
 import { displayIdValue } from '../../src_beach/utils_beach/idValue_beach.js';
 import { fitPageContent } from './pageFit_beach';
+import { fitNameBox } from './nameFit_beach';
 
 // The sheet's many debug lines (whole match objects) only when asked for:
 // localStorage obScoresheetDebug = '1'. Logging them always slowed the
@@ -122,6 +123,74 @@ const Input = ({
     aria-label={ariaLabel || placeholder || 'Input field'}
   />
 );
+
+/**
+ * A name that fits its cell (nameFit_beach): one line, smaller, two lines,
+ * at worst cut with "…". Editable as the sheet's other fields; while it has
+ * the focus it shows the whole name. Its cell must be `relative`: the
+ * textarea covers it (absolutely positioned) and takes its size from it.
+ */
+const FitName = ({
+  value,
+  onChange,
+  fontPx = 8,
+  ariaLabel
+}: {
+  value?: string;
+  onChange?: (val: string) => void;
+  fontPx?: number;
+  ariaLabel?: string;
+}) => {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const text = value || '';
+  const [focused, setFocused] = useState(false);
+  // the start of the name and "…" when even two lines at 75 % are too short
+  const [clipped, setClipped] = useState<string | null>(null);
+  // a font has loaded, or the cell's size changed (the page fit, the Licence
+  // column): fit again
+  const [refits, setRefits] = useState(0);
+  const lastFit = useRef('');
+  useEffect(() => {
+    const cell = ref.current?.parentElement;
+    const refit = () => setRefits(n => n + 1);
+    const fonts = typeof document !== 'undefined' ? (document as any).fonts : null;
+    fonts?.addEventListener?.('loadingdone', refit);
+    const ro = cell && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(refit) : null;
+    if (cell) ro?.observe(cell);
+    return () => {
+      fonts?.removeEventListener?.('loadingdone', refit);
+      ro?.disconnect();
+    };
+  }, []);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // the same name in a cell of the same size: nothing to do (no layout per step on every render)
+    const cell = el.parentElement;
+    const key = [text, fontPx, focused ? 1 : 0, refits, cell?.clientWidth, cell?.clientHeight].join('|');
+    if (key === lastFit.current) return;
+    lastFit.current = key;
+    const fit = fitNameBox(el, text, { fontPx, clip: !focused });
+    if (fit.clipped !== clipped) setClipped(fit.clipped);
+  });
+  return (
+    <textarea
+      ref={ref}
+      value={focused || clipped == null ? text : clipped}
+      // a name is one line of text: Enter adds no line break, a pasted one becomes a space
+      onChange={e => onChange?.(e.target.value.replace(/[\r\n]+/g, ' '))}
+      onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      rows={1}
+      spellCheck={false}
+      aria-label={ariaLabel}
+      title={clipped != null ? text : undefined}
+      className="absolute left-0 top-0 block w-full h-full m-0 border-0 px-1 py-0 outline-none bg-transparent font-mono text-left text-black resize-none overflow-hidden"
+      style={{ fontSize: `${fontPx}px` }}
+    />
+  );
+};
 
 // Box that toggles 'X'
 const XBox = ({
@@ -4007,23 +4076,23 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                   <div className="flex-1 pl-1 border border-b-0 border-l-0 border-black">Player's Name</div>
                   {get('teams_licence_col') === 'true' && <div data-teams-licence-head="t1" className="w-16 pl-1 border border-b-0 border-l-0 border-black">Licence</div>}
                 </div>
-                {/* Player 1 */}
+                {/* Player 1 (a long name fits its cell, as in APPROVAL: smaller, on two lines, at worst cut with "…") */}
                 <div className="flex text-[9px] h-5">
                   <div className="w-6 border border-black" style={centerStyle}><Input value={get('b_t1_p1_no')} onChange={v => set('b_t1_p1_no', v)} className="w-full text-center" /></div>
-                  <div className="flex-1 border border-l-0 border-black"><Input value={get('b_t1_p1_name')} onChange={v => set('b_t1_p1_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
-                  {get('teams_licence_col') === 'true' && <div className="w-16 border border-l-0 border-black"><Input value={get('b_t1_p1_lic')} onChange={v => set('b_t1_p1_lic', v)} className="w-full px-0.5 tabular-nums" style={{ textAlign: 'left' }} /></div>}
+                  <div data-teams-player-name="b_t1_p1" className="relative flex-1 min-w-0 overflow-hidden border border-l-0 border-black"><FitName value={get('b_t1_p1_name')} onChange={v => set('b_t1_p1_name', v)} fontPx={9} ariaLabel="Team 1 player 1 name" /></div>
+                  {get('teams_licence_col') === 'true' && <div className="w-16 border border-l-0 border-black"><Input value={get('b_t1_p1_lic')} onChange={v => set('b_t1_p1_lic', v)} className="w-full h-full px-0.5 tabular-nums" style={{ textAlign: 'left' }} /></div>}
                 </div>
                 {/* Player 2 */}
                 <div className="flex text-[9px] h-5">
                   <div className="w-6 border border-t-0 border-black" style={centerStyle}><Input value={get('b_t1_p2_no')} onChange={v => set('b_t1_p2_no', v)} className="w-full text-center" /></div>
-                  <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t1_p2_name')} onChange={v => set('b_t1_p2_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
-                  {get('teams_licence_col') === 'true' && <div className="w-16 border border-l-0 border-t-0 border-black"><Input value={get('b_t1_p2_lic')} onChange={v => set('b_t1_p2_lic', v)} className="w-full px-0.5 tabular-nums" style={{ textAlign: 'left' }} /></div>}
+                  <div data-teams-player-name="b_t1_p2" className="relative flex-1 min-w-0 overflow-hidden border border-l-0 border-t-0 border-black"><FitName value={get('b_t1_p2_name')} onChange={v => set('b_t1_p2_name', v)} fontPx={9} ariaLabel="Team 1 player 2 name" /></div>
+                  {get('teams_licence_col') === 'true' && <div className="w-16 border border-l-0 border-t-0 border-black"><Input value={get('b_t1_p2_lic')} onChange={v => set('b_t1_p2_lic', v)} className="w-full h-full px-0.5 tabular-nums" style={{ textAlign: 'left' }} /></div>}
                 </div>
                 {/* Coach row - only when hasCoach */}
                 {currentMatchData?.match?.hasCoach && (
                   <div className="flex text-[9px] h-5">
                     <div className="w-6 border border-t-0 border-black" style={centerStyle}><span className="text-[8px] font-bold">C</span></div>
-                    <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t1_coach_name')} onChange={v => set('b_t1_coach_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
+                    <div data-teams-player-name="b_t1_coach" className="relative flex-1 min-w-0 overflow-hidden border border-l-0 border-t-0 border-black"><FitName value={get('b_t1_coach_name')} onChange={v => set('b_t1_coach_name', v)} fontPx={9} ariaLabel="Team 1 coach name" /></div>
                     {get('teams_licence_col') === 'true' && <div className="w-16 border border-l-0 border-t-0 border-black" />}
                   </div>
                 )}
@@ -4075,20 +4144,20 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                 {/* Player 1 */}
                 <div className="flex text-[9px] h-5">
                   <div className="w-6 border border-t-0 border-black" style={centerStyle}><Input value={get('b_t2_p1_no')} onChange={v => set('b_t2_p1_no', v)} className="w-full text-center" /></div>
-                  <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_p1_name')} onChange={v => set('b_t2_p1_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
-                  {get('teams_licence_col') === 'true' && <div className="w-16 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_p1_lic')} onChange={v => set('b_t2_p1_lic', v)} className="w-full px-0.5 tabular-nums" style={{ textAlign: 'left' }} /></div>}
+                  <div data-teams-player-name="b_t2_p1" className="relative flex-1 min-w-0 overflow-hidden border border-l-0 border-t-0 border-black"><FitName value={get('b_t2_p1_name')} onChange={v => set('b_t2_p1_name', v)} fontPx={9} ariaLabel="Team 2 player 1 name" /></div>
+                  {get('teams_licence_col') === 'true' && <div className="w-16 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_p1_lic')} onChange={v => set('b_t2_p1_lic', v)} className="w-full h-full px-0.5 tabular-nums" style={{ textAlign: 'left' }} /></div>}
                 </div>
                 {/* Player 2 */}
                 <div className="flex text-[9px] h-5">
                   <div className="w-6 border border-t-0 border-black" style={centerStyle}><Input value={get('b_t2_p2_no')} onChange={v => set('b_t2_p2_no', v)} className="w-full text-center" /></div>
-                  <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_p2_name')} onChange={v => set('b_t2_p2_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
-                  {get('teams_licence_col') === 'true' && <div className="w-16 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_p2_lic')} onChange={v => set('b_t2_p2_lic', v)} className="w-full px-0.5 tabular-nums" style={{ textAlign: 'left' }} /></div>}
+                  <div data-teams-player-name="b_t2_p2" className="relative flex-1 min-w-0 overflow-hidden border border-l-0 border-t-0 border-black"><FitName value={get('b_t2_p2_name')} onChange={v => set('b_t2_p2_name', v)} fontPx={9} ariaLabel="Team 2 player 2 name" /></div>
+                  {get('teams_licence_col') === 'true' && <div className="w-16 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_p2_lic')} onChange={v => set('b_t2_p2_lic', v)} className="w-full h-full px-0.5 tabular-nums" style={{ textAlign: 'left' }} /></div>}
                 </div>
                 {/* Coach row - only when hasCoach */}
                 {currentMatchData?.match?.hasCoach && (
                   <div className="flex text-[9px] h-5">
                     <div className="w-6 border border-t-0 border-black" style={centerStyle}><span className="text-[8px] font-bold">C</span></div>
-                    <div className="flex-1 border border-l-0 border-t-0 border-black"><Input value={get('b_t2_coach_name')} onChange={v => set('b_t2_coach_name', v)} className="w-full px-1" style={{ textAlign: 'left' }} /></div>
+                    <div data-teams-player-name="b_t2_coach" className="relative flex-1 min-w-0 overflow-hidden border border-l-0 border-t-0 border-black"><FitName value={get('b_t2_coach_name')} onChange={v => set('b_t2_coach_name', v)} fontPx={9} ariaLabel="Team 2 coach name" /></div>
                     {get('teams_licence_col') === 'true' && <div className="w-16 border border-l-0 border-t-0 border-black" />}
                   </div>
                 )}
@@ -4278,7 +4347,8 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                   ].map(r => (
                     <tr key={r.k} className="h-4">
                       <td className="border-r border-b border-black px-1 font-bold text-left">{r.l}</td>
-                      <td className="border-r border-b border-black p-0"><Input value={get(`${r.k}_name`)} onChange={v => set(`${r.k}_name`, v)} className="w-full h-full px-1" style={{ textAlign: 'left' }} /></td>
+                      {/* a long name fits its cell: smaller, on two lines, at worst cut with "…" (nameFit_beach; the line judges too) */}
+                      <td data-approval-name={r.k} className="relative overflow-hidden border-r border-b border-black p-0"><FitName value={get(`${r.k}_name`)} onChange={v => set(`${r.k}_name`, v)} ariaLabel={`${r.l} name`} /></td>
                       {approvalLicenceCol && <td data-approval-licence={r.k} className="border-r border-b border-black p-0"><Input value={get(`${r.k}_lic`)} onChange={v => set(`${r.k}_lic`, v)} className="w-full h-full px-0.5 tabular-nums" style={{ textAlign: 'left' }} /></td>}
                       <td className="border-r border-b border-black p-0"><Input value={get(`${r.k}_country`)} onChange={v => set(`${r.k}_country`, v)} className="w-full h-full text-center" /></td>
                       <td className="border-b border-black bg-gray-50 p-0" style={{ overflow: 'hidden' }}>
@@ -4303,11 +4373,11 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                       <div className="flex h-4">
                         <div className="flex-1 flex border-r border-black h-full">
                           <span className="w-4 border-r border-black font-bold h-full" style={centerStyle}>1</span>
-                          <Input value={get('lj1')} onChange={v => set('lj1', v)} className="flex-1 px-1 h-full" style={{ textAlign: 'left' }} />
+                          <div data-approval-lj="1" className="relative flex-1 min-w-0 h-full overflow-hidden"><FitName value={get('lj1')} onChange={v => set('lj1', v)} ariaLabel="Line judge 1 name" /></div>
                         </div>
                         <div className="flex-1 flex h-full">
                           <span className="w-4 border-r border-black font-bold h-full" style={centerStyle}>2</span>
-                          <Input value={get('lj2')} onChange={v => set('lj2', v)} className="flex-1 px-1 h-full" style={{ textAlign: 'left' }} />
+                          <div data-approval-lj="2" className="relative flex-1 min-w-0 h-full overflow-hidden"><FitName value={get('lj2')} onChange={v => set('lj2', v)} ariaLabel="Line judge 2 name" /></div>
                         </div>
                       </div>
                     </td>
@@ -4317,11 +4387,11 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
                       <div className="flex h-4">
                         <div className="flex-1 flex border-r border-black h-full">
                           <span className="w-4 border-r border-black font-bold h-full" style={centerStyle}>3</span>
-                          <Input value={get('lj3')} onChange={v => set('lj3', v)} className="flex-1 px-1 h-full" style={{ textAlign: 'left' }} />
+                          <div data-approval-lj="3" className="relative flex-1 min-w-0 h-full overflow-hidden"><FitName value={get('lj3')} onChange={v => set('lj3', v)} ariaLabel="Line judge 3 name" /></div>
                         </div>
                         <div className="flex-1 flex h-full">
                           <span className="w-4 border-r border-black font-bold h-full" style={centerStyle}>4</span>
-                          <Input value={get('lj4')} onChange={v => set('lj4', v)} className="flex-1 px-1 h-full" style={{ textAlign: 'left' }} />
+                          <div data-approval-lj="4" className="relative flex-1 min-w-0 h-full overflow-hidden"><FitName value={get('lj4')} onChange={v => set('lj4', v)} ariaLabel="Line judge 4 name" /></div>
                         </div>
                       </div>
                     </td>

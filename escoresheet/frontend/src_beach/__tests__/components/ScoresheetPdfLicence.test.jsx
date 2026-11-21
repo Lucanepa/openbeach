@@ -3,13 +3,19 @@
 // the heading "Licence". A match without any value keeps the FIVB layout.
 // The APPROVAL box (owner 20.11.2026) prints the officials' licences the same
 // way: they were stored but the box had no column for them.
+// Long names (owner 21.11.2026): with the Licence column a name of 30 and more
+// characters was cut off at the edge of APPROVAL's Name column (and a player's
+// of 26 in TEAMS). A name now fits its cell: smaller, on two lines, at worst
+// cut with "…" (nameFit_beach). jsdom has no layout: the fitting is checked
+// on a modelled text box here and in Chromium in ScoresheetPdfPageFitBrowser.
 import { describe, it, expect, beforeAll } from 'vitest'
-import { render, cleanup } from '@testing-library/react'
+import { render, cleanup, fireEvent } from '@testing-library/react'
 import { buildVideoMatch } from '../fixtures/obVideoMatch20261008'
 
-let Sheet
+let Sheet, nameFit
 beforeAll(async () => {
   Sheet = (await import('../../../scoresheet_pdf_beach/components_beach/eScoresheet_beach.tsx')).default
+  nameFit = await import('../../../scoresheet_pdf_beach/components_beach/nameFit_beach.ts')
 })
 
 function sheet(matchData) {
@@ -129,6 +135,158 @@ describe('score sheet PDF: the officials\' licences in APPROVAL', () => {
     expect(fields.asst_scorer_name).toBe('Assist Ada')
     expect(fields.ref2_lic).toBeUndefined()
     expect(fields.approval_licence_col).toBe('true')
+    cleanup()
+  })
+})
+
+// A name cell's textarea as the browser lays it out: the cell `cellW` x
+// `cellH` px, a monospace font `charW` px a character, 4 px padding each
+// side; the text wraps after spaces and hyphens (a word longer than a line
+// overflows, or breaks anywhere once overflow-wrap is "anywhere").
+function nameBox({ cellW, cellH, charW = 4.8 }) {
+  const el = document.createElement('textarea')
+  const size = (v, base) => (v && v.endsWith('%') ? parseFloat(v) / 100 * base : base)
+  const width = () => size(el.style.width, cellW)
+  const lineH = () => parseFloat(el.style.lineHeight) || cellH
+  const layout = () => {
+    const perLine = Math.floor((width() - 8) / charW)
+    const anywhere = el.style.overflowWrap === 'anywhere'
+    const words = el.value.match(/[^\s-]*-?\s*/g).filter(Boolean)
+    let lines = 1, used = 0, widest = 0
+    for (const w of words) {
+      const len = w.trimEnd().length
+      if (used > 0 && used + len > perLine) { lines++; used = 0 }
+      if (anywhere && len > perLine) { lines += Math.ceil(len / perLine) - 1; used = len % perLine; widest = perLine; continue }
+      used += w.length
+      widest = Math.max(widest, Math.min(used, Math.max(len, used - (w.length - len))))
+    }
+    return { lines, widest }
+  }
+  Object.defineProperty(el, 'clientWidth', { get: () => Math.round(width()) })
+  Object.defineProperty(el, 'clientHeight', { get: () => Math.round(size(el.style.height, cellH)) })
+  Object.defineProperty(el, 'scrollWidth', { get: () => Math.round(Math.max(width(), layout().widest * charW + 8)) })
+  Object.defineProperty(el, 'scrollHeight', { get: () => Math.round(Math.max(size(el.style.height, cellH), layout().lines * lineH())) })
+  return el
+}
+
+const N30 = 'Musterhuber-Beispiel Annemarie'
+const N40 = 'Beispielmann-Mustergruber Marie-Theresia'
+const N50 = 'Beispielmann-Mustergruber-Probst Marie-Theresia An'
+const N90 = 'Beispielmann-Mustergruber-Probst-Vorlagenhofer-Testmannsberger Marie-Theresia Annemarie-Lu'
+
+describe('score sheet PDF: long names fit their cell (nameFit_beach)', () => {
+  it('the sizes tried: each on one line first, two lines once two fit the row, not below 75 %', () => {
+    const steps = nameFit.nameFitSteps(8, 15)
+    expect(steps).toEqual([
+      { px: 8, lines: 1 }, { px: 7.5, lines: 1 }, { px: 7, lines: 1 },
+      { px: 6.5, lines: 1 }, { px: 6.5, lines: 2 }, { px: 6, lines: 1 }, { px: 6, lines: 2 }
+    ])
+    // two lines of 6.5 px with room for descenders fill the 15 px row, no more
+    for (const st of steps.filter(x => x.lines === 2)) expect(2 * st.px * nameFit.NAME_LINE_FACTOR).toBeLessThanOrEqual(15)
+    // TEAMS' rows: 9 px, 18 px high; the steps end on 75 % itself
+    const teams = nameFit.nameFitSteps(9, 18)
+    expect(teams.map(x => x.px)).toEqual([9, 8.5, 8, 7.5, 7.5, 7, 7, 6.75, 6.75])
+    expect(teams.at(-1)).toEqual({ px: 6.75, lines: 2 })
+  })
+
+  it('"…" after the longest start that fits', () => {
+    expect(nameFit.clipWithEllipsis('abcdefghij', c => c.length <= 5)).toBe('abcd\u2026')
+    // no space left before "…"
+    expect(nameFit.clipWithEllipsis('abc defghij', c => c.length <= 5)).toBe('abc\u2026')
+    expect(nameFit.clipWithEllipsis('abc', () => false)).toBe('\u2026')
+  })
+
+  // APPROVAL's Name column: 155 px beside a licence, 182 px without; rows 15 px inside
+  it.each([
+    ['a name that fits stays at full size', 155, N30, { scale: 1, lines: 1 }],
+    ['40 characters beside a licence: two lines', 155, N40, { scale: 0.8125, lines: 2 }],
+    ['40 characters without the Licence column: one line, a little smaller', 182, N40, { scale: 0.875, lines: 1 }],
+    ['50 characters: two lines', 155, N50, { scale: 0.8125, lines: 2 }]
+  ])('%s', (_, cellW, text, expected) => {
+    const el = nameBox({ cellW, cellH: 15 })
+    const fit = nameFit.fitNameBox(el, text, { fontPx: 8 })
+    expect(fit).toEqual({ ...expected, clipped: null })
+    expect(el.value).toBe(text)
+    // the font stays at the cell's size (a browser's minimum font size cannot hold it up): the box is scaled
+    expect(el.style.fontSize).toBe('8px')
+    expect(el.style.transform).toBe(expected.scale < 1 ? `scale(${expected.scale})` : '')
+    expect(parseFloat(el.style.width) * expected.scale).toBeCloseTo(100, 6)
+    expect(parseFloat(el.style.height) * expected.scale).toBeCloseTo(100, 6)
+    // one line fills the row (centred), two lines share it
+    expect(parseFloat(el.style.lineHeight) * expected.scale * expected.lines).toBeCloseTo(15, 6)
+    expect(el.scrollWidth).toBeLessThanOrEqual(el.clientWidth + 1)
+    expect(el.scrollHeight).toBeLessThanOrEqual(el.clientHeight + 1)
+    expect(el.dataset.nameFit).toBe(String(Math.round(expected.scale * 1000) / 1000))
+  })
+
+  it('a name too long even for two lines at 75 %: its start and "…", the whole name while editing', () => {
+    const el = nameBox({ cellW: 155, cellH: 15 })
+    const fit = nameFit.fitNameBox(el, N90, { fontPx: 8 })
+    expect(fit.scale).toBe(0.75)
+    expect(fit.lines).toBe(2)
+    expect(fit.clipped).toMatch(/\u2026$/)
+    expect(N90.startsWith(fit.clipped.slice(0, -1))).toBe(true)
+    expect(el.value).toBe(fit.clipped)
+    expect(el.scrollHeight).toBeLessThanOrEqual(el.clientHeight + 1)
+    expect(el.dataset.nameClipped).toBe('true')
+    // with the focus (clip: false) the whole name, at the smallest size
+    const editing = nameFit.fitNameBox(el, N90, { fontPx: 8, clip: false })
+    expect(editing).toEqual({ scale: 0.75, lines: 2, clipped: null })
+    expect(el.value).toBe(N90)
+    expect(el.dataset.nameClipped).toBeUndefined()
+  })
+
+  it('no layout (jsdom, a hidden window): left as it is', () => {
+    const el = document.createElement('textarea')
+    expect(nameFit.fitNameBox(el, N90)).toEqual({ scale: 1, lines: 1, clipped: null })
+    expect(el.value).toBe(N90)
+    expect(el.style.transform).toBe('')
+  })
+})
+
+describe('score sheet PDF: the name cells on the sheet', () => {
+  const LONG = [
+    { role: '1st referee', lastName: 'Beispielmann-Mustergruber', firstName: 'Marie-Theresia', country: 'CHE', dob: '204411' },
+    { role: '2nd referee', firstName: 'Remo', lastName: 'Zweiter', country: 'CHE', dob: '2001-02-03' },
+    { role: 'scorer', firstName: 'Sina', lastName: 'Schreiber', country: 'CHE', dob: '0077' },
+    { role: 'assistant scorer', firstName: 'Ada', lastName: 'Assist', country: 'ITA', dob: null },
+    { role: 'line judge 1', name: 'Marie-Theresia An Beispielmann-Mustergruber-Probst' },
+    { role: 'line judge 2', name: 'Lina Linie' }
+  ]
+
+  it('APPROVAL: each official\'s and line judge\'s whole name in a fitted text box, still editable', async () => {
+    const { container } = sheet(withOfficials(LONG))
+    await new Promise(r => setTimeout(r, 0))
+    const box = (k) => container.querySelector(`[data-approval-name="${k}"] textarea[data-name-fit]`)
+    expect(box('ref1').value).toBe(N40)
+    expect(box('ref2').value).toBe('Zweiter Remo')
+    expect(box('asst_scorer').value).toBe('Assist Ada')
+    // the cell holds the text box (absolutely positioned: it never grows the row)
+    expect(box('ref1').parentElement.className.split(' ')).toContain('relative')
+    expect(box('ref1').className.split(' ')).toContain('absolute')
+    const lj = (n) => container.querySelector(`[data-approval-lj="${n}"] textarea[data-name-fit]`)
+    expect(lj(1).value).toBe('Marie-Theresia An Beispielmann-Mustergruber-Probst')
+    expect(lj(2).value).toBe('Lina Linie')
+    expect(lj(3).value).toBe('')
+    // typed corrections still go in
+    fireEvent.change(box('ref2'), { target: { value: 'Zweiter Remo-Luca' } })
+    expect(box('ref2').value).toBe('Zweiter Remo-Luca')
+    // one line of text: a pasted line break becomes a space
+    fireEvent.change(box('ref2'), { target: { value: 'Zweiter\nRemo' } })
+    expect(box('ref2').value).toBe('Zweiter Remo')
+    cleanup()
+  })
+
+  it('TEAMS: the players\' names fit the same way', async () => {
+    const data = buildVideoMatch()
+    data.team_1Players[0].lastName = 'Beispielmann-Mustergruber-Probst'
+    data.team_1Players[0].firstName = 'Marie-Theresia An'
+    const { container } = sheet(data)
+    await new Promise(r => setTimeout(r, 0))
+    const names = [...container.querySelectorAll('[data-teams-player-name] textarea[data-name-fit]')]
+    expect(names).toHaveLength(4)
+    expect(names[0].value).toBe(N50)
+    expect(names.every(n => n.style.fontSize === '9px')).toBe(true)
     cleanup()
   })
 })
