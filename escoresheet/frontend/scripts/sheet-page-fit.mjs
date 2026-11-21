@@ -5,17 +5,22 @@
  * than the page was cut off the PDF without a word (page 2, 19 px,
  * 2026-11-20).
  *
- * Reads a JSON list of { name, data } on stdin (data: what the match end page
- * puts in sessionStorage 'scoresheetData'), opens scoresheet_beach.html with
- * each, and prints one JSON line: { results: [{ name, pages: [{ id, pageH,
- * paddingBottom, contentBottom, lowest, fitScale }] }] } with heights in the
- * page's own px (the preview's zoom taken out). Without a Chromium build it
+ * Reads a JSON list of { name, data, pdf? } on stdin (data: what the match
+ * end page puts in sessionStorage 'scoresheetData'), opens
+ * scoresheet_beach.html with each, and prints one JSON line: { results: [{
+ * name, pages: [{ id, pageH, paddingBottom, contentBottom, lowest, fitScale
+ * }], names: [...], pdf? }] } with heights in the page's own px (the
+ * preview's zoom taken out). `names`: every fitted name field on pages 1 and
+ * 2 (nameFit_beach), its text box against its cell. With `pdf`, the PDF the
+ * Download button saves, read back: each page's size and the pictures on it
+ * (pixels, placement in mm from the top left). Without a Chromium build it
  * prints { skipped: reason }.
  *
  * Used by src_beach/__tests__/components/ScoresheetPdfPageFitBrowser.test.js;
  * by hand: node scripts/sheet-page-fit.mjs < variants.json
  */
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { inflateSync } from 'node:zlib'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -27,6 +32,40 @@ const readStdin = async () => {
   let s = ''
   for await (const chunk of process.stdin) s += chunk
   return JSON.parse(s || '[]')
+}
+
+const MM_PER_PT = 25.4 / 72
+
+/** Each page of a jsPDF file: its size and the pictures drawn on it ("w 0 0 h x y cm /I Do"), in mm from the top left. */
+async function readPdf(file) {
+  const { PDFDocument, PDFName, PDFArray } = await import('pdf-lib')
+  const doc = await PDFDocument.load(readFileSync(file))
+  return doc.getPages().map((page) => {
+    const { width, height } = page.getSize()
+    const contents = page.node.Contents()
+    const streams = contents instanceof PDFArray ? contents.asArray().map((r) => doc.context.lookup(r)) : [contents]
+    const ops = streams.map((st) => {
+      const raw = Buffer.from(st.getContents())
+      return (st.dict.get(PDFName.of('Filter')) ? inflateSync(raw) : raw).toString('latin1')
+    }).join('\n')
+    const xobjects = page.node.Resources()?.get(PDFName.of('XObject'))
+    const xdict = xobjects ? doc.context.lookup(xobjects) : null
+    const images = []
+    for (const m of ops.matchAll(/([-\d.]+)\s+[-\d.]+\s+[-\d.]+\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+cm\s*\/(\S+)\s+Do/g)) {
+      const [w, h, x, y] = m.slice(1, 5).map(Number)
+      const ref = xdict?.get(PDFName.of(m[5]))
+      const xo = ref ? doc.context.lookup(ref) : null
+      images.push({
+        pxW: xo?.dict.get(PDFName.of('Width'))?.asNumber(),
+        pxH: xo?.dict.get(PDFName.of('Height'))?.asNumber(),
+        x: x * MM_PER_PT,
+        y: (height - y - h) * MM_PER_PT,
+        w: w * MM_PER_PT,
+        h: h * MM_PER_PT
+      })
+    }
+    return { widthMm: width * MM_PER_PT, heightMm: height * MM_PER_PT, images }
+  })
 }
 
 const { chromium } = await import('playwright')
@@ -53,8 +92,8 @@ try {
   const { port } = server.httpServer.address()
   browser = await chromium.launch()
   const results = []
-  for (const { name, data } of variants) {
-    const context = await browser.newContext({ viewport: { width: 1400, height: 1000 } })
+  for (const { name, data, pdf } of variants) {
+    const context = await browser.newContext({ viewport: { width: 1400, height: 1000 }, acceptDownloads: !!pdf })
     await context.addInitScript((json) => { sessionStorage.setItem('scoresheetData', json) }, JSON.stringify(data))
     const page = await context.newPage()
     const errors = []
@@ -86,7 +125,43 @@ try {
         fitScale: fit?.dataset.fitScale ? Number(fit.dataset.fitScale) : 1
       }
     }))
-    results.push({ name, pages, errors })
+    // every fitted name: its text inside its text box, the box inside its cell
+    const names = await page.evaluate(() => [...document.querySelectorAll('#page-1 textarea[data-name-fit], #page-2 textarea[data-name-fit]')].map((el) => {
+      const cell = el.parentElement
+      const r = el.getBoundingClientRect()
+      const c = cell.getBoundingClientRect()
+      const cs = getComputedStyle(cell)
+      // the cell's padding box (inside its borders), on screen
+      const box = {
+        left: c.left + parseFloat(cs.borderLeftWidth),
+        top: c.top + parseFloat(cs.borderTopWidth),
+        right: c.right - parseFloat(cs.borderRightWidth),
+        bottom: c.bottom - parseFloat(cs.borderBottomWidth)
+      }
+      return {
+        cell: Object.entries(cell.dataset).map(([k, v]) => `${k}=${v}`).join(' '),
+        label: el.getAttribute('aria-label'),
+        text: el.title || el.value,
+        shown: el.value,
+        scale: Number(el.dataset.nameFit),
+        lines: Number(el.dataset.nameLines),
+        clipped: el.dataset.nameClipped === 'true',
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+        scrollHeight: el.scrollHeight,
+        clientHeight: el.clientHeight,
+        inCell: r.left >= box.left - 0.5 && r.top >= box.top - 0.5 && r.right <= box.right + 0.5 && r.bottom <= box.bottom + 0.5
+      }
+    }))
+    let pdfPages
+    if (pdf) {
+      const download = page.waitForEvent('download', { timeout: 120000 })
+      await page.getByRole('button', { name: /Download PDF/i }).first().click()
+      const file = join(cacheDir, `${name}.pdf`)
+      await (await download).saveAs(file)
+      pdfPages = await readPdf(file)
+    }
+    results.push({ name, pages, names, errors, ...(pdf ? { pdf: pdfPages } : {}) })
     await context.close()
   }
   print({ results })

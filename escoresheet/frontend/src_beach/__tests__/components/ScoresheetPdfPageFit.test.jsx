@@ -12,10 +12,12 @@ import { describe, it, expect, beforeAll } from 'vitest'
 import { render, cleanup } from '@testing-library/react'
 import { buildVideoMatch } from '../fixtures/obVideoMatch20261008'
 
-let Sheet, pageFitScale, fitPageContent, PAGE_FIT_TOLERANCE_PX
+let Sheet, pageFitScale, fitPageContent, PAGE_FIT_TOLERANCE_PX, app
 beforeAll(async () => {
   Sheet = (await import('../../../scoresheet_pdf_beach/components_beach/eScoresheet_beach.tsx')).default
   ;({ pageFitScale, fitPageContent, PAGE_FIT_TOLERANCE_PX } = await import('../../../scoresheet_pdf_beach/components_beach/pageFit_beach.ts'))
+  await import('../../i18n')
+  app = await import('../../../scoresheet_pdf_beach/App.tsx')
 })
 
 // A page's content wrapper as the browser lays it out: `box` px high as the
@@ -102,6 +104,48 @@ describe('the sheet: pages 1 and 2 carry their fit wrapper', () => {
     // jsdom has no layout: nothing is scaled
     expect(fit1.style.transform).toBe('')
     expect(fit2.style.transform).toBe('')
+    cleanup()
+  })
+})
+
+// The PDF (2026-11-21): each captured page was drawn over the whole A4 page
+// (297 x 210 mm), stretched x 1.072 across and x 1.105 down, with ~2 mm left
+// for the printer's edge. It is now placed at its true size, centred, as
+// OpenVolley places its sheet on A3; the browser test reads the real PDF.
+describe('the PDF: each page of the sheet at its true size on A4', () => {
+  const MM_PER_CSS_PX = 25.4 / 96
+
+  it('277 x 190 mm, 10 mm from every edge of the A4 landscape page', () => {
+    const calls = []
+    const pdf = { addImage: (...args) => calls.push(args) }
+    app.addSheetPageImage(pdf, 'data:image/jpeg;base64,AAAA')
+    expect(calls).toHaveLength(1)
+    const [img, format, x, y, w, h] = calls[0]
+    expect(img).toBe('data:image/jpeg;base64,AAAA')
+    expect(format).toBe('JPEG')
+    expect([x, y, w, h]).toEqual([10, 10, 277, 190])
+    expect(app.PDF_PAGE_MM).toEqual({ width: 297, height: 210 })
+    // centred: the same margin on both sides
+    expect(app.PDF_PAGE_MM.width - x - w).toBe(x)
+    expect(app.PDF_PAGE_MM.height - y - h).toBe(y)
+  })
+
+  it('in the proportions of the page it captures (no stretch)', () => {
+    const { container } = render(<Sheet matchData={buildVideoMatch()} />)
+    const pages = [...container.querySelectorAll('[id^="page-"]')]
+    expect(pages.length).toBeGreaterThanOrEqual(2)
+    for (const page of pages) {
+      // the page box the PDF captures is the size it is placed at
+      expect(page.style.width).toBe(`${app.SHEET_PAGE_MM.width}mm`)
+      expect(page.style.height).toBe(`${app.SHEET_PAGE_MM.height}mm`)
+    }
+    // the capture: the page's box in whole CSS px (offsetWidth x offsetHeight), twice over
+    const pxW = Math.round(app.SHEET_PAGE_MM.width / MM_PER_CSS_PX) * 2
+    const pxH = Math.round(app.SHEET_PAGE_MM.height / MM_PER_CSS_PX) * 2
+    const placed = app.SHEET_PAGE_MM.width / app.SHEET_PAGE_MM.height
+    expect(Math.abs((pxW / pxH) / placed - 1)).toBeLessThan(0.001)
+    // the old placement distorted it by 3 %
+    expect(Math.abs((pxW / pxH) / (297 / 210) - 1)).toBeGreaterThan(0.03)
     cleanup()
   })
 })
