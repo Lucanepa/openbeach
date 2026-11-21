@@ -104,7 +104,7 @@ describe('relayLivescoreMode', () => {
   })
 
   it('keeps the cloud everywhere else', () => {
-    expect(relayLivescoreMode({ servedFromLocalServer: false, origin: 'https://beach-livescore.openvolley.app' })).toBe(false)
+    expect(relayLivescoreMode({ servedFromLocalServer: false, origin: 'https://livescore-beach.openvolley.app' })).toBe(false)
     expect(relayLivescoreMode({ servedFromLocalServer: true, origin: 'http://192.168.1.20:5174', override: 'https://backend.openvolley.app' })).toBe(false)
     expect(relayLivescoreMode({})).toBe(false)
   })

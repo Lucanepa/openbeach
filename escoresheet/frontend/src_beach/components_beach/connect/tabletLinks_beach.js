@@ -19,11 +19,13 @@ const LAN_PATHS = {
   livescore: '/livescore'
 }
 
-// The openbeach sites (scripts/build-subdomains.js)
+// The openbeach sites (scripts/subdomain-pages.js `host`): the
+// <function>-beach names. beach-referee / beach-livescore.openvolley.app,
+// the build keys, have no DNS record, so a cloud QR code opened nothing.
 const CLOUD_SITES = {
   main: 'https://beach.openvolley.app',
-  referee: 'https://beach-referee.openvolley.app',
-  livescore: 'https://beach-livescore.openvolley.app'
+  referee: 'https://referee-beach.openvolley.app',
+  livescore: 'https://livescore-beach.openvolley.app'
 }
 
 /**

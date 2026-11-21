@@ -313,7 +313,7 @@ describe('ConnectTabletsModal_beach', () => {
     expect(screen.getByTestId('scan-no-link')).toHaveTextContent('Sign in first (step 1)')
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: 'Type the address' }))
-    expect(screen.getByTestId('scan-url')).toHaveTextContent(`https://beach-referee.openvolley.app/?match=${SEED}`)
+    expect(screen.getByTestId('scan-url')).toHaveTextContent(`https://referee-beach.openvolley.app/?match=${SEED}`)
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     expect(screen.getByTestId('login-modal')).toBeInTheDocument()
   })
@@ -323,12 +323,12 @@ describe('ConnectTabletsModal_beach', () => {
     renderModal({ match: MATCH, fetchImpl: server({ clients: [] }), win: {} })
     choose('Internet')
     expect(screen.getByTestId('server-account')).toHaveTextContent('scorer@example.org')
-    expect(qrUrl()).toBe(`https://beach-referee.openvolley.app/?match=${SEED}`)
+    expect(qrUrl()).toBe(`https://referee-beach.openvolley.app/?match=${SEED}`)
     expect(screen.getByTestId('pin-referee')).toHaveTextContent('123 456')
     expect(screen.getByTestId('role-status-referee')).toHaveTextContent('On · status not visible over the internet')
     expect(screen.getByTestId('devices-connected')).toHaveTextContent('Live status shows tablets on this network only')
     pick('livescore')
-    expect(qrUrl()).toBe('https://beach-livescore.openvolley.app/')
+    expect(qrUrl()).toBe('https://livescore-beach.openvolley.app/')
   })
 
   it('internet where the cloud is blocked: dimmed with the reason, no links', () => {
