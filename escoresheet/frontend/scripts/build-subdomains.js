@@ -7,12 +7,13 @@
  *   node scripts/build-subdomains.js            # Build all subdomains
  *   node scripts/build-subdomains.js beachapp   # Build only beachapp
  *
- * Output:
- *   dist-beachapp/       → beach.openvolley.app (main scoresheet; the Pages project keeps the beachapp name)
- *   dist-beach-referee/  → beach-referee.openvolley.app
- *   dist-beach-livescore/→ beach-livescore.openvolley.app
- *   dist-beach-scoresheet/→ beach-scoresheet.openvolley.app
- *   dist-beach-roster/   → beach-roster.openvolley.app
+ * Output (the hosts: subdomain-pages.js `host`):
+ *   dist-beachapp/         → beach.openvolley.app (main scoresheet and the pages
+ *                            it opens: APP_PAGES; the Pages project keeps the beachapp name)
+ *   dist-beach-referee/    → referee-beach.openvolley.app
+ *   dist-beach-livescore/  → livescore-beach.openvolley.app
+ *   dist-beach-scoresheet/ → scoresheet-beach.openvolley.app
+ *   dist-beach-scoreboard/ → no site of its own (beach.openvolley.app/scoreboard_beach.html)
  */
 
 import { build } from 'vite'
@@ -23,7 +24,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { PWA_INCLUDE_ASSETS, PWA_ICONS, THEME_COLOR } from '../pwa-icons.js'
 import { IGNORE_URL_PARAMETERS } from '../pwa-workbox.js'
-import { subdomains, htmlFor } from './subdomain-pages.js'
+import { subdomains, htmlFor, hostFor, missingFromBuild } from './subdomain-pages.js'
 import { precacheUnderFinalName } from './subdomain-precache.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -54,7 +55,7 @@ async function buildSubdomain(subdomain, basePath = '/') {
   // Clean output directory
   if (existsSync(outDir)) rmSync(outDir, { recursive: true })
 
-  console.log(`\n🏐 Building ${subdomain}.openvolley.app...`)
+  console.log(`\n🏐 Building ${hostFor(subdomain)}...`)
 
   // Create temp index.html in frontend root (use custom HTML for scoresheet)
   const htmlContent = htmlFor(config)
@@ -137,7 +138,13 @@ async function buildSubdomain(subdomain, basePath = '/') {
         outDir,
         emptyOutDir: true,
         rolldownOptions: {
-          input: tempIndexPath,
+          // beachapp: its index.html and the pages the scoretable opens on
+          // its own origin (APP_PAGES; the PDF sheet reads the scorer's
+          // sessionStorage). Under vite.config.js's input names: the two
+          // configs merge, an object input key by key.
+          input: config.pages
+            ? { main: tempIndexPath, ...Object.fromEntries(Object.entries(config.pages).map(([k, p]) => [k, resolve(frontendDir, p)])) }
+            : tempIndexPath,
           output: {
             format: 'es',
             codeSplitting: {
@@ -170,7 +177,15 @@ async function buildSubdomain(subdomain, basePath = '/') {
       copyFileSync(finalHtmlPath, resolve(outDir, '404.html'))
     }
 
-    console.log(`✅ Built ${subdomain}.openvolley.app → dist-${subdomain}/`)
+    // A site without a page the app opens (the match-end PDF's sheet among
+    // them) must not go live: fail the build, Cloudflare Pages keeps the last
+    // good deploy
+    const missing = missingFromBuild(outDir, config, { pwa: !disablePWA })
+    if (missing.length) {
+      throw new Error(`dist-${subdomain} lacks: ${missing.join(', ')}`)
+    }
+
+    console.log(`✅ Built ${hostFor(subdomain)} → dist-${subdomain}/`)
 
   } finally {
     // Clean up temp file
@@ -199,7 +214,7 @@ async function main() {
     console.log('\n✨ All subdomain builds complete!')
     console.log('\n📁 Output directories:')
     for (const subdomain of Object.keys(subdomains)) {
-      console.log(`   dist-${subdomain}/ → ${subdomain}.openvolley.app`)
+      console.log(`   dist-${subdomain}/ → ${hostFor(subdomain)}`)
     }
   }
 }

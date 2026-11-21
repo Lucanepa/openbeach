@@ -37,7 +37,7 @@ describe('ConnectionSetupModal_beach', () => {
     expect(dbMock.matches.get).toHaveBeenCalledWith(3)
     // a web build opens on Internet: the beach referee site with the match
     await waitFor(() => expect(screen.getByTestId('pin-referee')).toHaveTextContent('654 949'))
-    expect(screen.getByTestId('role-qr')).toHaveAttribute('data-url', 'https://beach-referee.openvolley.app/?match=match_3_x')
+    expect(screen.getByTestId('role-qr')).toHaveAttribute('data-url', 'https://referee-beach.openvolley.app/?match=match_3_x')
   })
 
   it('without a match: open a match first', async () => {

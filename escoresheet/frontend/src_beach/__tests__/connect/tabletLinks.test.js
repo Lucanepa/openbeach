@@ -46,8 +46,8 @@ describe('lanRoleUrl', () => {
 
 describe('cloudRoleUrl', () => {
   it('links the beach sites, the referee with the match', () => {
-    expect(cloudRoleUrl('referee', 'm1')).toBe('https://beach-referee.openvolley.app/?match=m1')
-    expect(cloudRoleUrl('livescore', 'm1')).toBe('https://beach-livescore.openvolley.app/')
+    expect(cloudRoleUrl('referee', 'm1')).toBe('https://referee-beach.openvolley.app/?match=m1')
+    expect(cloudRoleUrl('livescore', 'm1')).toBe('https://livescore-beach.openvolley.app/')
     expect(cloudRoleUrl('main', 'm1')).toBe('https://beach.openvolley.app/')
     expect(cloudRoleUrl('bench_home', 'm1')).toBeNull()
   })
