@@ -16,6 +16,28 @@
 
 import { getCloudApiUrl } from '../utils_beach/backendConfig_beach'
 import { deviceId, platformName } from '../utils_beach/identity_beach'
+import { OLD_API_CACHES } from '../../pwa-workbox.js'
+
+/**
+ * Deletes the service worker caches earlier versions kept API answers in
+ * ('api-cache', 'network-cache': pwa-workbox.js OLD_API_CACHES). They were
+ * keyed by URL only, so they held one account's answers (/api/me, saved
+ * teams, approvals, relay bundles) for whoever came next on the device
+ * (audit SEC-20). The worker of this version keeps no API answer
+ * (API_NETWORK_ONLY_ROUTE); a worker of an older version, still in control
+ * until the page takes the update, may write them again, so they are deleted
+ * at every start and whenever a session ends here. Never throws.
+ * @param {{ caches?: CacheStorage }} [opts]
+ */
+export function dropOldApiCaches({ caches: store = typeof caches !== 'undefined' ? caches : undefined } = {}) {
+  if (!store || typeof store.delete !== 'function') return Promise.resolve()
+  return Promise.all(OLD_API_CACHES.map((name) => {
+    try { return Promise.resolve(store.delete(name)).catch(() => false) } catch { return false }
+  })).then(() => undefined, () => undefined)
+}
+
+// Once per page load: every page that talks to the backend imports this file
+dropOldApiCaches()
 
 /**
  * This installation, as the writes name it (server db/019, the scoring-device
@@ -673,6 +695,7 @@ function getStoredToken() {
     // Check token expiration
     if (session?.expires_at && Date.now() / 1000 > session.expires_at) {
       localStorage.removeItem('api_auth_token')
+      dropOldApiCaches()
       notifyTokenChange(null)
       return null
     }
@@ -686,6 +709,9 @@ function storeToken(session) {
   } else {
     localStorage.removeItem('api_auth_token')
   }
+  // The session changed hands (a sign-in, a sign-out, a token the server
+  // refused): no old service worker copy of an API answer outlives it
+  dropOldApiCaches()
   notifyTokenChange(session)
 }
 
@@ -746,6 +772,8 @@ export const apiAuth = {
       try { await authRequest('sign-out', { access_token: token }) } catch { /* ignore */ }
     }
     storeToken(null)
+    // The old service worker copies of this account's API answers
+    await dropOldApiCaches()
     return { error: null }
   },
 
@@ -792,7 +820,10 @@ export const apiAuth = {
   async deleteUser() {
     const token = getStoredToken()?.access_token
     const result = await authRequest('delete-account', { access_token: token })
-    if (!result.error) storeToken(null)
+    if (!result.error) {
+      storeToken(null)
+      await dropOldApiCaches()
+    }
     return result
   },
 

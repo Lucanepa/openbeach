@@ -23,7 +23,7 @@ import { readFileSync, writeFileSync, existsSync, rmSync, renameSync, copyFileSy
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { PWA_INCLUDE_ASSETS, PWA_ICONS, THEME_COLOR } from '../pwa-icons.js'
-import { IGNORE_URL_PARAMETERS } from '../pwa-workbox.js'
+import { IGNORE_URL_PARAMETERS, SUBDOMAIN_RUNTIME_CACHING } from '../pwa-workbox.js'
 import { subdomains, htmlFor, hostFor, missingFromBuild } from './subdomain-pages.js'
 import { precacheUnderFinalName } from './subdomain-precache.js'
 
@@ -92,33 +92,9 @@ async function buildSubdomain(subdomain, basePath = '/') {
             // Same offline rule as the main build (pwa-workbox.js): /?cache_bust=..
             // is the precached index.html
             ignoreURLParametersMatching: IGNORE_URL_PARAMETERS,
-            runtimeCaching: [
-              {
-                urlPattern: /^https?:\/\/.*\/api\/.*/i,
-                handler: 'NetworkFirst',
-                options: {
-                  cacheName: 'api-cache',
-                  expiration: { maxEntries: 50, maxAgeSeconds: 86400 },
-                  networkTimeoutSeconds: 10
-                }
-              },
-              {
-                urlPattern: /\.(?:js|css|png|jpg|jpeg|svg|gif|woff|woff2)$/,
-                handler: 'CacheFirst',
-                options: {
-                  cacheName: 'static-assets',
-                  expiration: { maxEntries: 100, maxAgeSeconds: 2592000 }
-                }
-              },
-              {
-                urlPattern: /\.html$/,
-                handler: 'NetworkFirst',
-                options: {
-                  cacheName: 'html-cache',
-                  expiration: { maxEntries: 10, maxAgeSeconds: 86400 }
-                }
-              }
-            ],
+            // The API from the network only, first (one account's answers
+            // were kept for the next: pwa-workbox.js API_NETWORK_ONLY_ROUTE)
+            runtimeCaching: SUBDOMAIN_RUNTIME_CACHING,
             navigateFallbackDenylist: [/^\/api\//],
             cleanupOutdatedCaches: true
           },

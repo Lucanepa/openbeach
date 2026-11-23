@@ -7,7 +7,7 @@ import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
 import { PWA_INCLUDE_ASSETS, PWA_ICONS, THEME_COLOR } from './pwa-icons.js'
-import { IGNORE_URL_PARAMETERS } from './pwa-workbox.js'
+import { IGNORE_URL_PARAMETERS, MAIN_RUNTIME_CACHING } from './pwa-workbox.js'
 import { APP_PAGES } from './scripts/subdomain-pages.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -112,41 +112,9 @@ export default defineConfig({
         // A page the app opens with a query (?mode=local, ?action=print,
         // ?cache_bust=..) is its precached file, offline too (pwa-workbox.js)
         ignoreURLParametersMatching: IGNORE_URL_PARAMETERS,
-        // Use NetworkFirst for API calls, but CacheFirst for assets
-        runtimeCaching: [
-          {
-            // The account approvals and the approval PIN status are never
-            // answered from a cache: the NetworkFirst route below falls back
-            // to the last copy after 3 s, and a stale list would bring back
-            // an approval undone or voided since and pass the re-check
-            // before "Confirm and approve" (MatchEnd_beach)
-            urlPattern: /^https:\/\/[^/]+\/api\/(?:approvals|account\/approval)/,
-            handler: 'NetworkOnly'
-          },
-          {
-            urlPattern: /^https:\/\/.*\.(?:png|jpg|jpeg|svg|gif|webp|woff|woff2|ttf|eot)$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'static-assets',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-              }
-            }
-          },
-          {
-            urlPattern: /^https:\/\/.*/,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'network-cache',
-              networkTimeoutSeconds: 3,
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24 // 1 day
-              }
-            }
-          }
-        ]
+        // The API from the network only (first), CacheFirst for images and
+        // fonts; no catch-all NetworkFirst route (pwa-workbox.js)
+        runtimeCaching: MAIN_RUNTIME_CACHING
       },
       manifest: {
         name: process.env.VITE_APP_TITLE || 'OpenBeach eScoresheet',
