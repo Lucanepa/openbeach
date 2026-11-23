@@ -656,20 +656,95 @@ export const apiStorage = {
 
 // ==================== Auth ====================
 
-async function authRequest(action, body = {}) {
+async function authRequest(action, body = {}, { timeoutMs = 0, keepalive = false } = {}) {
   const apiUrl = getCloudApiUrl(`/api/auth/${action}`)
   if (!apiUrl) return { data: null, error: { message: 'Backend not available' } }
 
   try {
+    const signal = timeoutMs ? requestTimeoutSignal(timeoutMs) : undefined
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
+      ...(keepalive ? { keepalive: true } : {})
     })
     return safeJsonResponse(response, 'Auth request failed')
   } catch (err) {
-    return { data: null, error: networkError(err) }
+    const error = networkError(err)
+    if (err?.name === 'TimeoutError' || err?.name === 'AbortError') error.timeout = true
+    return { data: null, error }
   }
+}
+
+// ---- Sign-outs whose revocation has not reached the server yet ----
+// (OpenVolley's apiClient.js, audit SEC-38) "Sign out" ends the session on
+// the device at once. The server's session would otherwise stay valid for up
+// to 30 days (90 from the sign-in) when the request did not get through
+// (offline at the beach, a venue network that stalls, a tab closed at once):
+// its token waits here and is sent again at the next start, when the device
+// is back online and when the backend answers again (onAuthStateChange),
+// until the server answered. The app never signs in with these tokens.
+const PENDING_SIGN_OUTS_KEY = 'ob:pendingSignOuts'
+const PENDING_SIGN_OUTS_MAX = 10
+// The server ends every session 90 days after its sign-in at the latest
+// (backend lib/auth.js absoluteTtlSec): nothing left to revoke after that
+const PENDING_SIGN_OUT_MAX_AGE_MS = 90 * 24 * 3600 * 1000
+// How long a revocation request may take (sign-out waits for it at most this long)
+export const SIGN_OUT_TIMEOUT_MS = 4000
+
+function readPendingSignOuts() {
+  try {
+    const list = JSON.parse(localStorage.getItem(PENDING_SIGN_OUTS_KEY) || '[]')
+    const oldest = Date.now() - PENDING_SIGN_OUT_MAX_AGE_MS
+    return Array.isArray(list) ? list.filter((e) => e && typeof e.token === 'string' && e.token && Number(e.at) > oldest) : []
+  } catch { return [] }
+}
+
+function writePendingSignOuts(list) {
+  try {
+    if (list.length) localStorage.setItem(PENDING_SIGN_OUTS_KEY, JSON.stringify(list.slice(-PENDING_SIGN_OUTS_MAX)))
+    else localStorage.removeItem(PENDING_SIGN_OUTS_KEY)
+  } catch { /* storage full or blocked: this sign-out's own request is the only try */ }
+}
+
+// Revoked, or refused for good (a 4xx other than a timeout or rate limit):
+// nothing left to send. Offline, 408, 429 and 5xx: sent again later.
+function revocationDone(result) {
+  if (!result.error) return true
+  const status = result.error.status ?? result.status
+  return status >= 400 && status < 500 && status !== 408 && status !== 429
+}
+
+async function revokeSession(token, { keepalive = false } = {}) {
+  const result = await authRequest('sign-out', { access_token: token }, { timeoutMs: SIGN_OUT_TIMEOUT_MS, keepalive })
+  if (revocationDone(result)) writePendingSignOuts(readPendingSignOuts().filter((e) => e.token !== token))
+  return result
+}
+
+const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false
+
+let pendingSignOutsRun = null
+let pendingSignOutsAgain = false
+/** Sends the waiting revocations, one pass at a time. Never rejects. */
+export function sendPendingSignOuts() {
+  if (pendingSignOutsRun) {
+    // (asked again meanwhile, e.g. back online: one more pass after this one)
+    pendingSignOutsAgain = true
+    return pendingSignOutsRun
+  }
+  pendingSignOutsRun = (async () => {
+    do {
+      pendingSignOutsAgain = false
+      if (isOffline()) return
+      for (const { token } of readPendingSignOuts()) {
+        const result = await revokeSession(token)
+        // the backend cannot be reached: the others wait for the next pass too
+        if (result.error?.network) break
+      }
+    } while (pendingSignOutsAgain)
+  })().catch(() => {}).finally(() => { pendingSignOutsRun = null })
+  return pendingSignOutsRun
 }
 
 // Same-tab notification: the 'storage' event only fires in OTHER tabs, so without
@@ -765,15 +840,23 @@ export const apiAuth = {
   },
 
   async signOut() {
-    // Revoke the session on the server first (best effort: offline or a server
-    // error must not keep the user signed in on this device).
+    // The device is signed out first, at once: a venue network that stalls
+    // instead of failing kept the scorer signed in while the request waited,
+    // and for the next person when the tab was closed meanwhile. The server's
+    // session is revoked next, waited for at most SIGN_OUT_TIMEOUT_MS; what
+    // does not get through is sent again later (sendPendingSignOuts).
     const token = getStoredToken()?.access_token
-    if (token) {
-      try { await authRequest('sign-out', { access_token: token }) } catch { /* ignore */ }
-    }
+    if (token) writePendingSignOuts([...readPendingSignOuts(), { token, at: Date.now() }])
     storeToken(null)
     // The old service worker copies of this account's API answers
     await dropOldApiCaches()
+    if (token) {
+      // keepalive: the request survives a tab closed right after the tap
+      const result = await revokeSession(token, { keepalive: true })
+      // A browser that will not send a keepalive request to another origin
+      // fails it at once, as if offline: once more as a plain request
+      if (result.error?.network && !result.error.timeout && !isOffline()) await revokeSession(token)
+    }
     return { error: null }
   },
 
@@ -855,12 +938,22 @@ export const apiAuth = {
     }
     window.addEventListener(TOKEN_CHANGE_EVENT, localHandler)
 
+    // Every page that follows the session also ends the server sessions of
+    // sign-outs that did not get through: now, back online, and when the
+    // backend answers again after an outage
+    const retrySignOuts = () => { sendPendingSignOuts() }
+    retrySignOuts()
+    window.addEventListener('online', retrySignOuts)
+    window.addEventListener(BACKEND_REACHED_EVENT, retrySignOuts)
+
     return {
       data: {
         subscription: {
           unsubscribe: () => {
             window.removeEventListener('storage', handler)
             window.removeEventListener(TOKEN_CHANGE_EVENT, localHandler)
+            window.removeEventListener('online', retrySignOuts)
+            window.removeEventListener(BACKEND_REACHED_EVENT, retrySignOuts)
           }
         }
       }
