@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 // Ported from OpenVolley src/utils/nativeBackup/__tests__/platform.test.js
-import { detectBackupPlatform, isNativeBackupPlatform, createTauriStore, createCapacitorStore, BACKUP_SUBDIR } from '../../utils_beach/nativeBackup/platform_beach'
+import { detectBackupPlatform, isNativeBackupPlatform, createTauriStore, createCapacitorStore, BACKUP_SUBDIR, appFilesDirectories } from '../../utils_beach/nativeBackup/platform_beach'
 
 describe('detectBackupPlatform', () => {
   it('recognises the desktop app, the Android app and plain browsers', () => {
@@ -102,22 +102,24 @@ function fakeFilesystem({ refuse = [] } = {}) {
 }
 
 describe('createCapacitorStore', () => {
-  it('writes the event file and latest.json under Documents/OpenBeach/backups', async () => {
+  // Audit SEC-22: the app's own folder (Directory.Data, else the app's external
+  // folder), never the public Documents folder it used to write to first
+  it('writes the event file and latest.json under <app folder>/OpenBeach/backups', async () => {
     const fs = fakeFilesystem()
     const store = createCapacitorStore(fs, { log: { warn: () => {} } })
     await store.write('game5-s', '20261006T100000.000Z-00001.json', '{"v":1}')
-    expect(fs.files.get(`DOCUMENTS:${BACKUP_SUBDIR}/game5-s/20261006T100000.000Z-00001.json`)).toBe('{"v":1}')
-    expect(fs.files.get(`DOCUMENTS:${BACKUP_SUBDIR}/game5-s/latest.json`)).toBe('{"v":1}')
+    expect(fs.files.get(`DATA:${BACKUP_SUBDIR}/game5-s/20261006T100000.000Z-00001.json`)).toBe('{"v":1}')
+    expect(fs.files.get(`DATA:${BACKUP_SUBDIR}/game5-s/latest.json`)).toBe('{"v":1}')
     expect(fs.Filesystem.writeFile).toHaveBeenCalledWith(expect.objectContaining({ encoding: 'utf8', recursive: true }))
     // the match JSON crosses the bridge once: latest.json is a native copy
     expect(fs.Filesystem.writeFile).toHaveBeenCalledTimes(1)
     expect(fs.Filesystem.copy).toHaveBeenCalledWith({
       from: `${BACKUP_SUBDIR}/game5-s/20261006T100000.000Z-00001.json`,
       to: `${BACKUP_SUBDIR}/game5-s/latest.json`,
-      directory: 'DOCUMENTS',
-      toDirectory: 'DOCUMENTS'
+      directory: 'DATA',
+      toDirectory: 'DATA'
     })
-    expect(await store.info()).toEqual({ folder: `/storage/emulated/0/DOCUMENTS/${BACKUP_SUBDIR}` })
+    expect(await store.info()).toEqual({ folder: `/storage/emulated/0/DATA/${BACKUP_SUBDIR}` })
     expect(store.canOpenFolder).toBe(false)
   })
 
@@ -128,7 +130,7 @@ describe('createCapacitorStore', () => {
     fs.Filesystem.copy.mockRejectedValue(new Error('EACCES'))
     const result = await store.write('game5-s', 'a.json', '{}')
     expect(result.warning).toMatch(/latest\.json.*EACCES/)
-    expect(fs.files.has(`DOCUMENTS:${BACKUP_SUBDIR}/game5-s/a.json`)).toBe(true)
+    expect(fs.files.has(`DATA:${BACKUP_SUBDIR}/game5-s/a.json`)).toBe(true)
   })
 
   it('writes latest.json itself when the plugin has no copy', async () => {
@@ -136,11 +138,11 @@ describe('createCapacitorStore', () => {
     delete fs.Filesystem.copy
     const store = createCapacitorStore(fs, { log: { warn: () => {} } })
     await store.write('game5-s', 'a.json', '{"v":2}')
-    expect(fs.files.get(`DOCUMENTS:${BACKUP_SUBDIR}/game5-s/latest.json`)).toBe('{"v":2}')
+    expect(fs.files.get(`DATA:${BACKUP_SUBDIR}/game5-s/latest.json`)).toBe('{"v":2}')
   })
 
-  it('falls back to the app folder when Documents is refused', async () => {
-    const fs = fakeFilesystem({ refuse: ['DOCUMENTS'] })
+  it('falls back to the app\'s external folder when internal storage is refused', async () => {
+    const fs = fakeFilesystem({ refuse: ['DATA'] })
     const store = createCapacitorStore(fs, { log: { warn: () => {} } })
     await store.write('game5-s', 'a.json', '{}', { latest: false })
     expect(fs.files.has(`EXTERNAL:${BACKUP_SUBDIR}/game5-s/a.json`)).toBe(true)
@@ -162,6 +164,15 @@ describe('createCapacitorStore', () => {
     fs.Filesystem.deleteFile.mockRejectedValueOnce(new Error('EACCES'))
     await store.remove('game1-a', ['x.json', 'latest.json'])
     expect(warn).toHaveBeenCalled()
-    expect(fs.files.has(`DOCUMENTS:${BACKUP_SUBDIR}/game1-a/latest.json`)).toBe(false)
+    expect(fs.files.has(`DATA:${BACKUP_SUBDIR}/game1-a/latest.json`)).toBe(false)
+  })
+
+  it('never writes to the public Documents folder, even when the app folders refuse', async () => {
+    const fs = fakeFilesystem({ refuse: ['DATA', 'EXTERNAL'] })
+    const store = createCapacitorStore(fs, { log: { warn: () => {} } })
+    await expect(store.write('game5-s', 'a.json', '{}')).rejects.toThrow(/No writable folder/)
+    expect([...fs.files.keys()].some(k => k.startsWith('DOCUMENTS:'))).toBe(false)
+    expect(fs.Filesystem.mkdir.mock.calls.some(([o]) => o.directory === 'DOCUMENTS')).toBe(false)
+    expect(appFilesDirectories(fs.Directory)).toEqual(['DATA', 'EXTERNAL'])
   })
 })

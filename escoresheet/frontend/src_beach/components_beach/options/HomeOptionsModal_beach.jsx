@@ -8,6 +8,7 @@ import NativeServerSection from './NativeServerSection_beach'
 import DesktopUpdateSection from './DesktopUpdateSection_beach'
 import KeybindingsModal from './KeybindingsModal_beach'
 import ActivityLogSection from './ActivityLogSection_beach'
+import ExportToDocumentsRow from './ExportToDocumentsRow_beach'
 import ThemeOption from './ThemeOption_beach'
 import LiveScreenSection from './LiveScreenSection_beach'
 import { OptionNumber, OptionRow, OptionSection, OptionSwitch } from './optionRows_beach'
@@ -382,6 +383,8 @@ export default function HomeOptionsModal({
                 </Button>
               )}
             />
+            {/* Android: the backups stay in the app's own folder; a copy out only when asked */}
+            {backup.platform === 'capacitor' && <ExportToDocumentsRow />}
           </OptionSection>
         )}
 

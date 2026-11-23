@@ -2,9 +2,9 @@
  * What the app backup files (the native per-event backups) leave out of the
  * match row, and what the coalescing key ignores.
  *
- * The files are written to a folder the device owner (and on Android 10 and
- * older, other apps) can read, and on Android they stay after an uninstall.
- * Connection PINs, the game PIN and session ids are access secrets, not
+ * The files are written to the app's own folder (Android, since audit
+ * SEC-22: it was the public Documents folder) or the desktop app's data
+ * folder, and Export to Documents copies them out on request. Connection PINs, the game PIN and session ids are access secrets, not
  * scoring data: a restore keeps the PINs of the local copy it replaces or
  * makes new ones (backupManager_beach restoreMatchFromJson). The cloud backup
  * and the browser download / folder backup file are unchanged: they keep the

@@ -32,6 +32,9 @@ export function getNativeBackupEngine() {
       engine = createNativeBackupEngine({ store, exportMatch: exportMatchData, skipMatch: isContinuedElsewhere })
       engine.subscribe(emit)
       emit()
+      // The files older versions left in the public Documents folder move
+      // into the app's own folder, a few seconds in (audit SEC-22)
+      startNativeFileHousekeeping()
       return engine
     })().catch((e) => {
       console.error('[NativeBackup] cannot start:', e)
@@ -86,6 +89,66 @@ export async function flushNativeBackups(timeoutMs = QUIT_BACKUP_WAIT_MS) {
   } finally {
     clearTimeout(timer)
   }
+}
+
+// After the start's own work (the database, the first screen)
+export const HOUSEKEEPING_DELAY_MS = 5000
+
+// The Capacitor app's OS: 'android', 'ios', or null when it cannot tell
+function capacitorOs(win) {
+  try {
+    return win?.Capacitor?.getPlatform?.() || null
+  } catch {
+    return null
+  }
+}
+
+let housekeeping = null
+/**
+ * Once per app session, a few seconds after the backup engine started: on
+ * Android the backups and activity logs older versions left in the public
+ * Documents folder are moved into the app's own folder (once per install,
+ * androidFiles_beach.moveLegacyFiles, audit SEC-22). Nothing in a browser or
+ * the desktop app. Never throws.
+ * Android only, not every Capacitor app: on iOS the Documents, Data and
+ * External folders are one folder, which a move would empty.
+ */
+export function startNativeFileHousekeeping({
+  delayMs = HOUSEKEEPING_DELAY_MS,
+  platform = detectBackupPlatform(),
+  win = typeof window !== 'undefined' ? window : undefined,
+  load = () => Promise.all([import('@capacitor/filesystem'), import('./androidFiles_beach')])
+} = {}) {
+  if (housekeeping) return housekeeping
+  housekeeping = (async () => {
+    if (platform !== 'capacitor' || capacitorOs(win) !== 'android') return null
+    await new Promise(resolve => setTimeout(resolve, delayMs))
+    try {
+      const [fs, { moveLegacyFiles }] = await load()
+      return await moveLegacyFiles(fs)
+    } catch (e) {
+      console.warn('[AndroidFiles] moving the old files:', e?.message || e)
+      return null
+    }
+  })()
+  return housekeeping
+}
+
+/** Tests: the next start runs the housekeeping again. */
+export function resetNativeFileHousekeepingForTests() {
+  housekeeping = null
+}
+
+/**
+ * Options, Export to Documents (Android): each match's newest backup and the
+ * activity logs copied to a new Documents/OpenBeach/export-<time> folder,
+ * the user's own copy (a USB cable, another app). Resolves to
+ * androidFiles_beach.exportToDocuments's result (a file that could not be
+ * copied is counted in `failed`); throws when Documents cannot be written.
+ */
+export async function exportNativeFilesToDocuments({ load = () => Promise.all([import('@capacitor/filesystem'), import('./androidFiles_beach')]) } = {}) {
+  const [fs, { exportToDocuments }] = await load()
+  return exportToDocuments(fs)
 }
 
 /** Opens the backup folder in the file manager (desktop). */

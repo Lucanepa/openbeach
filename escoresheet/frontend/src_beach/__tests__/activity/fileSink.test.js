@@ -1,5 +1,6 @@
 // The beach activity log as daily files: the shared Rust command on the
-// desktop, Documents/OpenBeach/logs on Android, none in a browser.
+// desktop, <app folder>/OpenBeach/logs on Android (never the public Documents
+// folder, audit SEC-22), none in a browser.
 // Ported from OpenVolley src/utils/activity/__tests__/fileSink.test.js.
 import { describe, it, expect, vi } from 'vitest'
 import { createActivityFileSink, planLogPrune, activityLine, activityFileName, LOG_SUBDIR } from '../../utils_beach/activity/fileSink_beach'
@@ -23,7 +24,7 @@ describe('beach activity log files', () => {
     vi.useRealTimers()
   })
 
-  it('Android: appends to Documents/OpenBeach/logs/activity-<day>.jsonl (not OpenVolley\'s) and prunes old files', async () => {
+  it('Android: appends to <app folder>/OpenBeach/logs/activity-<day>.jsonl (not OpenVolley\'s, not Documents) and prunes old files', async () => {
     expect(LOG_SUBDIR).toBe('OpenBeach/logs')
     const calls = []
     const Filesystem = {
@@ -34,10 +35,10 @@ describe('beach activity log files', () => {
       readdir: async () => ({ files: [{ name: 'activity-2026-01-01.jsonl', size: 10 }, ...Array.from({ length: 30 }, (_, i) => ({ name: `activity-2026-09-${String(i + 1).padStart(2, '0')}.jsonl`, size: 10 }))] }),
       deleteFile: async (o) => { calls.push(['delete', o.path]) }
     }
-    const sink = await createActivityFileSink({ platform: 'capacitor', load: async () => ({ Filesystem, Directory: { Documents: 'DOCUMENTS' }, Encoding: { UTF8: 'utf8' } }) })
+    const sink = await createActivityFileSink({ platform: 'capacitor', load: async () => ({ Filesystem, Directory: { Documents: 'DOCUMENTS', Data: 'DATA', External: 'EXTERNAL' }, Encoding: { UTF8: 'utf8' } }) })
     sink.add([{ uid: 'a', kind: 'app.start' }])
     await sink.flush()
-    expect(calls[0]).toEqual(['append', `OpenBeach/logs/${activityFileName()}`, 'DOCUMENTS', '{"uid":"a","kind":"app.start"}\n'])
+    expect(calls[0]).toEqual(['append', `OpenBeach/logs/${activityFileName()}`, 'DATA', '{"uid":"a","kind":"app.start"}\n'])
     expect(calls.filter(c => c[0] === 'delete').map(c => c[1])).toEqual(['OpenBeach/logs/activity-2026-01-01.jsonl'])
     expect(sink.canOpenFolder).toBe(false)
   })

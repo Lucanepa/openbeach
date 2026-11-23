@@ -4,15 +4,19 @@
  *             (src-tauri/src/activity.rs: activity_append, activity_open_dir;
  *             today <data dir>/OpenVolley/logs on Windows / Linux for both
  *             apps, ~/Library/Logs/OpenBeach on macOS)
- *   Android:  Documents/OpenBeach/logs/activity-YYYY-MM-DD.jsonl
- *             (@capacitor/filesystem, the folders the beach backups use)
+ *   Android:  <app folder>/OpenBeach/logs/activity-YYYY-MM-DD.jsonl
+ *             (@capacitor/filesystem, the app's own folders the backups use:
+ *             nativeBackup/platform_beach appFilesDirectories; no other app
+ *             reads them, and they go with the app. Older versions wrote to
+ *             the public Documents folder: nativeBackup/androidFiles_beach
+ *             moves them in, audit SEC-22)
  *   browser:  none (Dexie only)
  * One JSON object per line; written every 2 s or 50 lines and on quit. At
  * most 30 daily files and 50 MB are kept. Never throws into the app.
   *
  * Ported from OpenVolley src/utils/activity/fileSink.js (9b1d726c).
  */
-import { detectBackupPlatform } from '../nativeBackup/platform_beach'
+import { appFilesDirectories, detectBackupPlatform } from '../nativeBackup/platform_beach'
 
 // Apart from the OpenVolley app's own folder, as the backups (OpenBeach/backups)
 export const LOG_SUBDIR = 'OpenBeach/logs'
@@ -57,7 +61,7 @@ function tauriWriter(invoke) {
 }
 
 function capacitorWriter({ Filesystem, Directory, Encoding }, { log = console } = {}) {
-  const candidates = [Directory.Documents, Directory.External, Directory.Data].filter(Boolean)
+  const candidates = appFilesDirectories(Directory)
   let ready = null
   let lastPrune = 0
 
@@ -88,7 +92,7 @@ function capacitorWriter({ Filesystem, Directory, Encoding }, { log = console } 
     try {
       const { files } = await Filesystem.readdir({ path: LOG_SUBDIR, directory: dir })
       for (const name of planLogPrune((files || []).map(f => ({ name: f.name, size: f.size || 0 })))) {
-        try { await Filesystem.deleteFile({ path: `${LOG_SUBDIR}/${name}`, directory: dir }) } catch { /* left by an older install */ }
+        try { await Filesystem.deleteFile({ path: `${LOG_SUBDIR}/${name}`, directory: dir }) } catch { /* not there any more */ }
       }
     } catch (e) {
       log.warn?.('[Activity] log prune failed:', e?.message || e)
