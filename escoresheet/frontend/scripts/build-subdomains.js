@@ -26,6 +26,7 @@ import { PWA_INCLUDE_ASSETS, PWA_ICONS, THEME_COLOR } from '../pwa-icons.js'
 import { IGNORE_URL_PARAMETERS, SUBDOMAIN_RUNTIME_CACHING } from '../pwa-workbox.js'
 import { subdomains, htmlFor, hostFor, missingFromBuild } from './subdomain-pages.js'
 import { precacheUnderFinalName } from './subdomain-precache.js'
+import { headersFor, buildChannel } from '../csp.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -152,6 +153,12 @@ async function buildSubdomain(subdomain, basePath = '/') {
     if (existsSync(finalHtmlPath)) {
       copyFileSync(finalHtmlPath, resolve(outDir, '404.html'))
     }
+
+    // The site's security headers (csp.js: the Content-Security-Policy,
+    // Report-Only on a preview build; frame protection; nosniff; referrer),
+    // which Cloudflare Pages sends from _headers (audit SEC-44). After the
+    // public_beach copy, so nothing there replaces it.
+    writeFileSync(resolve(outDir, '_headers'), headersFor(subdomain, buildChannel()))
 
     // A site without a page the app opens (the match-end PDF's sheet among
     // them) must not go live: fail the build, Cloudflare Pages keeps the last

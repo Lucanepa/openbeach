@@ -74,7 +74,8 @@ describe('colour theme', () => {
   })
 
   it('the boot script reads the same key and values', () => {
-    const config = readFileSync(resolve(__dirname, '../../../vite.config.js'), 'utf-8')
+    // theme-boot.js since the CSP allows it by its hash (csp.js); vite.config.js injects it
+    const config = readFileSync(resolve(__dirname, '../../../theme-boot.js'), 'utf-8')
     expect(config).toContain(`localStorage.getItem('${THEME_KEY}')`)
     expect(config).toContain("t==='dark'||t==='eink'")
   })
