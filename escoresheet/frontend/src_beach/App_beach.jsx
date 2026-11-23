@@ -76,6 +76,7 @@ import { confirmDialog, toast } from './ui/volleyui/uiStore.js'
 import { DEFAULT_TEAM1_COLOUR, DEFAULT_TEAM2_COLOUR } from './utils_beach/teamColours_beach'
 import { readManageLicence, cleanIdValue, licenceOf } from './utils_beach/idValue_beach'
 import { securePin } from './utils_beach/pin_beach'
+import { REFEREE_ROLES, officialRole, cleanOfficialEmail } from './utils_beach/officials_beach'
 
 function parseDateTime(dateTime) {
   const [datePart, timePart] = dateTime.split(' ')
@@ -1678,14 +1679,19 @@ export default function App() {
       })
     }
 
-    // Build officials array
-    const officials = (compMatch.officials || []).map(o => ({
-      role: o.role || '',
-      firstName: o.firstName || o.first_name || '',
-      lastName: o.lastName || o.last_name || '',
-      country: o.country || '',
-      dob: licenceOf(o.dob)
-    }))
+    // Build officials array (an appointed referee's account address comes
+    // along: only that account approves as them, PERM-08)
+    const officials = (compMatch.officials || []).map(o => {
+      const email = REFEREE_ROLES.includes(officialRole(o.role)) ? cleanOfficialEmail(o.email) : null
+      return {
+        role: o.role || '',
+        firstName: o.firstName || o.first_name || '',
+        lastName: o.lastName || o.last_name || '',
+        country: o.country || '',
+        dob: licenceOf(o.dob),
+        ...(email ? { email } : {})
+      }
+    })
 
     // Parse scheduled_at
     const scheduledAt = compMatch.scheduled_at || null

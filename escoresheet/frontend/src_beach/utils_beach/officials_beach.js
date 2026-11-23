@@ -87,6 +87,75 @@ export function officialFullName(o) {
 const MAIN_ROLES = Object.values(OFFICIAL_KEY_ROLES)
 const filled = (v) => String(v ?? '').trim() !== ''
 
+/** The roles whose entry keeps the address of the appointed referee's account. */
+export const REFEREE_ROLES = Object.freeze(['1st referee', '2nd referee'])
+
+/**
+ * The address of the appointed referee's account as the match stores it:
+ * trimmed, lower-case, null unless it looks like one (the OpenVolley
+ * backend's officialAddressOf reads the same: at most 254 characters).
+ *
+ * Why it is stored (OpenVolley audit round 3, PERM-08, owner decision 6):
+ * the backend binds the electronic approval of a referee slot to the address
+ * stored for that referee (OV_APPROVAL_NOT_MATCH_OFFICIAL): only that
+ * account may approve as that referee. Without one, any beach:referee
+ * account at the scoring table could approve as the referee the match names.
+ * Never relayed (relayPublisher_beach) and never logged (useSyncQueue_beach
+ * redactForLog); the backend gives the officials to the match's scorers only.
+ */
+export function cleanOfficialEmail(raw) {
+  const s = String(raw ?? '').trim().toLowerCase()
+  return s.length <= 254 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s) ? s : null
+}
+
+/** The stored address of the official of a role ('1st referee', 'ref2', ...), or ''. */
+export function officialEmailOf(officials, role) {
+  return cleanOfficialEmail(findOfficial(officials, role)?.email) || ''
+}
+
+/**
+ * Match Setup's list of officials, filtering out entries with no name.
+ * ref1 / ref2 / scorer / asst: { firstName, lastName, country, dob } (or the
+ * snake_case names), the referees with their account's `email` too
+ * (cleanOfficialEmail; left out when there is none). `useSnakeCase`: the
+ * cloud copy's spelling (first_name / last_name, a date value as
+ * YYYY-MM-DD); the device keeps a licence clean and a date as typed.
+ */
+export function buildOfficialsArray(ref1, ref2, scorer, asst, lineJudges = {}, useSnakeCase = false) {
+  const officials = []
+  const fnKey = useSnakeCase ? 'first_name' : 'firstName'
+  const lnKey = useSnakeCase ? 'last_name' : 'lastName'
+  // The value beside the name (licence or date of birth): kept clean on the
+  // device; in the cloud copy a licence verbatim and a date as YYYY-MM-DD
+  const idValue = (o) => (useSnakeCase ? idValueForSync(o.dob) : (cleanIdValue(o.dob) || null))
+  const named = (o) => !!(o?.firstName || o?.lastName || o?.first_name || o?.last_name)
+  const entry = (role, o, { withEmail = false } = {}) => {
+    const email = withEmail ? cleanOfficialEmail(o.email) : null
+    return {
+      role,
+      [fnKey]: o.firstName || o.first_name || '',
+      [lnKey]: o.lastName || o.last_name || '',
+      country: o.country || null,
+      dob: idValue(o),
+      ...(email ? { email } : {})
+    }
+  }
+
+  // Add main officials only if they have a name
+  if (named(ref1)) officials.push(entry('1st referee', ref1, { withEmail: true }))
+  if (named(ref2)) officials.push(entry('2nd referee', ref2, { withEmail: true }))
+  if (named(scorer)) officials.push(entry('scorer', scorer))
+  if (named(asst)) officials.push(entry('assistant scorer', asst))
+
+  // Add line judges if present
+  if (lineJudges.lj1) officials.push({ role: 'line judge 1', name: lineJudges.lj1 })
+  if (lineJudges.lj2) officials.push({ role: 'line judge 2', name: lineJudges.lj2 })
+  if (lineJudges.lj3) officials.push({ role: 'line judge 3', name: lineJudges.lj3 })
+  if (lineJudges.lj4) officials.push({ role: 'line judge 4', name: lineJudges.lj4 })
+
+  return officials
+}
+
 /**
  * The officials Manual adjustments saves: Match Setup's list with the edits
  * of the four main officials (`edited`: { ref1, ref2, scorer, asstScorer },
@@ -107,8 +176,11 @@ export function officialsWithEdits(stored, edited, { cloud = false } = {}) {
     if (!filled(firstName) && !filled(lastName)) continue
     const country = ('country' in e ? e.country : base.country) || null
     const dob = 'dob' in e ? e.dob : base.dob
+    // a referee's account address stays as Match Setup stored it (the cloud
+    // copy binds the referee's approval to it, PERM-08)
+    const email = REFEREE_ROLES.includes(role) ? cleanOfficialEmail(base.email) : null
     out.push(cloud
-      ? { role, first_name: firstName, last_name: lastName, country, dob: idValueForSync(dob) }
+      ? { role, first_name: firstName, last_name: lastName, country, dob: idValueForSync(dob), ...(email ? { email } : {}) }
       : { ...base, role, firstName, lastName, country, dob: cleanIdValue(dob) || null })
   }
   return [...out, ...list.filter(o => !MAIN_ROLES.includes(officialRole(o.role)))]

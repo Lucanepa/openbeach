@@ -331,6 +331,20 @@ export function namesDiffer(accountName, enteredName) {
   return !!a && !!b && a !== b
 }
 
+/**
+ * The official the match setup entered for a role (the appointed one), when
+ * the account that approved the slot has another name; '' otherwise. Shown
+ * next to the approving account's name, so a different person approving in
+ * the appointed referee's place is seen (PERM-08: until every OpenBeach
+ * build stores the referee's account address, the server accepts any
+ * beach:referee account for a slot without one).
+ */
+export function appointedNameIfDiffers(match, role, approval) {
+  if (!approval?.name) return ''
+  const entered = officialName(officialFor(match, role))
+  return namesDiffer(approval.name, entered) ? entered : ''
+}
+
 // ── Per-device memory (localStorage; never in match.officials) ──
 
 // openbeach's own keys

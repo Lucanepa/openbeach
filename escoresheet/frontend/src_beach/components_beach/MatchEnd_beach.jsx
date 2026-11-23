@@ -18,7 +18,7 @@ import { useAuth } from '../contexts_beach/AuthContext_beach'
 import { approvalsApi, approvalErrorKey, isApprovalUnavailable, isApprovalUnsupported } from '../lib_beach/approvalsApi_beach'
 import {
   ROLE_TO_SLOT, approvalFor, isApprovalValid, slotComplete, approvalLine, approvalsBySlot, approvalSummary,
-  resultKey, rememberApprovalEmail, namesDiffer, approvalsCompletingSlots, approvalsStillValid, pinApprovalState,
+  resultKey, rememberApprovalEmail, namesDiffer, appointedNameIfDiffers, approvalsCompletingSlots, approvalsStillValid, pinApprovalState,
   callerMayApprove as mayApproveFrom
 } from '../utils_beach/accountApproval_beach'
 import AccountApprovalDialog from './AccountApprovalDialog_beach'
@@ -1017,8 +1017,15 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   // Undo), "Approve with PIN", or one line saying why not. Never empty.
   const renderPinLine = (role, pin, approval, { isSigned, disabled }) => {
     if (pin.state === 'approved') {
+      // Another person than the official entered approved (PERM-08): both names show
+      const appointed = appointedNameIfDiffers(match, role, approval)
       return (
         <div className="flex flex-col gap-1.5">
+          {appointed && (
+            <div className="text-xs leading-snug text-amber-800" data-testid={`account-approval-appointed-${role}`}>
+              {t('approval.officialEntered', { name: appointed })}
+            </div>
+          )}
           {isSigned && (
             // Signed by hand AND approved: the approval as a compact line
             <div

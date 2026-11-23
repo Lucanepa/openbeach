@@ -95,6 +95,9 @@ const APPROVAL_ERROR_KEYS = {
   OV_PASSWORD_INVALID: 'passwordInvalid',
   OV_APPROVAL_ROLE_REQUIRED: 'roleRequired',
   OV_APPROVAL_NOT_MATCH_SCORER: 'notMatchScorer',
+  // the referee slot is bound to the account address the match setup stored (PERM-08)
+  OV_APPROVAL_NOT_MATCH_OFFICIAL: 'notMatchOfficial',
+  OV_APPROVAL_OFFICIAL_EMAIL_MISSING: 'officialEmailMissing',
   OV_APPROVAL_SCORER_NOT_REFEREE: 'scorerNotReferee',
   OV_APPROVAL_CALLER_ROLE: 'callerRole',
   OV_APPROVAL_NAME_REQUIRED: 'nameRequired',

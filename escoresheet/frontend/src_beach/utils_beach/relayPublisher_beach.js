@@ -91,6 +91,21 @@ const pinText = (v) => {
   return s || null
 }
 
+// The officials on the wire go without the appointed referees' account
+// addresses (officials_beach cleanOfficialEmail, PERM-08): every relay drops
+// the officials before a tablet sees the match; this keeps the addresses off
+// the wire too. Either stored shape (the list, the older object by role).
+function wireOfficials(officials) {
+  const strip = (o) => {
+    if (!o || typeof o !== 'object' || Array.isArray(o) || !('email' in o)) return o
+    const { email, ...rest } = o
+    return rest
+  }
+  if (Array.isArray(officials)) return officials.map(strip)
+  if (officials && typeof officials === 'object') return Object.fromEntries(Object.entries(officials).map(([k, v]) => [k, strip(v)]))
+  return officials
+}
+
 /**
  * The match object of a sync in the relay's names (see the file comment):
  * the bench PINs and connections under home/away, the team names as
@@ -105,6 +120,7 @@ export function toWireMatch(match) {
   const src = match && typeof match === 'object' ? match : {}
   const out = { ...src }
   for (const k of NEVER_RELAYED) delete out[k]
+  if (out.officials !== undefined) out.officials = wireOfficials(out.officials)
   for (const [wire, sources] of PIN_MAP) {
     const v = sources.map((k) => pinText(src[k])).find(Boolean) ?? pinText(src[wire])
     if (v) out[wire] = v

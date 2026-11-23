@@ -314,3 +314,44 @@ describe('MatchEnd_beach: approve with an account', () => {
     expect((await db.sync_queue.toArray()).some(j => j.payload?.status === 'approved')).toBe(false)
   })
 })
+
+// OpenVolley audit round 3, PERM-08 (owner decision 6): the match stores the
+// appointed referee's account address (Match Setup), the dialog starts with
+// it, and when another account approves (the server accepts one for a slot
+// without an address, for older OpenBeach builds) both names show.
+describe('MatchEnd_beach: the appointed referee', () => {
+  it('the dialog starts with the address the match setup stored for the referee', async () => {
+    await seed({
+      officials: [{ ...OFFICIALS[0], email: 'anna.ref@example.ch' }, OFFICIALS[1], OFFICIALS[2]],
+      scorerSignature: 'data:s', ref2Signature: 'data:r2'
+    })
+    renderMatchEnd()
+    await waitFor(() => expect(screen.getByTestId('account-approval-open-ref1')).toBeEnabled())
+    await click(screen.getByTestId('account-approval-open-ref1'))
+    const dialog = await screen.findByTestId('account-approval-form')
+    expect(dialog.querySelectorAll('input')[0]).toHaveValue('anna.ref@example.ch')
+  })
+
+  it('an account of another name approved: the official entered shows next to it', async () => {
+    api.approve = vi.fn(async ({ slot }) => ({ data: { approval: record(slot, { name: 'Beachref Beat' }), already: false }, error: null, status: 200 }))
+    await seed({ scorerSignature: 'data:s', ref2Signature: 'data:r2' })
+    renderMatchEnd()
+    await approveIn('ref1', { email: 'beat@x.ch' })
+    expect(await screen.findByTestId('account-approval-ref1')).toHaveTextContent('Beachref Beat')
+    expect(await screen.findByTestId('account-approval-appointed-ref1')).toHaveTextContent('Official entered: Ref Anna')
+    // the same person: nothing more
+    expect(screen.queryByTestId('account-approval-appointed-ref2')).toBeNull()
+  })
+
+  it('the server refuses another account than the stored one: the box says why', async () => {
+    api.approve = vi.fn(async () => ({ data: null, error: { code: 'OV_APPROVAL_NOT_MATCH_OFFICIAL', status: 403, message: 'not the official' }, status: 403 }))
+    await seed({
+      officials: [{ ...OFFICIALS[0], email: 'anna.ref@example.ch' }, OFFICIALS[1], OFFICIALS[2]],
+      scorerSignature: 'data:s', ref2Signature: 'data:r2'
+    })
+    renderMatchEnd()
+    await approveIn('ref1', { email: 'beat@x.ch' })
+    expect(await screen.findByText('This is not the email entered for this referee in the match setup.')).toBeInTheDocument()
+    expect((await row()).accountApprovals?.referee1).toBeFalsy()
+  })
+})

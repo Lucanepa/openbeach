@@ -12,7 +12,7 @@ import CountrySelect from './CountrySelect_beach'
 import CountryFlag from './CountryFlag_beach'
 import IdValueInput from './IdValueInput_beach'
 import { cleanIdValue, displayIdValue, idValueForSync, isPlaceholderValue, licenceOf, readManageLicence } from '../utils_beach/idValue_beach'
-import { findOfficial, officialsList } from '../utils_beach/officials_beach'
+import { findOfficial, officialsList, buildOfficialsArray, officialEmailOf } from '../utils_beach/officials_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
 import { isBackendAvailable, isRelayOriginPage, getCloudApiUrl, BEACH_DESKTOP_HTTP_PORT } from '../utils_beach/backendConfig_beach'
@@ -94,37 +94,8 @@ function safeParseScheduledAt(scheduledAt) {
   return splitLocalDateTime(scheduledAt)
 }
 
-// Helper to build officials array, filtering out entries with no name
-function buildOfficialsArray(ref1, ref2, scorer, asst, lineJudges = {}, useSnakeCase = false) {
-  const officials = []
-  const fnKey = useSnakeCase ? 'first_name' : 'firstName'
-  const lnKey = useSnakeCase ? 'last_name' : 'lastName'
-  // The value beside the name (licence or date of birth): kept clean on the
-  // device; in the cloud copy a licence verbatim and a date as YYYY-MM-DD
-  const idValue = (o) => (useSnakeCase ? idValueForSync(o.dob) : (cleanIdValue(o.dob) || null))
-
-  // Add main officials only if they have a name
-  if (ref1?.firstName || ref1?.lastName || ref1?.first_name || ref1?.last_name) {
-    officials.push({ role: '1st referee', [fnKey]: ref1.firstName || ref1.first_name || '', [lnKey]: ref1.lastName || ref1.last_name || '', country: ref1.country || null, dob: idValue(ref1) })
-  }
-  if (ref2?.firstName || ref2?.lastName || ref2?.first_name || ref2?.last_name) {
-    officials.push({ role: '2nd referee', [fnKey]: ref2.firstName || ref2.first_name || '', [lnKey]: ref2.lastName || ref2.last_name || '', country: ref2.country || null, dob: idValue(ref2) })
-  }
-  if (scorer?.firstName || scorer?.lastName || scorer?.first_name || scorer?.last_name) {
-    officials.push({ role: 'scorer', [fnKey]: scorer.firstName || scorer.first_name || '', [lnKey]: scorer.lastName || scorer.last_name || '', country: scorer.country || null, dob: idValue(scorer) })
-  }
-  if (asst?.firstName || asst?.lastName || asst?.first_name || asst?.last_name) {
-    officials.push({ role: 'assistant scorer', [fnKey]: asst.firstName || asst.first_name || '', [lnKey]: asst.lastName || asst.last_name || '', country: asst.country || null, dob: idValue(asst) })
-  }
-
-  // Add line judges if present
-  if (lineJudges.lj1) officials.push({ role: 'line judge 1', name: lineJudges.lj1 })
-  if (lineJudges.lj2) officials.push({ role: 'line judge 2', name: lineJudges.lj2 })
-  if (lineJudges.lj3) officials.push({ role: 'line judge 3', name: lineJudges.lj3 })
-  if (lineJudges.lj4) officials.push({ role: 'line judge 4', name: lineJudges.lj4 })
-
-  return officials
-}
+// buildOfficialsArray: utils_beach/officials_beach (the referees' account
+// addresses with them, PERM-08)
 
 // Helper to validate and create a UTC ISO string from local date and time inputs
 // Treats user input as LOCAL time and converts to UTC for storage
@@ -209,8 +180,8 @@ function hasMatchInfoChanged(original, current) {
 // Helper to check if officials have changed
 function hasOfficialsChanged(original, current) {
   if (!original) return true
-  const keys = ['ref1First', 'ref1Last', 'ref1Country', 'ref1Dob',
-    'ref2First', 'ref2Last', 'ref2Country', 'ref2Dob',
+  const keys = ['ref1First', 'ref1Last', 'ref1Country', 'ref1Dob', 'ref1Email',
+    'ref2First', 'ref2Last', 'ref2Country', 'ref2Dob', 'ref2Email',
     'scorerFirst', 'scorerLast', 'scorerCountry', 'scorerDob',
     'asstFirst', 'asstLast', 'asstCountry', 'asstDob',
     'lineJudge1', 'lineJudge2', 'lineJudge3', 'lineJudge4']
@@ -242,6 +213,9 @@ const OfficialCard = memo(function OfficialCard({
   setFirstName,
   setCountry,
   setDob,
+  // a referee's account address (PERM-08): only that account approves as them
+  email = '',
+  setEmail = null,
   hasDatabase = false,
   selectorKey = null,
   isExpanded,
@@ -303,6 +277,11 @@ const OfficialCard = memo(function OfficialCard({
           <Field tone="compact" className={FIELD} label={t('matchSetup.firstName')}><Input size="lg" className="capitalize" value={firstName} onChange={e => setFirstName(e.target.value)} /></Field>
           <Field tone="compact" className={FIELD} label={t('matchSetup.country')}><Input size="lg" value={country} onChange={e => setCountry(e.target.value)} /></Field>
           {manageLicence && <Field tone="compact" className={FIELD} label={t('licence.label')} hint={t('licence.hint')}><IdValueInput size="lg" value={dob} onChange={setDob} data-testid={officialKey ? `${officialKey}-licence` : undefined} /></Field>}
+          {setEmail && (
+            <Field tone="compact" className={cn(FIELD, '[grid-column:1/-1]')} label={t('matchSetup.refereeEmail')} hint={t('matchSetup.refereeEmailHint')}>
+              <Input size="lg" type="email" inputMode="email" autoComplete="off" value={email} onChange={e => setEmail(e.target.value)} maxLength={254} aria-label={`${title} ${t('matchSetup.refereeEmail')}`} data-testid={officialKey ? `${officialKey}-email` : undefined} />
+            </Field>
+          )}
         </div>
       )}
     </div>
@@ -516,11 +495,14 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   const [ref1Last, setRef1Last] = useState('')
   const [ref1Country, setRef1Country] = useState('CHE')
   const [ref1Dob, setRef1Dob] = useState('')
+  // The appointed referees' account addresses (officials[].email, PERM-08)
+  const [ref1Email, setRef1Email] = useState('')
 
   const [ref2First, setRef2First] = useState('')
   const [ref2Last, setRef2Last] = useState('')
   const [ref2Country, setRef2Country] = useState('CHE')
   const [ref2Dob, setRef2Dob] = useState('')
+  const [ref2Email, setRef2Email] = useState('')
 
   const [scorerFirst, setScorerFirst] = useState('')
   const [scorerLast, setScorerLast] = useState('')
@@ -693,8 +675,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       }
     } else if (currentView === 'officials') {
       originalOfficialsRef.current = {
-        ref1First, ref1Last, ref1Country, ref1Dob,
-        ref2First, ref2Last, ref2Country, ref2Dob,
+        ref1First, ref1Last, ref1Country, ref1Dob, ref1Email,
+        ref2First, ref2Last, ref2Country, ref2Dob, ref2Email,
         scorerFirst, scorerLast, scorerCountry, scorerDob,
         asstFirst, asstLast, asstCountry, asstDob,
         lineJudge1, lineJudge2, lineJudge3, lineJudge4
@@ -962,8 +944,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
   const restoreOfficials = () => {
     const o = originalOfficialsRef.current
     if (!o) return
-    setRef1First(o.ref1First); setRef1Last(o.ref1Last); setRef1Country(o.ref1Country); setRef1Dob(o.ref1Dob)
-    setRef2First(o.ref2First); setRef2Last(o.ref2Last); setRef2Country(o.ref2Country); setRef2Dob(o.ref2Dob)
+    setRef1First(o.ref1First); setRef1Last(o.ref1Last); setRef1Country(o.ref1Country); setRef1Dob(o.ref1Dob); setRef1Email(o.ref1Email || '')
+    setRef2First(o.ref2First); setRef2Last(o.ref2Last); setRef2Country(o.ref2Country); setRef2Dob(o.ref2Dob); setRef2Email(o.ref2Email || '')
     setScorerFirst(o.scorerFirst); setScorerLast(o.scorerLast); setScorerCountry(o.scorerCountry); setScorerDob(o.scorerDob)
     setAsstFirst(o.asstFirst); setAsstLast(o.asstLast); setAsstCountry(o.asstCountry); setAsstDob(o.asstDob)
     setLineJudge1(o.lineJudge1); setLineJudge2(o.lineJudge2); setLineJudge3(o.lineJudge3); setLineJudge4(o.lineJudge4)
@@ -1096,6 +1078,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             setRef1Last(ref1.lastName || '')
             setRef1Country(ref1.country || 'CHE')
             setRef1Dob(displayIdValue(ref1.dob))
+            setRef1Email(officialEmailOf(storedOfficials, '1st referee'))
           }
           const ref2 = findOfficial(storedOfficials, '2nd referee')
           if (ref2) {
@@ -1103,6 +1086,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             setRef2Last(ref2.lastName || '')
             setRef2Country(ref2.country || 'CHE')
             setRef2Dob(displayIdValue(ref2.dob))
+            setRef2Email(officialEmailOf(storedOfficials, '2nd referee'))
           }
           const scorer = findOfficial(storedOfficials, 'scorer')
           if (scorer) {
@@ -1418,10 +1402,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           if (draft.ref1Last !== undefined) setRef1Last(draft.ref1Last)
           if (draft.ref1Country !== undefined) setRef1Country(draft.ref1Country)
           if (draft.ref1Dob !== undefined) setRef1Dob(draft.ref1Dob)
+          if (draft.ref1Email !== undefined) setRef1Email(draft.ref1Email)
           if (draft.ref2First !== undefined) setRef2First(draft.ref2First)
           if (draft.ref2Last !== undefined) setRef2Last(draft.ref2Last)
           if (draft.ref2Country !== undefined) setRef2Country(draft.ref2Country)
           if (draft.ref2Dob !== undefined) setRef2Dob(draft.ref2Dob)
+          if (draft.ref2Email !== undefined) setRef2Email(draft.ref2Email)
           if (draft.scorerFirst !== undefined) setScorerFirst(draft.scorerFirst)
           if (draft.scorerLast !== undefined) setScorerLast(draft.scorerLast)
           if (draft.scorerCountry !== undefined) setScorerCountry(draft.scorerCountry)
@@ -1464,10 +1450,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         ref1Last,
         ref1Country,
         ref1Dob,
+        ref1Email,
         ref2First,
         ref2Last,
         ref2Country,
         ref2Dob,
+        ref2Email,
         scorerFirst,
         scorerLast,
         scorerCountry,
@@ -1532,8 +1520,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           gamePin: ensureGamePin((await db.matches.get(matchId)) || match).gamePin,
           scheduledAt,
           officials: buildOfficialsArray(
-            { firstName: ref1First, lastName: ref1Last, country: ref1Country, dob: ref1Dob },
-            { firstName: ref2First, lastName: ref2Last, country: ref2Country, dob: ref2Dob },
+            { firstName: ref1First, lastName: ref1Last, country: ref1Country, dob: ref1Dob, email: ref1Email },
+            { firstName: ref2First, lastName: ref2Last, country: ref2Country, dob: ref2Dob, email: ref2Email },
             { firstName: scorerFirst, lastName: scorerLast, country: scorerCountry, dob: scorerDob },
             { firstName: asstFirst, lastName: asstLast, country: asstCountry, dob: asstDob },
             { lj1: lineJudge1, lj2: lineJudge2, lj3: lineJudge3, lj4: lineJudge4 }
@@ -1618,7 +1606,7 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
       return () => clearTimeout(timeoutId)
     }
-  }, [date, time, hall, city, type2, hasCoach, gameN, league, team1Name, team2Name, team1Color, team2Color, team1Country, team2Country, team1ShortName, team2ShortName, team1Roster, team2Roster, ref1First, ref1Last, ref1Country, ref1Dob, ref2First, ref2Last, ref2Country, ref2Dob, scorerFirst, scorerLast, scorerCountry, scorerDob, asstFirst, asstLast, asstCountry, asstDob, currentView])
+  }, [date, time, hall, city, type2, hasCoach, gameN, league, team1Name, team2Name, team1Color, team2Color, team1Country, team2Country, team1ShortName, team2ShortName, team1Roster, team2Roster, ref1First, ref1Last, ref1Country, ref1Dob, ref1Email, ref2First, ref2Last, ref2Country, ref2Dob, ref2Email, scorerFirst, scorerLast, scorerCountry, scorerDob, asstFirst, asstLast, asstCountry, asstDob, currentView])
 
   // Update input widths when team1/team2 values change - set default width based on content
   useEffect(() => {
@@ -2195,8 +2183,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
         team1TeamConnectionEnabled: false,
         team2TeamConnectionEnabled: false,
         officials: buildOfficialsArray(
-          { firstName: ref1First, lastName: ref1Last, country: ref1Country, dob: ref1Dob },
-          { firstName: ref2First, lastName: ref2Last, country: ref2Country, dob: ref2Dob },
+          { firstName: ref1First, lastName: ref1Last, country: ref1Country, dob: ref1Dob, email: ref1Email },
+          { firstName: ref2First, lastName: ref2Last, country: ref2Country, dob: ref2Dob, email: ref2Email },
           { firstName: scorerFirst, lastName: scorerLast, country: scorerCountry, dob: scorerDob },
           { firstName: asstFirst, lastName: asstLast, country: asstCountry, dob: asstDob },
           { lj1: lineJudge1, lj2: lineJudge2, lj3: lineJudge3, lj4: lineJudge4 }
@@ -2244,8 +2232,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             is_captain: !!p.isCaptain
           })),
           officials: buildOfficialsArray(
-            { firstName: ref1First, lastName: ref1Last, country: ref1Country, dob: ref1Dob },
-            { firstName: ref2First, lastName: ref2Last, country: ref2Country, dob: ref2Dob },
+            { firstName: ref1First, lastName: ref1Last, country: ref1Country, dob: ref1Dob, email: ref1Email },
+            { firstName: ref2First, lastName: ref2Last, country: ref2Country, dob: ref2Dob, email: ref2Email },
             { firstName: scorerFirst, lastName: scorerLast, country: scorerCountry, dob: scorerDob },
             { firstName: asstFirst, lastName: asstLast, country: asstCountry, dob: asstDob },
             { lj1: lineJudge1, lj2: lineJudge2, lj3: lineJudge3, lj4: lineJudge4 },
@@ -3019,6 +3007,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             setFirstName={setRef1First}
             setCountry={setRef1Country}
             setDob={setRef1Dob}
+            email={ref1Email}
+            setEmail={setRef1Email}
             hasDatabase={true}
             selectorKey="ref1"
             isExpanded={expandedOfficialId === 'ref1'}
@@ -3038,6 +3028,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             setFirstName={setRef2First}
             setCountry={setRef2Country}
             setDob={setRef2Dob}
+            email={ref2Email}
+            setEmail={setRef2Email}
             hasDatabase={true}
             selectorKey="ref2"
             isExpanded={expandedOfficialId === 'ref2'}
@@ -3106,11 +3098,13 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
               setRef1Last(referee.lastName || '')
               setRef1Country(referee.country || 'CHE')
               setRef1Dob('')
+              setRef1Email('')
             } else if (showRefereeSelector === 'ref2') {
               setRef2First(referee.firstName || '')
               setRef2Last(referee.lastName || '')
               setRef2Country(referee.country || 'CHE')
               setRef2Dob('')
+              setRef2Email('')
             } else if (showRefereeSelector === 'scorer') {
               setScorerFirst(referee.firstName || '')
               setScorerLast(referee.lastName || '')
@@ -3125,8 +3119,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
           <Button variant="primary" size="xl" className="min-w-40" onClick={async () => {
             // Check if any changes were made (skip sync if no changes)
             const currentOfficials = {
-              ref1First, ref1Last, ref1Country, ref1Dob,
-              ref2First, ref2Last, ref2Country, ref2Dob,
+              ref1First, ref1Last, ref1Country, ref1Dob, ref1Email,
+              ref2First, ref2Last, ref2Country, ref2Dob, ref2Email,
               scorerFirst, scorerLast, scorerCountry, scorerDob,
               asstFirst, asstLast, asstCountry, asstDob,
               lineJudge1, lineJudge2, lineJudge3, lineJudge4
@@ -3143,8 +3137,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
             if (matchId) {
               await db.matches.update(matchId, {
                 officials: buildOfficialsArray(
-                  { firstName: ref1First, lastName: ref1Last, country: ref1Country, dob: ref1Dob },
-                  { firstName: ref2First, lastName: ref2Last, country: ref2Country, dob: ref2Dob },
+                  { firstName: ref1First, lastName: ref1Last, country: ref1Country, dob: ref1Dob, email: ref1Email },
+                  { firstName: ref2First, lastName: ref2Last, country: ref2Country, dob: ref2Dob, email: ref2Email },
                   { firstName: scorerFirst, lastName: scorerLast, country: scorerCountry, dob: scorerDob },
                   { firstName: asstFirst, lastName: asstLast, country: asstCountry, dob: asstDob },
                   { lj1: lineJudge1, lj2: lineJudge2, lj3: lineJudge3, lj4: lineJudge4 }
@@ -3160,8 +3154,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                   payload: {
                     id: matchForOfficials.seed_key,
                     officials: buildOfficialsArray(
-                      { firstName: ref1First, lastName: ref1Last, country: ref1Country, dob: idValueForSync(ref1Dob) },
-                      { firstName: ref2First, lastName: ref2Last, country: ref2Country, dob: idValueForSync(ref2Dob) },
+                      { firstName: ref1First, lastName: ref1Last, country: ref1Country, dob: idValueForSync(ref1Dob), email: ref1Email },
+                      { firstName: ref2First, lastName: ref2Last, country: ref2Country, dob: idValueForSync(ref2Dob), email: ref2Email },
                       { firstName: scorerFirst, lastName: scorerLast, country: scorerCountry, dob: idValueForSync(scorerDob) },
                       { firstName: asstFirst, lastName: asstLast, country: asstCountry, dob: idValueForSync(asstDob) },
                       { lj1: lineJudge1, lj2: lineJudge2, lj3: lineJudge3, lj4: lineJudge4 },
@@ -4742,8 +4736,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
                     league,
                     scheduledAt,
                     officials: buildOfficialsArray(
-                      { firstName: ref1First, lastName: ref1Last, country: ref1Country, dob: ref1Dob },
-                      { firstName: ref2First, lastName: ref2Last, country: ref2Country, dob: ref2Dob },
+                      { firstName: ref1First, lastName: ref1Last, country: ref1Country, dob: ref1Dob, email: ref1Email },
+                      { firstName: ref2First, lastName: ref2Last, country: ref2Country, dob: ref2Dob, email: ref2Email },
                       { firstName: scorerFirst, lastName: scorerLast, country: scorerCountry, dob: scorerDob },
                       { firstName: asstFirst, lastName: asstLast, country: asstCountry, dob: asstDob },
                       { lj1: lineJudge1, lj2: lineJudge2, lj3: lineJudge3, lj4: lineJudge4 }
