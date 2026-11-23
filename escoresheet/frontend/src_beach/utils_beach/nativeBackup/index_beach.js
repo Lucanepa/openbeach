@@ -9,6 +9,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { detectBackupPlatform, isNativeBackupPlatform, createPlatformStore } from './platform_beach'
 import { createNativeBackupEngine } from './engine_beach'
+import { createBackupSealer } from '../backupCrypto/sealer_beach'
 import { isContinuedElsewhere } from '../matchReopen_beach'
 
 export { detectBackupPlatform, isNativeBackupPlatform } from './platform_beach'
@@ -23,13 +24,23 @@ export function getNativeBackupEngine() {
   if (!isNativeBackupPlatform(detectBackupPlatform())) return Promise.resolve(null)
   if (!enginePromise) {
     enginePromise = (async () => {
-      const [store, { exportMatchData }] = await Promise.all([
+      const [store, { exportMatchData }, { db }] = await Promise.all([
         createPlatformStore(),
-        import('../backupManager_beach')
+        import('../backupManager_beach'),
+        import('../../db_beach/db_beach')
       ])
       // No new file of a copy another device went on with: its state is older
-      // than the match's (OpenVolley 2026-10-29, match 406970)
-      engine = createNativeBackupEngine({ store, exportMatch: exportMatchData, skipMatch: isContinuedElsewhere })
+      // than the match's (OpenVolley 2026-10-29, match 406970). The files are
+      // sealed with the match's game PIN and referee PIN (audit SEC-22); the
+      // match row alone gives the PINs whose keys are derived when the match
+      // is first backed up.
+      engine = createNativeBackupEngine({
+        store,
+        exportMatch: exportMatchData,
+        readMatch: (matchId) => db.matches.get(matchId),
+        sealer: createBackupSealer(),
+        skipMatch: isContinuedElsewhere
+      })
       engine.subscribe(emit)
       emit()
       // The files older versions left in the public Documents folder move

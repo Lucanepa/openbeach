@@ -2564,7 +2564,8 @@
     "sets": "Sätz",
     "sanctions": "Sanktione",
     "sanction": "Sanktion",
-    "failed": "S Spiil hät nöd chöne widerhergstellt werde."
+    "failed": "S Spiil hät nöd chöne widerhergstellt werde.",
+    "untrusted": "Die Datei isch nöd verschlüsselt. Nüt zeigt, dass sie us dere App chunnt: Wer sie gha hät, hät sie chöne ändere. Stell sie nume wider her, wenn du weisch, wo sie ufbewahrt gsii isch."
   },
   "appWindow": {
     "pdfSaveUnsupported": "D Tablet-App cha kei PDF-Dateie speichere: D Genehmigung am Spiilend ladet s Matchblatt ufe, oder mach s uf emne Computer uf.",
@@ -3320,5 +3321,19 @@
     "enterCode": "Live-Bildschirm-Code",
     "join": "Biiträte",
     "badCode": "Das isch kein Live-Bildschirm-Code (8 Buechstabe und Ziffere)."
+  },
+  "backupUnlock": {
+    "title": "Verschlüsselti Sicherig",
+    "intro": "Die Sicherigsdatei isch verschlüsselt. Gib d Spiil-PIN oder d Schiri-PIN vom Spiil ii, zum sie uftue.",
+    "game": "Spiil {{n}}",
+    "saved": "Gspeicheret {{when}}",
+    "pinLabel": "Spiil-PIN oder Schiri-PIN",
+    "open": "Uftue",
+    "opening": "Wird ufgmacht…",
+    "wrongPin": "Falschi PIN: Das isch weder d Spiil-PIN no d Schiri-PIN vo dem Spiil.",
+    "damaged": "D Sicherigsdatei isch beschädigt und cha nöd gläse werde.",
+    "newer": "Die Sicherig isch vo ere neuere Version vo OpenBeach gspeicheret worde. Aktualisier d App, zum sie uftue.",
+    "unsupported": "Das Gerät cha kei verschlüsselti Sicherige uftue.",
+    "failed": "D Sicherig hät nöd chöne ufgmacht werde: {{error}}"
   }
 }

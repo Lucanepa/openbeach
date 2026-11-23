@@ -2,6 +2,9 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 // Ported from OpenVolley src/utils/nativeBackup/__tests__/engine.test.js
 import { createNativeBackupEngine, serializeBackup } from '../../utils_beach/nativeBackup/engine_beach'
 import { eventFileName, LATEST_FILE } from '../../utils_beach/nativeBackup/rotation_beach'
+import { createBackupSealer } from '../../utils_beach/backupCrypto/sealer_beach'
+import { isEncryptedBackup, openEnvelope } from '../../utils_beach/backupCrypto/envelope_beach'
+import { derivePinKey } from '../../utils_beach/backupCrypto/kdf_beach'
 
 const DAY = 24 * 60 * 60 * 1000
 const T0 = Date.UTC(2026, 9, 6, 12, 0, 0, 0)
@@ -362,13 +365,155 @@ describe('native backup engine', () => {
     engine.notify(1)
     await engine.flush()
     const text = store.dirs.get('game12-seed1').get(LATEST_FILE)
+    // encrypted with the game PIN and the referee PIN (audit SEC-22): inside, no PIN either
+    const { data: latest } = await openEnvelope(JSON.parse(text), '111111')
     for (const secret of ['111111', '222222', '333333', '444444', '555555', '666666', 'sess-1']) {
       expect(text).not.toContain(secret)
+      expect(JSON.stringify(latest)).not.toContain(secret)
     }
-    const latest = JSON.parse(text)
     expect(latest.secretsRemoved).toBe(true)
     expect(latest.match).toMatchObject({ hall: 'Sporthalle Nord', seed_key: 'seed1' })
     expect(m.state.match.gamePin).toBe('111111') // the stored match is untouched
+  })
+
+  // Audit SEC-22: the files (and the copies Export to Documents makes of
+  // them) held both rosters, the officials and the signatures in the clear.
+  // Ported from OpenVolley's engine.test.js 'encryption'.
+  describe('encryption', () => {
+    const withPins = (m) => {
+      Object.assign(m.state.match, { gamePin: '123456', refereePin: '654321', officials: [{ role: '1st referee', lastName: 'Arbitro' }] })
+      m.state.team1Players.push({ number: 1, lastName: 'Minor', signature: 'data:image/png;base64,SIGNATURE' })
+    }
+
+    it('a match with PINs: every file, latest.json too, is an envelope either PIN opens, with no name or signature in the clear', async () => {
+      const derive = vi.fn(derivePinKey)
+      const { engine, store, m, tick } = setup({ engine: { sealer: createBackupSealer({ derive, recoveryKey: '' }) } })
+      withPins(m)
+      for (let i = 0; i < 3; i++) {
+        m.point(i % 2 ? 'team2' : 'team1')
+        engine.notify(1)
+        await engine.flush()
+        tick()
+      }
+      const dir = store.dirs.get('game12-seed1')
+      const files = eventFiles(store)
+      expect(files).toHaveLength(3)
+      for (const name of [...files, LATEST_FILE]) {
+        const text = dir.get(name)
+        expect(isEncryptedBackup(JSON.parse(text))).toBe(true)
+        for (const clear of ['"events"', 'Minor', 'SIGNATURE', 'Arbitro', '123456', '654321']) expect(text).not.toContain(clear)
+      }
+      expect(dir.get(LATEST_FILE)).toBe(dir.get(files[2]))
+      const byGame = await openEnvelope(JSON.parse(dir.get(LATEST_FILE)), '123456')
+      const byReferee = await openEnvelope(JSON.parse(dir.get(LATEST_FILE)), '654321')
+      expect(byGame.data).toEqual(byReferee.data)
+      expect(byGame.unlockedWith).toEqual({ pin: 'game', field: 'gamePin', value: '123456' })
+      expect(byReferee.unlockedWith).toEqual({ pin: 'referee', field: 'refereePin', value: '654321' })
+      expect(byGame.data).toMatchObject({ version: 1, secretsRemoved: true, sets: [{ team1Points: 2, team2Points: 1 }], team1Players: [{ lastName: 'Minor' }] })
+      expect(byGame.data.events).toHaveLength(3)
+      // readable before it opens: game number, date and set scores, no names
+      const { readable } = JSON.parse(dir.get(LATEST_FILE))
+      expect(readable).toMatchObject({ gameN: 12, sets: [{ index: 1, team1: 2, team2: 1 }] })
+      expect(Object.keys(readable).sort()).toEqual(['gameN', 'lastUpdated', 'scheduledAt', 'sets'])
+      // the two PINs were derived once each, not per file
+      expect(derive).toHaveBeenCalledTimes(2)
+    })
+
+    it('a match with neither PIN is written plain, as before, and the log says so once', async () => {
+      const { engine, store, m, log, tick } = setup()
+      for (let i = 0; i < 2; i++) {
+        m.point('team1')
+        engine.notify(1)
+        await engine.flush()
+        tick()
+      }
+      const latest = JSON.parse(store.dirs.get('game12-seed1').get(LATEST_FILE))
+      expect(isEncryptedBackup(latest)).toBe(false)
+      expect(latest).toMatchObject({ version: 1, secretsRemoved: true })
+      expect(log.info.mock.calls.filter(c => String(c[0]).includes('not encrypted'))).toHaveLength(1)
+    })
+
+    it('coalescing compares the plain state, not the ciphertext (a fresh IV per file)', async () => {
+      const { engine, store, m } = setup()
+      withPins(m)
+      m.point('team1')
+      engine.notify(1)
+      await engine.flush()
+      Object.assign(m.state.match, { updatedAt: '2026-10-06T12:00:10Z', refereeHeartbeat: 5 })
+      engine.notify(1)
+      engine.notify(1)
+      await engine.flush()
+      expect(eventFiles(store)).toHaveLength(1)
+      m.point('team2')
+      engine.notify(1)
+      await engine.flush()
+      expect(eventFiles(store)).toHaveLength(2)
+    })
+
+    it('a new PIN: the files from then on open with it, not with the old one', async () => {
+      const { engine, store, m, tick } = setup()
+      withPins(m)
+      m.point('team1')
+      engine.notify(1)
+      await engine.flush()
+      tick()
+      m.state.match.refereePin = '777777'
+      m.point('team1')
+      engine.notify(1)
+      await engine.flush()
+      const latest = JSON.parse(store.dirs.get('game12-seed1').get(LATEST_FILE))
+      await expect(openEnvelope(latest, '654321')).rejects.toMatchObject({ code: 'OV_BACKUP_WRONG_PIN' })
+      expect((await openEnvelope(latest, '777777')).data.sets[0].team1Points).toBe(2)
+      expect((await openEnvelope(latest, '123456')).data.sets[0].team1Points).toBe(2)
+    })
+
+    // The first seal of a match derives both PIN keys (about 0.5-0.9 s each
+    // on a tablet): done when the engine first sees the match, so its first
+    // file, maybe the last one before the app quits, only encrypts
+    it('warms the PIN keys when it first sees the match, writing nothing: the first file does not derive them', async () => {
+      const derive = vi.fn(derivePinKey)
+      let match
+      const readMatch = vi.fn(async () => structuredClone(match.state.match))
+      const { engine, store, m } = setup({ engine: { sealer: createBackupSealer({ derive, recoveryKey: '' }), readMatch } })
+      match = m
+      withPins(m)
+      expect(await engine.warm(1)).toBe(true)
+      expect(derive).toHaveBeenCalledTimes(2)
+      expect(store.write).not.toHaveBeenCalled()
+      expect(m.exportMatch).not.toHaveBeenCalled()
+      derive.mockClear()
+      m.point('team1')
+      engine.notify(1)
+      await engine.flush()
+      expect(derive).not.toHaveBeenCalled()
+      expect(isEncryptedBackup(JSON.parse(store.dirs.get('game12-seed1').get(LATEST_FILE)))).toBe(true)
+      expect(readMatch).toHaveBeenCalledTimes(1) // once per match
+    })
+
+    it('a copy skipMatch names gets no keys', async () => {
+      const derive = vi.fn(derivePinKey)
+      const readMatch = vi.fn(async () => ({ id: 2, gamePin: '123456', cloudBlock: { code: 'OV_SCORER_MOVED' } }))
+      const skipMatch = (row) => row.cloudBlock?.code === 'OV_SCORER_MOVED'
+      const { engine } = setup({ engine: { sealer: createBackupSealer({ derive, recoveryKey: '' }), readMatch, skipMatch } })
+      expect(await engine.warm(2)).toBe(false)
+      expect(derive).not.toHaveBeenCalled()
+    })
+
+    it('a file that cannot be encrypted is not written in the clear: a status error, retried at the next event', async () => {
+      const real = createBackupSealer({ recoveryKey: '' })
+      const sealer = { seal: vi.fn().mockRejectedValueOnce(new Error('KDF out of memory')).mockImplementation(real.seal) }
+      const { engine, store, m } = setup({ engine: { sealer } })
+      withPins(m)
+      m.point('team1')
+      engine.notify(1)
+      await engine.flush()
+      expect(store.write).not.toHaveBeenCalled()
+      expect(engine.getStatus().error).toBe('KDF out of memory')
+      engine.notify(1)
+      await engine.flush()
+      expect(engine.getStatus().error).toBeNull()
+      expect(isEncryptedBackup(JSON.parse(store.dirs.get('game12-seed1').get(LATEST_FILE)))).toBe(true)
+    })
   })
 
   it('writes no file when only heartbeats, sessions or updatedAt changed', async () => {

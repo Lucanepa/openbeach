@@ -9,7 +9,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { exportToDocuments, moveLegacyFiles, MOVED_MARKER, EXPORT_PARENT } from '../../utils_beach/nativeBackup/androidFiles_beach'
-import { BACKUP_SUBDIR } from '../../utils_beach/nativeBackup/platform_beach'
+import { BACKUP_SUBDIR, createCapacitorStore } from '../../utils_beach/nativeBackup/platform_beach'
+import { createNativeBackupEngine } from '../../utils_beach/nativeBackup/engine_beach'
+import { createBackupSealer } from '../../utils_beach/backupCrypto/sealer_beach'
+import { isEncryptedBackup, openEnvelope } from '../../utils_beach/backupCrypto/envelope_beach'
 import { LOG_SUBDIR } from '../../utils_beach/activity/fileSink_beach'
 import { startNativeFileHousekeeping, resetNativeFileHousekeepingForTests, exportNativeFilesToDocuments } from '../../utils_beach/nativeBackup/index_beach'
 import ExportToDocumentsRow from '../../components_beach/options/ExportToDocumentsRow_beach'
@@ -186,6 +189,50 @@ describe('Export to Documents: a copy out, only when asked', () => {
     const { fs } = fakeFs({ files: { [`DATA:${BACKUP_SUBDIR}/game35-s1/latest.json`]: 'l' } })
     const r = await exportNativeFilesToDocuments({ load: async () => [fs, { exportToDocuments: (f) => exportToDocuments(f, { now: new Date(NOW), log: quiet }) }] })
     expect(r.backups).toBe(1)
+  })
+})
+
+// The reviewer's case: support asks for the logs, the scorer taps Export to
+// Documents, and every match's latest.json lands in the public Documents
+// folder. Now the app's files of a match with a PIN are sealed, so are the
+// copies: no roster, official or signature in the clear (audit SEC-22).
+describe('Export to Documents copies the sealed files as they are', () => {
+  it('the engine writes into the app folder, the export copies an envelope only the match PINs open', async () => {
+    const { fs, store } = fakeFs()
+    const backupStore = createCapacitorStore(fs, { log: quiet })
+    const data = {
+      version: 1,
+      match: { id: 7, game_n: 35, seed_key: 's1', status: 'live', gamePin: '135790', refereePin: '246802', officials: [{ role: 'referee1', lastName: 'Arbitro' }] },
+      team1: { name: 'Minor / Junior' },
+      team2: { name: 'Rossi / Bianchi' },
+      team1Players: [{ number: 1, lastName: 'Minor', signature: 'data:image/png;base64,SIGNATURE' }],
+      team2Players: [],
+      sets: [{ index: 1, team1Points: 3, team2Points: 1 }],
+      events: [{ type: 'point', seq: 1, payload: { team: 'team1' } }]
+    }
+    const engine = createNativeBackupEngine({
+      store: backupStore,
+      exportMatch: async () => structuredClone(data),
+      sealer: createBackupSealer({ recoveryKey: '' }),
+      quietMs: 0,
+      idle: (fn) => fn(),
+      now: () => new Date(NOW),
+      log: { info() {}, warn() {}, error() {} }
+    })
+    engine.notify(7)
+    await engine.flush()
+    const r = await exportToDocuments(fs, { now: new Date(NOW), log: quiet })
+    expect(r.backups).toBe(1)
+    const [exported] = keys(store, `DOCUMENTS:${EXPORT_PARENT}/export-20261123-1200/backups/`)
+    expect(exported).toBeTruthy()
+    const text = store.get(exported).data
+    for (const clear of ['Minor', 'Junior', 'Rossi', 'SIGNATURE', 'Arbitro', '135790', '246802', '"events"']) expect(text).not.toContain(clear)
+    expect(isEncryptedBackup(JSON.parse(text))).toBe(true)
+    // the app folder's own copy is the same envelope; the referee PIN opens it
+    expect(store.get(`DATA:${BACKUP_SUBDIR}/${exported.split('/').pop().replace(/\.json$/, '')}/latest.json`).data).toBe(text)
+    const { data: inside } = await openEnvelope(JSON.parse(text), '246802')
+    expect(inside.team1Players[0]).toMatchObject({ lastName: 'Minor', signature: 'data:image/png;base64,SIGNATURE' })
+    expect(inside.match.gamePin).toBeUndefined()
   })
 })
 

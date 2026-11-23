@@ -2564,7 +2564,8 @@
     "sets": "Sets",
     "sanctions": "Sanctions",
     "sanction": "sanction",
-    "failed": "Could not restore the match."
+    "failed": "Could not restore the match.",
+    "untrusted": "This file is not encrypted, so nothing shows that it comes from this app: anyone who had it could have changed it. Restore it only if you know where it was kept."
   },
   "appWindow": {
     "pdfSaveUnsupported": "The tablet app cannot save PDF files: the match-end approval uploads the scoresheet, or open it on a computer.",
@@ -3320,5 +3321,19 @@
     "enterCode": "Live screen code",
     "join": "Join",
     "badCode": "This is not a live screen code (8 letters and digits)."
+  },
+  "backupUnlock": {
+    "title": "Encrypted backup",
+    "intro": "This backup file is encrypted. Type the match's game PIN or referee PIN to open it.",
+    "game": "Match {{n}}",
+    "saved": "Saved {{when}}",
+    "pinLabel": "Game PIN or referee PIN",
+    "open": "Open",
+    "opening": "Opening…",
+    "wrongPin": "Wrong PIN: it is neither the game PIN nor the referee PIN of this match.",
+    "damaged": "The backup file is damaged and cannot be read.",
+    "newer": "This backup was saved by a newer version of OpenBeach. Update the app to open it.",
+    "unsupported": "This device cannot open encrypted backups.",
+    "failed": "The backup could not be opened: {{error}}"
   }
 }

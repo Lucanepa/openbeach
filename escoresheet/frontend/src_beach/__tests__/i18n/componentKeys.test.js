@@ -22,6 +22,9 @@ const SCREENS = [
   'components_beach/auth/ProfileModal_beach.jsx',
   // Android's Export to Documents (audit SEC-22)
   'components_beach/options/ExportToDocumentsRow_beach.jsx',
+  // the PIN of a sealed backup file, the restore preview's "not encrypted" (audit SEC-22)
+  'components_beach/BackupUnlockDialog_beach.jsx',
+  'components_beach/RestorePreviewModal_beach.jsx',
   'components_beach/auth/UserButton_beach.jsx',
   'components_beach/auth/InviteCodeForm_beach.jsx',
   'diagnostics_beach/DiagnosticsSection_beach.jsx',

@@ -18,8 +18,13 @@ import { THEME_BOOT_SCRIPT } from './theme-boot.js'
  *
  * What the pages need, and nothing more where that is known:
  *   - scripts: the bundle ('self') and the colour theme boot script (inline,
- *     by its hash: theme-boot.js). No other inline script, no eval, no
- *     WebAssembly.
+ *     by its hash: theme-boot.js). No other inline script, no eval.
+ *     WebAssembly ('wasm-unsafe-eval') only where a backup file is sealed or
+ *     opened: Argon2id of the match PINs (hash-wasm in
+ *     src_beach/utils_beach/backupCrypto/kdf_beach.js, audit SEC-22), in the
+ *     Android app (its backup files) and the scorer site (Restore match from
+ *     an exported file). Not the referee, livescore, scoreboard or sheet
+ *     sites.
  *   - styles: inline style attributes (React's style props, the PDF sheet's
  *     own Tailwind) and <style> tags of libraries: 'unsafe-inline' for styles
  *     only.
@@ -40,9 +45,15 @@ const sha256Source = (script) => `'sha256-${createHash('sha256').update(script, 
 
 export const THEME_BOOT_HASH = sha256Source(THEME_BOOT_SCRIPT)
 
+// The builds that open sealed backup files (Restore match): WebAssembly for
+// the PIN key derivation. The Android app's <meta> has it too (cspMeta).
+export const WASM_BUILDS = Object.freeze(['beachapp'])
+
+const scriptSrc = (wasm) => (wasm ? `'self' 'wasm-unsafe-eval' ${THEME_BOOT_HASH}` : `'self' ${THEME_BOOT_HASH}`)
+
 const DIRECTIVES = [
   ["default-src", "'self'"],
-  ["script-src", `'self' ${THEME_BOOT_HASH}`],
+  ["script-src", null], // scriptSrc(wasm)
   ["style-src", "'self' 'unsafe-inline'"],
   ["img-src", "'self' data: blob:"],
   ["font-src", "'self' data:"],
@@ -58,10 +69,12 @@ const DIRECTIVES = [
 
 /**
  * The policy as one header / meta value.
- * @param {{ frameAncestors?: string|null }} [opts] null: no frame-ancestors (a <meta>, or a page any site may frame)
+ * @param {{ frameAncestors?: string|null, wasm?: boolean }} [opts]
+ *   frameAncestors null: none (a <meta>, or a page any site may frame);
+ *   wasm: WebAssembly allowed (WASM_BUILDS, the Android app)
  */
-export function contentSecurityPolicy({ frameAncestors = "'self'" } = {}) {
-  const parts = DIRECTIVES.map(([name, value]) => `${name} ${value}`)
+export function contentSecurityPolicy({ frameAncestors = "'self'", wasm = false } = {}) {
+  const parts = DIRECTIVES.map(([name, value]) => `${name} ${name === 'script-src' ? scriptSrc(wasm) : value}`)
   if (frameAncestors) parts.push(`frame-ancestors ${frameAncestors}`)
   return parts.join('; ')
 }
@@ -95,7 +108,7 @@ export function buildChannel(env = process.env) {
  */
 export function securityHeaderLines(name, channel = 'production') {
   const frameable = FRAMEABLE_BUILDS.includes(name)
-  const policy = contentSecurityPolicy({ frameAncestors: frameable ? null : "'self'" })
+  const policy = contentSecurityPolicy({ frameAncestors: frameable ? null : "'self'", wasm: WASM_BUILDS.includes(name) })
   const header = channel === 'dev' ? 'Content-Security-Policy-Report-Only' : 'Content-Security-Policy'
   const lines = [`  ${header}: ${policy}`, '  X-Content-Type-Options: nosniff']
   if (!frameable) lines.push('  X-Frame-Options: SAMEORIGIN')
@@ -116,7 +129,8 @@ export function headersFor(name, channel = buildChannel()) {
 /**
  * Vite plugin: the policy as a <meta http-equiv> at the top of every page of
  * a build (the Android app: CAPACITOR=true in vite.config.js). Without
- * frame-ancestors, which a <meta> cannot set.
+ * frame-ancestors, which a <meta> cannot set; with WebAssembly (its backup
+ * files are sealed with the match PINs).
  * @param {{ enabled?: boolean }} [opts]
  */
 export function cspMeta({ enabled = true } = {}) {
@@ -132,7 +146,8 @@ export function cspMeta({ enabled = true } = {}) {
         if (!enabled) return html
         return [{
           tag: 'meta',
-          attrs: { 'http-equiv': 'Content-Security-Policy', content: contentSecurityPolicy({ frameAncestors: null }) },
+          // the app's backup files are sealed with the match PINs (WebAssembly)
+          attrs: { 'http-equiv': 'Content-Security-Policy', content: contentSecurityPolicy({ frameAncestors: null, wasm: true }) },
           injectTo: 'head-prepend'
         }]
       }

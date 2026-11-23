@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { contentSecurityPolicy, headersFor, securityHeaderLines, buildChannel, cspMeta, THEME_BOOT_HASH, FRAMEABLE_BUILDS } from '../../../csp.js'
+import { contentSecurityPolicy, headersFor, securityHeaderLines, buildChannel, cspMeta, THEME_BOOT_HASH, FRAMEABLE_BUILDS, WASM_BUILDS } from '../../../csp.js'
 import { THEME_BOOT_SCRIPT, themeBoot } from '../../../theme-boot.js'
 import { subdomains } from '../../../scripts/subdomain-pages.js'
 
@@ -34,9 +34,11 @@ describe('the _headers file of every dist-beach* build', () => {
     const h = parseHeaders(headersFor(name, 'production'))
     const csp = directives(h['Content-Security-Policy'])
     expect(csp['default-src']).toBe("'self'")
-    // the bundle and the theme boot script, nothing else inline, no eval
-    expect(csp['script-src']).toBe(`'self' ${THEME_BOOT_HASH}`)
-    expect(csp['script-src']).not.toMatch(/unsafe-inline|unsafe-eval|\*/)
+    // the bundle and the theme boot script, nothing else inline, no eval;
+    // WebAssembly only on the scorer site, which opens sealed backup files
+    // (audit SEC-22: Argon2id of the match PINs)
+    expect(csp['script-src']).toBe(WASM_BUILDS.includes(name) ? `'self' 'wasm-unsafe-eval' ${THEME_BOOT_HASH}` : `'self' ${THEME_BOOT_HASH}`)
+    expect(csp['script-src'].replace("'wasm-unsafe-eval'", '')).not.toMatch(/unsafe-inline|unsafe-eval|\*/)
     expect(csp['object-src']).toBe("'none'")
     expect(csp['base-uri']).toBe("'self'")
     expect(csp['form-action']).toBe("'self'")
@@ -49,6 +51,13 @@ describe('the _headers file of every dist-beach* build', () => {
     } else {
       expect(csp['frame-ancestors']).toBe("'self'")
       expect(h['X-Frame-Options']).toBe('SAMEORIGIN')
+    }
+  })
+
+  it('WebAssembly only where sealed backup files are opened: the scorer site', () => {
+    expect(WASM_BUILDS).toEqual(['beachapp'])
+    for (const name of ['beach-referee', 'beach-livescore', 'beach-scoreboard', 'beach-scoresheet']) {
+      expect(headersFor(name, 'production'), name).not.toMatch(/wasm-unsafe-eval/)
     }
   })
 
@@ -95,8 +104,12 @@ describe('the Android app build (CAPACITOR=true)', () => {
     expect(hook.order).toBe('post')
     const [tag] = hook.handler('<html>')
     expect(tag).toMatchObject({ tag: 'meta', injectTo: 'head-prepend', attrs: { 'http-equiv': 'Content-Security-Policy' } })
-    expect(tag.attrs.content).toBe(contentSecurityPolicy({ frameAncestors: null }))
+    expect(tag.attrs.content).toBe(contentSecurityPolicy({ frameAncestors: null, wasm: true }))
     expect(tag.attrs.content).not.toMatch(/frame-ancestors/)
+    // the app's backup files are sealed with the match PINs: Argon2id is
+    // WebAssembly (audit SEC-22); still no eval and no other inline script
+    const script = directives(tag.attrs.content)['script-src']
+    expect(script).toBe(`'self' 'wasm-unsafe-eval' ${THEME_BOOT_HASH}`)
     expect(cspMeta({ enabled: false }).transformIndexHtml.handler('<html>')).toBe('<html>')
     expect(cspMeta().apply).toBe('build')
   })

@@ -252,6 +252,91 @@ describe('remarks (backend db/017)', () => {
   })
 })
 
+// Audit SEC-22: the app backup files are sealed with the match's game PIN and
+// referee PIN (backupCrypto). The restore takes one only once a PIN opened it
+// (BackupUnlockDialog_beach), and keeps that PIN on the match; a plain file is
+// marked as not verified (backupFileTrust), also one that carries an
+// `unlockedWith` of its own.
+describe('encrypted app backup files (audit SEC-22)', () => {
+  let sealer
+  let env
+  beforeAll(async () => {
+    sealer = (await import('../../utils_beach/backupCrypto/sealer_beach')).createBackupSealer({ recoveryKey: '' })
+    env = await import('../../utils_beach/backupCrypto/envelope_beach')
+  })
+
+  // The file the native engine writes for this match: sealed
+  async function sealedFileOf(matchId) {
+    const data = await bm.exportMatchData(matchId)
+    const iso = '2026-10-08T12:00:00.000Z'
+    const { text, encrypted } = await sealer.seal(matchId, data, serializeBackup(data).build(iso), iso)
+    expect(encrypted).toBe(true)
+    return JSON.parse(text)
+  }
+  // What the PIN dialog hands the preview
+  const opened = async (envelope, pin) => {
+    const { data, unlockedWith } = await env.openEnvelope(envelope, pin)
+    return env.openedBackup(data, unlockedWith)
+  }
+
+  it('an envelope is refused until a PIN opens it, and nothing on the device changes', async () => {
+    const matchId = await seedMatch()
+    const envelope = await sealedFileOf(matchId)
+    for (const pin of ALL_PINS) expect(JSON.stringify(envelope)).not.toContain(pin)
+    expect(JSON.stringify(envelope)).not.toMatch(/Müller|Rossi/)
+    expect(bm.matchBackupFromFile(envelope)).toBe(envelope)
+    const before = await db.matches.toArray()
+    await expect(bm.restoreMatchFromJson(envelope)).rejects.toMatchObject({ code: bm.BACKUP_LOCKED_ERROR })
+    await expect(bm.restoreMatchInPlace(matchId, envelope)).rejects.toMatchObject({ code: bm.BACKUP_LOCKED_ERROR })
+    expect(await db.matches.toArray()).toEqual(before)
+    expect(await db.sync_queue.count()).toBe(0)
+  })
+
+  it('opened with the referee PIN on a device without the match: restored with that referee PIN, not a new one', async () => {
+    const matchId = await seedMatch()
+    const envelope = await sealedFileOf(matchId)
+    await Promise.all(db.tables.map(t => t.clear()))
+    const file = await opened(envelope, '900002')
+    expect(env.backupFileTrust(file)).toBe('sealed')
+    const newId = await bm.restoreMatchFromJson(file)
+    const restored = await db.matches.get(newId)
+    expect(restored.refereePin).toBe('900002')
+    expect(restored.unlockedWith).toBeUndefined()
+    expect(await db.sets.where('matchId').equals(newId).first()).toMatchObject({ team1Points: 14, team2Points: 12 })
+  })
+
+  it('opened with the game PIN: restored with that game PIN, which the restore job sends', async () => {
+    const matchId = await seedMatch()
+    const envelope = await sealedFileOf(matchId)
+    await Promise.all(db.tables.map(t => t.clear()))
+    const newId = await bm.restoreMatchFromJson(await opened(envelope, '900001'))
+    expect((await db.matches.get(newId)).gamePin).toBe('900001')
+    const job = (await db.sync_queue.toArray()).find(j => j.action === 'restore')
+    expect(job.payload.match.game_pin).toBe('900001')
+  })
+
+  it('over the local copy: its PINs come first', async () => {
+    const matchId = await seedMatch()
+    const envelope = await sealedFileOf(matchId)
+    await db.matches.update(matchId, { refereePin: '222222' })
+    const newId = await bm.restoreMatchFromJson(await opened(envelope, '900002'))
+    expect(await db.matches.get(newId)).toMatchObject({ gamePin: '900001', refereePin: '222222', team1Pin: '900003' })
+  })
+
+  it('a plain file cannot pass for an opened one with an unlockedWith of its own', async () => {
+    const matchId = await seedMatch()
+    const data = await bm.exportMatchData(matchId)
+    const plain = JSON.parse(serializeBackup(data).build('2026-10-08T12:00:00.000Z'))
+    const forged = { ...plain, unlockedWith: { pin: 'game', field: 'gamePin', value: '123123' } }
+    expect(env.backupFileTrust(forged)).toBe('plain')
+    expect(env.backupFileTrust(plain)).toBe('plain')
+    expect(env.backupFileTrust(JSON.parse(JSON.stringify(await bm.exportMatchData(matchId))))).toBe('plain')
+    await Promise.all(db.tables.map(t => t.clear()))
+    const newId = await bm.restoreMatchFromJson(forged)
+    expect((await db.matches.get(newId)).gamePin).not.toBe('123123')
+  })
+})
+
 // OB-11b: a test match starts with the referee connection on
 describe('the referee connection of a restored test match', () => {
   const restored = async () => (await db.matches.toArray())[0]

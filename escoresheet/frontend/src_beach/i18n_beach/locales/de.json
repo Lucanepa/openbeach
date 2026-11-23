@@ -2564,7 +2564,8 @@
     "sets": "Sätze",
     "sanctions": "Sanktionen",
     "sanction": "Sanktion",
-    "failed": "Das Spiel konnte nicht wiederhergestellt werden."
+    "failed": "Das Spiel konnte nicht wiederhergestellt werden.",
+    "untrusted": "Diese Datei ist nicht verschlüsselt. Nichts zeigt, dass sie aus dieser App stammt: Wer sie hatte, konnte sie ändern. Stelle sie nur wieder her, wenn du weisst, wo sie aufbewahrt war."
   },
   "appWindow": {
     "pdfSaveUnsupported": "Die Tablet-App kann keine PDF-Dateien speichern: Die Genehmigung am Spielende lädt das Matchblatt hoch, oder öffne es auf einem Computer.",
@@ -3320,5 +3321,19 @@
     "enterCode": "Live-Bildschirm-Code",
     "join": "Beitreten",
     "badCode": "Das ist kein Live-Bildschirm-Code (8 Buchstaben und Ziffern)."
+  },
+  "backupUnlock": {
+    "title": "Verschlüsselte Sicherung",
+    "intro": "Diese Sicherungsdatei ist verschlüsselt. Gib die Spiel-PIN oder die Schiedsrichter-PIN des Spiels ein, um sie zu öffnen.",
+    "game": "Spiel {{n}}",
+    "saved": "Gespeichert {{when}}",
+    "pinLabel": "Spiel-PIN oder Schiedsrichter-PIN",
+    "open": "Öffnen",
+    "opening": "Wird geöffnet…",
+    "wrongPin": "Falsche PIN: Das ist weder die Spiel-PIN noch die Schiedsrichter-PIN dieses Spiels.",
+    "damaged": "Die Sicherungsdatei ist beschädigt und kann nicht gelesen werden.",
+    "newer": "Diese Sicherung wurde von einer neueren Version von OpenBeach gespeichert. Aktualisiere die App, um sie zu öffnen.",
+    "unsupported": "Dieses Gerät kann keine verschlüsselten Sicherungen öffnen.",
+    "failed": "Die Sicherung konnte nicht geöffnet werden: {{error}}"
   }
 }

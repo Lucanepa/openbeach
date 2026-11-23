@@ -2564,7 +2564,8 @@
     "sets": "Sets",
     "sanctions": "Sanctions",
     "sanction": "sanction",
-    "failed": "Impossible de restaurer le match."
+    "failed": "Impossible de restaurer le match.",
+    "untrusted": "Ce fichier n’est pas chiffré : rien ne montre qu’il vient de cette app, et toute personne qui l’a eu a pu le modifier. Ne le restaure que si tu sais où il était conservé."
   },
   "appWindow": {
     "pdfSaveUnsupported": "L'application tablette ne peut pas enregistrer de PDF : l'approbation en fin de match téléverse la feuille, ou ouvre-la sur un ordinateur.",
@@ -3320,5 +3321,19 @@
     "enterCode": "Code de l’écran en direct",
     "join": "Rejoindre",
     "badCode": "Ce n’est pas un code d’écran en direct (8 lettres et chiffres)."
+  },
+  "backupUnlock": {
+    "title": "Sauvegarde chiffrée",
+    "intro": "Ce fichier de sauvegarde est chiffré. Saisis le PIN du match ou le PIN arbitre pour l’ouvrir.",
+    "game": "Match {{n}}",
+    "saved": "Enregistrée le {{when}}",
+    "pinLabel": "PIN du match ou PIN arbitre",
+    "open": "Ouvrir",
+    "opening": "Ouverture…",
+    "wrongPin": "PIN incorrect : ce n’est ni le PIN du match ni le PIN arbitre de ce match.",
+    "damaged": "Le fichier de sauvegarde est endommagé et ne peut pas être lu.",
+    "newer": "Cette sauvegarde a été enregistrée par une version plus récente d’OpenBeach. Mets l’app à jour pour l’ouvrir.",
+    "unsupported": "Cet appareil ne peut pas ouvrir les sauvegardes chiffrées.",
+    "failed": "Impossible d’ouvrir la sauvegarde : {{error}}"
   }
 }

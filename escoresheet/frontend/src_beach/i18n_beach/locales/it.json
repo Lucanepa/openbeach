@@ -2564,7 +2564,8 @@
     "sets": "Set",
     "sanctions": "Sanzioni",
     "sanction": "sanzione",
-    "failed": "Impossibile ripristinare la partita."
+    "failed": "Impossibile ripristinare la partita.",
+    "untrusted": "Questo file non è cifrato: niente mostra che venga da questa app, e chiunque l’abbia avuto può averlo modificato. Ripristinalo solo se sai dove era conservato."
   },
   "appWindow": {
     "pdfSaveUnsupported": "L'app per tablet non può salvare file PDF: l'approvazione a fine partita carica il referto, oppure aprilo su un computer.",
@@ -3320,5 +3321,19 @@
     "enterCode": "Codice schermo live",
     "join": "Partecipa",
     "badCode": "Questo non è un codice schermo live (8 lettere e cifre)."
+  },
+  "backupUnlock": {
+    "title": "Backup cifrato",
+    "intro": "Questo file di backup è cifrato. Inserisci il PIN partita o il PIN arbitro della partita per aprirlo.",
+    "game": "Partita {{n}}",
+    "saved": "Salvato il {{when}}",
+    "pinLabel": "PIN partita o PIN arbitro",
+    "open": "Apri",
+    "opening": "Apertura…",
+    "wrongPin": "PIN errato: non è né il PIN partita né il PIN arbitro di questa partita.",
+    "damaged": "Il file di backup è danneggiato e non può essere letto.",
+    "newer": "Questo backup è stato salvato da una versione più recente di OpenBeach. Aggiorna l’app per aprirlo.",
+    "unsupported": "Questo dispositivo non può aprire i backup cifrati.",
+    "failed": "Impossibile aprire il backup: {{error}}"
   }
 }
