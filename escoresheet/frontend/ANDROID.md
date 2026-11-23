@@ -92,6 +92,28 @@ the previous build: `aapt2 dump badging` (package, versions, SDKs,
 permissions) and the list of changed ZIP entries (the web assets must not
 change), and check that an empty-cache build gives the same bytes.
 
+### Dependency verification
+
+`android/gradle/verification-metadata.xml` holds the sha256 of every plugin
+and library the APK is built from (audit SEC-50, as OpenVolley's): Gradle
+refuses an artifact whose checksum differs or is missing, and F-Droid's build
+reads the same file. After a Gradle, AGP, Capacitor or plugin bump (a
+Dependabot PR too), update it:
+
+```bash
+npx cap sync android && cd android
+./gradlew --write-verification-metadata sha256 help assembleDebug assembleRelease testDebugUnitTest
+git diff gradle/verification-metadata.xml   # review: only the bumped artifacts should change
+# then check it with an empty cache:
+GRADLE_USER_HOME=$(mktemp -d) ./gradlew clean assembleRelease
+```
+
+Gradle sometimes misses a parent POM or a `.module` file of the buildscript
+classpath (`guava-parent`, `kotlinx-coroutines-bom`, `junit-bom`) when the
+cache is warm; the empty-cache run names it, add it by hand from the
+repository (check its published `.sha1`). aapt2 is per OS: the file lists the
+Linux, macOS and Windows jars; a new AGP needs all three again.
+
 ## Icons and splash
 
 The launcher icons (adaptive: the B2 ball on a dune `#efd8ae` background, plus

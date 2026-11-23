@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- What the app's FileProvider may hand to another app: only the folder the
+     app needs, never the whole shared storage or cache (it was
+     external-path "." and cache-path "."), so a path that reaches
+     getUriForFile by mistake cannot share a backup, a log or any other file
+     (audit SEC-50, as OpenVolley's android-6). OpenBeach shares no file
+     itself: the only user is a photo taken from a file field (Capacitor's
+     BridgeWebChromeClient puts it in the app's external Pictures folder). -->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="my_images" path="." />
-    <cache-path name="my_cache_images" path="." />
+    <external-files-path name="captures" path="Pictures/" />
 </paths>

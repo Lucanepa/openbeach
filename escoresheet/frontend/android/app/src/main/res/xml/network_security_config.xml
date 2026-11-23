@@ -4,9 +4,11 @@
   desktop app at http://<LAN-IP>:5174 / ws://<LAN-IP>:8081, the OpenVolley
   desktop app on 5173 / 8080, the venue server or the Pi) over plain HTTP
   (owner decision). LAN IPs cannot be listed in a domain-config, so cleartext
-  is allowed app-wide; the cloud backend is always https. Which hosts the app
-  may talk to at all is enforced in src_beach/utils_beach/backendConfig_beach.js
-  (isAllowedBackendUrl: localhost, RFC 1918 ranges, *.local, *.openvolley.app).
+  is allowed app-wide, except for openvolley.app and its subdomains: the
+  cloud is https only, whatever an address field says (audit SEC-50, as
+  OpenVolley's). Which hosts the app may talk to at all is enforced in
+  src_beach/utils_beach/backendConfig_beach.js (isAllowedBackendUrl:
+  localhost, RFC 1918 ranges, *.local, *.openvolley.app).
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true">
@@ -14,4 +16,7 @@
             <certificates src="system" />
         </trust-anchors>
     </base-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">openvolley.app</domain>
+    </domain-config>
 </network-security-config>

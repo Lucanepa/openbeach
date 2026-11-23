@@ -60,3 +60,40 @@ describe('SEC-49: no Auto Backup and no device transfer of the app data', () => 
     }
   })
 })
+
+describe('SEC-50: the FileProvider, cleartext, dependency checks', () => {
+  it('the FileProvider shares the camera-capture folder only, never all shared storage or the whole cache', () => {
+    const paths = res('res/xml/file_paths.xml')
+    const entries = [...paths.matchAll(/<([a-z-]+-path)\s+name="([^"]+)"\s+path="([^"]*)"\s*\/>/g)].map(m => ({ kind: m[1], name: m[2], path: m[3] }))
+    expect(entries).toEqual([{ kind: 'external-files-path', name: 'captures', path: 'Pictures/' }])
+    expect(paths).not.toMatch(/path="\."|<external-path|<cache-path|<root-path|<files-path/)
+  })
+
+  it('no cleartext to openvolley.app and its subdomains (venue relays on LAN addresses still over http)', () => {
+    const nsc = res('res/xml/network_security_config.xml')
+    expect(nsc).toMatch(/<base-config cleartextTrafficPermitted="true">/)
+    expect(nsc).toMatch(/<domain-config cleartextTrafficPermitted="false">\s*<domain includeSubdomains="true">openvolley\.app<\/domain>\s*<\/domain-config>/)
+  })
+
+  it('Gradle verifies the checksums of every Maven artifact of the APK', () => {
+    const meta = readFileSync(path.join(fe, 'android/gradle/verification-metadata.xml'), 'utf8')
+    expect(meta).toMatch(/<verify-metadata>true<\/verify-metadata>/)
+    // the plugins and libraries the app is built from are listed with their sha256
+    for (const group of ['com.android.tools.build', 'androidx.appcompat', 'androidx.core']) {
+      expect(meta, group).toMatch(new RegExp(`<component group="${group.replace(/\./g, '\\.')}"`))
+    }
+    expect(meta).toMatch(/<sha256 value="[0-9a-f]{64}"/)
+  })
+
+  it('CI audits the production dependencies; Dependabot also proposes the action pins', () => {
+    const repo = path.resolve(fe, '../..')
+    const audit = readFileSync(path.join(repo, '.github/workflows/dependency-audit.yml'), 'utf8')
+    expect(audit).toMatch(/working-directory: escoresheet\/frontend\s+run: npm audit --omit=dev --audit-level=high/)
+    expect(audit).toMatch(/permissions:\s+contents: read/)
+    // actions pinned by commit
+    for (const m of audit.matchAll(/uses: ([^\s]+)/g)) expect(m[1], m[1]).toMatch(/@[0-9a-f]{40}$/)
+    const dependabot = readFileSync(path.join(repo, '.github/dependabot.yml'), 'utf8')
+    expect(dependabot).toMatch(/package-ecosystem: github-actions/)
+    expect(dependabot).toMatch(/package-ecosystem: npm\s+directory: \/escoresheet\/frontend/)
+  })
+})
