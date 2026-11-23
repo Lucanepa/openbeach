@@ -45,7 +45,8 @@ export default defineConfig({
     react(),
     // The Android app's Content-Security-Policy as a <meta> (no server sends
     // it a header; the web builds get a _headers file, build-subdomains.js).
-    // First in <head>: a policy <meta> governs only what comes after it.
+    // Its hook runs last (order 'post'), so the <meta> is first in <head>: a
+    // policy <meta> governs only what comes after it.
     cspMeta({ enabled: isCapacitor }),
     // Colour theme (utils_beach/theme_beach.js): set <html data-theme> before
     // the first paint, so a dark or e-ink page does not flash light while the
