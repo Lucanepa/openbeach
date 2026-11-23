@@ -22,6 +22,7 @@ import { postMatchSignaturesFromServer } from './signatures_beach'
 import { listMatchBackups } from './logger_beach'
 import { officialsList } from './officials_beach'
 import { isEncryptedBackup, unlockedPin } from './backupCrypto/envelope_beach'
+import { securePin } from './pin_beach'
 
 // IndexedDB key for storing file system directory handle
 const BACKUP_DB_NAME = 'escoresheet_backup'
@@ -306,17 +307,10 @@ const LOCAL_CONNECTION_PIN_FIELDS = ['refereePin', 'team1Pin', 'team2Pin', 'team
 const LOCAL_PIN_FIELDS = ['gamePin', ...LOCAL_CONNECTION_PIN_FIELDS]
 const hasValue = (v) => v !== undefined && v !== null && String(v).trim() !== ''
 
-// A 6-digit PIN, distinct from the given ones
+// A 6-digit PIN, distinct from the given ones (pin_beach: unbiased digits of
+// crypto.getRandomValues, no Math.random fallback)
 function newPin(existing) {
-  let pin = ''
-  for (let attempt = 0; attempt < 100; attempt++) {
-    const digits = new Uint32Array(6)
-    if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(digits)
-    else for (let i = 0; i < 6; i++) digits[i] = Math.floor(Math.random() * 4294967296)
-    pin = Array.from(digits, v => String(v % 10)).join('')
-    if (!existing.includes(pin)) break
-  }
-  return pin
+  return securePin({ exclude: existing })
 }
 
 /**

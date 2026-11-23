@@ -17,6 +17,7 @@
 import { getRelayWebSocketUrl } from './backendConfig_beach'
 import { isScorerMoved } from './matchHandover_beach'
 import { writingDevice } from '../lib_beach/apiClient_beach'
+import { securePin } from './pin_beach'
 
 export const SPORT_TYPE = 'beach'
 
@@ -188,13 +189,11 @@ export function syncMatchMessage(key, local, { now = Date.now(), device = writin
 /**
  * A new 6-digit game PIN. The relays only let the socket that proved the
  * match's game PIN write to it (anti-hijack): a synced official match must
- * have one.
- * @param {() => number} [random]
+ * have one. From crypto.getRandomValues (pin_beach), never Math.random.
+ * @param {{ getRandomValues: Function }} [cryptoImpl]  tests only
  */
-export function generateGamePin(random = Math.random) {
-  let pin = ''
-  for (let i = 0; i < 6; i++) pin += String(Math.floor(random() * 10) % 10)
-  return pin
+export function generateGamePin(cryptoImpl = globalThis.crypto) {
+  return securePin({ cryptoImpl })
 }
 
 /**

@@ -75,6 +75,7 @@ import { cn } from './ui/volleyui/cn.js'
 import { confirmDialog, toast } from './ui/volleyui/uiStore.js'
 import { DEFAULT_TEAM1_COLOUR, DEFAULT_TEAM2_COLOUR } from './utils_beach/teamColours_beach'
 import { readManageLicence, cleanIdValue, licenceOf } from './utils_beach/idValue_beach'
+import { securePin } from './utils_beach/pin_beach'
 
 function parseDateTime(dateTime) {
   const [datePart, timePart] = dateTime.split(' ')
@@ -84,13 +85,9 @@ function parseDateTime(dateTime) {
   return date.toISOString()
 }
 
+// A match's referee PIN: crypto.getRandomValues, never Math.random (pin_beach)
 function generateRefereePin() {
-  const chars = '0123456789'
-  let pin = ''
-  for (let i = 0; i < 6; i++) {
-    pin += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return pin
+  return securePin()
 }
 
 export default function App() {

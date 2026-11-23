@@ -131,7 +131,9 @@ describe('the wire shape: team1 = home, team2 = away', () => {
 describe('the game PIN', () => {
   it('is six digits', () => {
     for (let i = 0; i < 20; i++) expect(generateGamePin()).toMatch(/^\d{6}$/)
-    expect(generateGamePin(() => 0.999999)).toBe('999999')
+    // its digits come from crypto.getRandomValues (pin_beach, audit SEC-29;
+    // this used to inject a Math.random stand-in)
+    expect(generateGamePin({ getRandomValues: (a) => a.fill(249) })).toBe('999999')
   })
 
   it('a match keeps its own or gets one; a test match too', () => {

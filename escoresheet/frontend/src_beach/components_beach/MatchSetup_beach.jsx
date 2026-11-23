@@ -17,6 +17,7 @@ import { findOfficial, officialsList } from '../utils_beach/officials_beach'
 const ballImage = '/beachball.png'
 import { isBackendAvailable, isRelayOriginPage, getCloudApiUrl, BEACH_DESKTOP_HTTP_PORT } from '../utils_beach/backendConfig_beach'
 import { scorerPublisher, readRelayBundle, ensureGamePin } from '../utils_beach/relayPublisher_beach'
+import { securePin } from '../utils_beach/pin_beach'
 import { exportMatchData } from '../utils_beach/backupManager_beach'
 import { uploadBackupToCloud, uploadLogsToCloud } from '../utils_beach/logger_beach'
 import { apiFrom } from '../lib_beach/apiClient_beach'
@@ -1158,27 +1159,9 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
     async function completeMatch() {
       try {
-        // Generate PINs if they don't exist (for matches created before PIN feature)
-        const generatePinCode = (existingPins = []) => {
-          const chars = '0123456789'
-          let pin = ''
-          let attempts = 0
-          const maxAttempts = 100
-
-          do {
-            pin = ''
-            for (let i = 0; i < 6; i++) {
-              pin += chars.charAt(Math.floor(Math.random() * chars.length))
-            }
-            attempts++
-            if (attempts >= maxAttempts) {
-              // If we can't generate a unique PIN after many attempts, just return this one
-              break
-            }
-          } while (existingPins.includes(pin))
-
-          return pin
-        }
+        // Generate PINs if they don't exist (for matches created before PIN
+        // feature): crypto.getRandomValues, never Math.random (pin_beach)
+        const generatePinCode = (existingPins = []) => securePin({ exclude: existingPins })
 
         const updates = {}
         const existingPins = []
@@ -2161,37 +2144,12 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
       const team1DbId = await db.teams.add({ name: team1Name, color: team1Color, shortName: team1ShortName || team1Name.trim().toUpperCase(), createdAt: new Date().toISOString() })
       const team2DbId = await db.teams.add({ name: team2Name, color: team2Color, shortName: team2ShortName || team2Name.trim().toUpperCase(), createdAt: new Date().toISOString() })
 
-      // Generate 6-digit PIN code for referee authentication
-      const generatePinCode = (existingPins = []) => {
-        const chars = '0123456789'
-        let pin = ''
-        let attempts = 0
-        const maxAttempts = 100
-
-        do {
-          pin = ''
-          for (let i = 0; i < 6; i++) {
-            pin += chars.charAt(Math.floor(Math.random() * chars.length))
-          }
-          attempts++
-          if (attempts >= maxAttempts) {
-            // If we can't generate a unique PIN after many attempts, just return this one
-            break
-          }
-        } while (existingPins.includes(pin))
-
-        return pin
-      }
+      // Generate 6-digit PIN code for referee authentication: every PIN of
+      // the match from crypto.getRandomValues, never Math.random (pin_beach)
+      const generatePinCode = (existingPins = []) => securePin({ exclude: existingPins })
 
       // Auto-generate gamePin for official matches
-      const generatedGamePin = (() => {
-        const chars = '0123456789'
-        let pin = ''
-        for (let i = 0; i < 6; i++) {
-          pin += chars.charAt(Math.floor(Math.random() * chars.length))
-        }
-        return pin
-      })()
+      const generatedGamePin = securePin()
 
       // Generate all PINs upfront so we can display them in the modal
       const generatedRefereePin = generatePinCode([])
@@ -4261,23 +4219,8 @@ export default function MatchSetup({ onStart, matchId, onReturn, onOpenOptions, 
 
   // Helper function to generate unique PIN
   const generateUniquePin = async () => {
-    const generatePinCode = (existingPins = []) => {
-      const chars = '0123456789'
-      let pin = ''
-      let attempts = 0
-      const maxAttempts = 100
-
-      do {
-        pin = ''
-        for (let i = 0; i < 6; i++) {
-          pin += chars.charAt(Math.floor(Math.random() * chars.length))
-        }
-        attempts++
-        if (attempts >= maxAttempts) break
-      } while (existingPins.includes(pin))
-
-      return pin
-    }
+    // crypto.getRandomValues, never Math.random (pin_beach)
+    const generatePinCode = (existingPins = []) => securePin({ exclude: existingPins })
 
     // Get all existing PINs to ensure uniqueness
     const allMatches = await db.matches.toArray()
