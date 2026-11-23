@@ -66,18 +66,43 @@ export function courtSecretOf(match) {
   return null
 }
 
-// The court token (backend isCourtToken): the first 32 hex characters of
-// SHA-256 of "court\0" + the match's own key, so one match is one court on
-// the page whether it comes over the relay, a venue relay's forward or the
-// desktop app's push.
+// The game PIN of the match (4 to 8 digits), or null.
+const GAME_PIN_RE = /^[0-9]{4,8}$/
+export function gamePinOf(match) {
+  const v = match?.gamePin ?? match?.game_pin
+  const pin = v == null ? '' : String(v).trim()
+  return GAME_PIN_RE.test(pin) ? pin : null
+}
+
+// The court token (backend isCourtToken), 32 hex characters, so one match is
+// one court on the page whether it comes over the relay, a venue relay's
+// forward or the desktop app's push, and whichever scoring device sends it:
+//   - a match with a game PIN: HMAC-SHA256 keyed with the game PIN of
+//     "court\0" + its seed key. Every scoring device of the match knows the
+//     PIN; the public does not. The seed key alone is the match's public id:
+//     its hash let anyone who works it out overwrite the court on every TV
+//     (OpenVolley audit 2611 SEC-07, SR-3);
+//   - a match without one (an older match, a test match without a PIN):
+//     SHA-256 of "court\0" + its seed key, as before.
 const tokens = new Map()
+const hex32 = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32)
 export async function courtTokenFor(match, subtle = globalThis.crypto?.subtle) {
   const secret = courtSecretOf(match)
   if (!secret || !subtle) return null
-  if (tokens.has(secret)) return tokens.get(secret)
-  const digest = await subtle.digest('SHA-256', new TextEncoder().encode(`court\0${secret}`))
-  const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32)
-  tokens.set(secret, hex)
+  const pin = gamePinOf(match)
+  const key = pin ? `pin\0${pin}\0${secret}` : secret
+  if (tokens.has(key)) return tokens.get(key)
+  const enc = new TextEncoder()
+  let digest
+  if (pin) {
+    const k = await subtle.importKey('raw', enc.encode(pin), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+    digest = await subtle.sign('HMAC', k, enc.encode(`court\0${secret}`))
+  } else {
+    digest = await subtle.digest('SHA-256', enc.encode(`court\0${secret}`))
+  }
+  const hex = hex32(digest)
+  if (tokens.size >= 500) tokens.clear()
+  tokens.set(key, hex)
   return hex
 }
 
@@ -85,7 +110,9 @@ export async function courtTokenFor(match, subtle = globalThis.crypto?.subtle) {
 export function cachedCourtToken(match) {
   const secret = courtSecretOf(match)
   if (!secret) return null
-  if (tokens.has(secret)) return tokens.get(secret)
+  const pin = gamePinOf(match)
+  const key = pin ? `pin\0${pin}\0${secret}` : secret
+  if (tokens.has(key)) return tokens.get(key)
   courtTokenFor(match).catch(() => null)
   return null
 }
