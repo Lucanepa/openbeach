@@ -43,3 +43,20 @@ describe('SEC-22: backups and logs stay in the app\'s own folder', () => {
     expect(manifest).not.toMatch(/MANAGE_EXTERNAL_STORAGE/)
   })
 })
+
+describe('SEC-49: no Auto Backup and no device transfer of the app data', () => {
+  it('allowBackup and fullBackupContent are off, and the Android 12+ extraction rules exclude every domain', () => {
+    const manifest = res('AndroidManifest.xml')
+    expect(manifest).toMatch(/android:allowBackup="false"/)
+    expect(manifest).toMatch(/android:fullBackupContent="false"/)
+    expect(manifest).toMatch(/android:dataExtractionRules="@xml\/data_extraction_rules"/)
+    const rules = res('res/xml/data_extraction_rules.xml')
+    const domains = ['root', 'file', 'database', 'sharedpref', 'external', 'device_root', 'device_file', 'device_database', 'device_sharedpref']
+    for (const section of ['cloud-backup', 'device-transfer']) {
+      const body = new RegExp(`<${section}>([\\s\\S]*?)</${section}>`).exec(rules)?.[1]
+      expect(body, section).toBeTruthy()
+      for (const d of domains) expect(body, `${section} ${d}`).toContain(`<exclude domain="${d}" path="." />`)
+      expect(body).not.toMatch(/<include/)
+    }
+  })
+})
