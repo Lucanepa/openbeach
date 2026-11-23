@@ -2,6 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { closeAppWindow, getOpenerWindow } from '../src_beach/utils_beach/appWindowGuest_beach.js';
+// @ts-ignore - JS module
+import { postScoresheetError } from '../src_beach/utils_beach/scoresheetMessages_beach.js';
 import './scoresheet_beach.css'; // compiled Tailwind (was cdn.tailwindcss.com: unstyled offline)
 import { installPopupDiagnostics } from '../src_beach/diagnostics_beach/index_beach';
 
@@ -10,18 +12,13 @@ import { installPopupDiagnostics } from '../src_beach/diagnostics_beach/index_be
 // (src_beach/diagnostics_beach/popupForward_beach.js). Elsewhere this does nothing.
 installPopupDiagnostics({ app: 'scoresheet' });
 
-// Helper function to send errors to parent window
+// Helper function to send errors to the window that opened this sheet: to the
+// app's own origin only (it was '*': any page holding this window heard the
+// errors), as plain clipped text (audit SEC-43)
 const sendErrorToParent = (error: Error | string, details?: string) => {
   try {
     const opener = getOpenerWindow();
-    if (opener) {
-      opener.postMessage({
-        type: 'SCORESHEET_ERROR',
-        error: typeof error === 'string' ? error : error.message,
-        details: details || (error instanceof Error ? error.stack : ''),
-        stack: error instanceof Error ? error.stack : undefined
-      }, '*');
-    }
+    if (opener) postScoresheetError(opener, error, details);
   } catch (e) {
     console.error('Failed to send error to parent:', e);
   }
