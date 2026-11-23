@@ -244,8 +244,8 @@
     "scorer": "Schriiber",
     "assistantScorer": "Assistenz-Schriiber",
     "lineJudges": "Linierichter",
-    "refereeEmail": "E-Mail vom Konto (freiwillig)",
-    "refereeEmailHint": "Nur s Konto mit dere Adrässe chan s Resultat als dä Schiri genehmige. Nur d Schriiber vo däm Spiil gsehnd si.",
+    "refereeEmail": "E-Mail vom Konto (nötig zum mit PIN genehmige)",
+    "refereeEmailHint": "Nur s Konto mit dere Adrässe chan s Resultat als dä Schiri genehmige. Ohni Adrässe underschriibt dä Schiri vo Hand. Nur d Schriiber vo däm Spiil gsehnd si.",
     "startMatch": "Spiil starte",
     "testMatch": "Testspiil",
     "createMatch": "Spiil erstelle",
@@ -3218,7 +3218,8 @@
       "signedOut": "Mäld dich uf däm Grät aa, zum mit PIN genehmige",
       "callerRole": "S Konto uf däm Grät cha kei Genehmigunge schicke: es bruucht d Rolle Schriiber oder Schiri",
       "offline": "Offline: d Genehmigung mit PIN chunnt wieder, sobald du online bisch",
-      "beachOff": "De Server genehmigt Beachresultat no nöd mit PIN: vo Hand underschriibe"
+      "beachOff": "De Server genehmigt Beachresultat no nöd mit PIN: vo Hand underschriibe",
+      "noOfficialEmail": "Für dä Schiri isch i de Spiiliirichtig kei E-Mail erfasst worde, drum cha sis Konto nöd prüeft werde: vo Hand underschriibe"
     }
   },
   "brand": {

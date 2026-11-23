@@ -244,8 +244,8 @@
     "scorer": "Schreiber",
     "assistantScorer": "Ass. Schreiber",
     "lineJudges": "Linienrichter",
-    "refereeEmail": "E-Mail des Kontos (freiwillig)",
-    "refereeEmailHint": "Nur das Konto mit dieser Adresse kann das Resultat als dieser Schiedsrichter genehmigen. Nur die Schreiber dieses Spiels sehen sie.",
+    "refereeEmail": "E-Mail des Kontos (nötig zum Genehmigen mit PIN)",
+    "refereeEmailHint": "Nur das Konto mit dieser Adresse kann das Resultat als dieser Schiedsrichter genehmigen. Ohne Adresse unterschreibt dieser Schiedsrichter von Hand. Nur die Schreiber dieses Spiels sehen sie.",
     "startMatch": "Spiel starten",
     "testMatch": "Testspiel",
     "createMatch": "Spiel erstellen",
@@ -3218,7 +3218,8 @@
       "signedOut": "Melde dich auf diesem Gerät an, um mit PIN zu genehmigen",
       "callerRole": "Das Konto auf diesem Gerät kann keine Genehmigungen senden: es braucht die Rolle Schreiber oder Schiedsrichter",
       "offline": "Offline: die Genehmigung mit PIN erscheint wieder, sobald du online bist",
-      "beachOff": "Dieser Server genehmigt Beachresultate noch nicht mit PIN: von Hand unterschreiben"
+      "beachOff": "Dieser Server genehmigt Beachresultate noch nicht mit PIN: von Hand unterschreiben",
+      "noOfficialEmail": "Für diesen Schiedsrichter wurde in der Spieleinrichtung keine E-Mail erfasst, darum kann sein Konto nicht geprüft werden: von Hand unterschreiben"
     }
   },
   "brand": {

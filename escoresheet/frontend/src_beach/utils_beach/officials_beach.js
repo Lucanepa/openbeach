@@ -99,9 +99,11 @@ export const REFEREE_ROLES = Object.freeze(['1st referee', '2nd referee'])
  * the backend binds the electronic approval of a referee slot to the address
  * stored for that referee (OV_APPROVAL_NOT_MATCH_OFFICIAL): only that
  * account may approve as that referee. Without one, any beach:referee
- * account at the scoring table could approve as the referee the match names.
- * Never relayed (relayPublisher_beach) and never logged (useSyncQueue_beach
- * redactForLog); the backend gives the officials to the match's scorers only.
+ * account at the scoring table could approve as the referee the match names,
+ * so Match end offers the account approval of a referee slot only when its
+ * address is stored (accountApproval_beach pinApprovalState). Never relayed
+ * (relayPublisher_beach) and never logged (useSyncQueue_beach redactForLog);
+ * the backend gives the officials to the match's scorers only.
  */
 export function cleanOfficialEmail(raw) {
   const s = String(raw ?? '').trim().toLowerCase()

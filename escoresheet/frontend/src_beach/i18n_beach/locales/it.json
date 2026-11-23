@@ -244,8 +244,8 @@
     "scorer": "Segnapunti",
     "assistantScorer": "Ass. segnapunti",
     "lineJudges": "Giudici di linea",
-    "refereeEmail": "E-mail del suo account (facoltativa)",
-    "refereeEmailHint": "Solo l'account con questo indirizzo può approvare il risultato come questo arbitro. La vedono solo i segnapunti di questa partita.",
+    "refereeEmail": "E-mail del suo account (necessaria per approvare con PIN)",
+    "refereeEmailHint": "Solo l'account con questo indirizzo può approvare il risultato come questo arbitro. Senza indirizzo, questo arbitro firma a mano. La vedono solo i segnapunti di questa partita.",
     "startMatch": "Inizia Partita",
     "testMatch": "Partita Test",
     "createMatch": "Crea partita",
@@ -3218,7 +3218,8 @@
       "signedOut": "Accedi su questo dispositivo per approvare con PIN",
       "callerRole": "L’account di questo dispositivo non può inviare approvazioni: serve il ruolo di segnapunti o di arbitro",
       "offline": "Offline: l’approvazione con PIN torna disponibile appena sei online",
-      "beachOff": "Questo server non approva ancora i risultati di beach con un PIN: firma a mano"
+      "beachOff": "Questo server non approva ancora i risultati di beach con un PIN: firma a mano",
+      "noOfficialEmail": "Per questo arbitro non è stata inserita nessuna e-mail nella configurazione partita, quindi il suo account non può essere verificato: firma a mano"
     }
   },
   "brand": {

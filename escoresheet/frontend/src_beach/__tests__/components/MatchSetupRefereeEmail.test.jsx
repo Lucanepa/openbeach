@@ -89,6 +89,10 @@ describe('Match Setup: the referees\' account addresses', () => {
     const ref1 = await screen.findByTestId('ref1-email')
     expect(ref1).toHaveValue('rita@example.ch')
     expect(ref1).toHaveAttribute('type', 'email')
+    // not "optional": without it the referee cannot approve with their account (Match end offers no PIN approval)
+    expect(ref1.getAttribute('aria-label')).toMatch(/Email of their account \(needed to approve with PIN\)$/)
+    expect(ref1.getAttribute('aria-label')).not.toMatch(/optional/i)
+    expect(screen.getByText(/Without an address, this referee signs by hand\./)).toBeInTheDocument()
     // the scorers' boxes have no address field (their slot is the match's own accounts)
     expect(screen.queryByTestId('scorer-email')).toBeNull()
 

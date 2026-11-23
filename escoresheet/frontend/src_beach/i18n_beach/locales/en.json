@@ -244,8 +244,8 @@
     "scorer": "Scorer",
     "assistantScorer": "Assistant scorer",
     "lineJudges": "Line judges",
-    "refereeEmail": "Email of their account (optional)",
-    "refereeEmailHint": "Only the account with this address can approve the result as this referee. Only this match's scorers see it.",
+    "refereeEmail": "Email of their account (needed to approve with PIN)",
+    "refereeEmailHint": "Only the account with this address can approve the result as this referee. Without an address, this referee signs by hand. Only this match's scorers see it.",
     "startMatch": "Start Match",
     "testMatch": "Test Match",
     "createMatch": "Create match",
@@ -3218,7 +3218,8 @@
       "signedOut": "Sign in on this device to approve with a PIN",
       "callerRole": "The account on this device cannot send approvals: it needs the scorer or referee role",
       "offline": "Offline: approval with a PIN is offered again when back online",
-      "beachOff": "This server does not approve beach results with a PIN yet: sign by hand"
+      "beachOff": "This server does not approve beach results with a PIN yet: sign by hand",
+      "noOfficialEmail": "No email was entered for this referee in the match setup, so their account cannot be checked: sign by hand"
     }
   },
   "brand": {

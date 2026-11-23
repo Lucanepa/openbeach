@@ -60,11 +60,14 @@ const record = (slot, over = {}) => ({
   id: `${slot}-id`, short_id: 'AB12CD34', slot, name: 'Ref Anna', approved_at: '2026-07-12T10:42:00.000Z',
   result_key: KEY, result_matches: true, mine: false, ...over
 })
+// The referees with the address of their account (Match Setup stores it): a
+// referee slot without one offers no account approval (PERM-08, below)
 const OFFICIALS = [
-  { role: '1st referee', firstName: 'Anna', lastName: 'Ref' },
-  { role: '2nd referee', firstName: 'Bea', lastName: 'Second' },
+  { role: '1st referee', firstName: 'Anna', lastName: 'Ref', email: 'anna.ref@x.ch' },
+  { role: '2nd referee', firstName: 'Bea', lastName: 'Second', email: 'bea.second@x.ch' },
   { role: 'scorer', firstName: 'Sam', lastName: 'Scorer' }
 ]
+const OFFICIALS_NO_ADDRESS = OFFICIALS.map(({ email, ...o }) => o)
 
 let matchId
 async function seed(extra = {}) {
@@ -317,9 +320,35 @@ describe('MatchEnd_beach: approve with an account', () => {
 
 // OpenVolley audit round 3, PERM-08 (owner decision 6): the match stores the
 // appointed referee's account address (Match Setup), the dialog starts with
-// it, and when another account approves (the server accepts one for a slot
-// without an address, for older OpenBeach builds) both names show.
+// it, only that account approves the slot, and a referee slot without an
+// address is not offered (the server still accepts any beach:referee account
+// for one, for older OpenBeach builds). When the approving account's profile
+// name differs from the official entered, both names show.
 describe('MatchEnd_beach: the appointed referee', () => {
+  it('a referee entered without the address of their account: no account approval for that slot, the box says why', async () => {
+    await seed({ officials: OFFICIALS_NO_ADDRESS, scorerSignature: 'data:s' })
+    renderMatchEnd()
+    await waitFor(() => expect(reasonOf('ref1')).toBe('noOfficialEmail'))
+    expect(reasonOf('ref2')).toBe('noOfficialEmail')
+    expect(screen.queryByTestId('account-approval-open-ref1')).toBeNull()
+    expect(screen.queryByTestId('account-approval-open-ref2')).toBeNull()
+    expect(screen.getByTestId('account-approval-why-ref1')).toHaveTextContent(
+      'No email was entered for this referee in the match setup, so their account cannot be checked: sign by hand'
+    )
+    // the scorer's slot needs no address; the referees still sign by hand
+    expect(screen.getByTestId('account-approval-open-scorer')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^2nd referee · Tap to sign/ })).toBeEnabled()
+    expect(api.approve).not.toHaveBeenCalled()
+  })
+
+  it('an approval the server holds for a slot without an address (made before) still shows as approved', async () => {
+    api.list = vi.fn(async () => ({ data: { approvals: [record('referee1')] }, error: null, status: 200 }))
+    await seed({ officials: OFFICIALS_NO_ADDRESS, scorerSignature: 'data:s', accountApprovals: { referee1: record('referee1') } })
+    renderMatchEnd()
+    expect(await screen.findByTestId('account-approval-ref1')).toHaveTextContent('Approved electronically')
+    expect(screen.getByTestId('account-approval-undo-ref1')).toBeInTheDocument()
+  })
+
   it('the dialog starts with the address the match setup stored for the referee', async () => {
     await seed({
       officials: [{ ...OFFICIALS[0], email: 'anna.ref@example.ch' }, OFFICIALS[1], OFFICIALS[2]],
@@ -332,11 +361,13 @@ describe('MatchEnd_beach: the appointed referee', () => {
     expect(dialog.querySelectorAll('input')[0]).toHaveValue('anna.ref@example.ch')
   })
 
-  it('an account of another name approved: the official entered shows next to it', async () => {
+  it('the account at the stored address has another name: the official entered shows next to it', async () => {
     api.approve = vi.fn(async ({ slot }) => ({ data: { approval: record(slot, { name: 'Beachref Beat' }), already: false }, error: null, status: 200 }))
     await seed({ scorerSignature: 'data:s', ref2Signature: 'data:r2' })
     renderMatchEnd()
-    await approveIn('ref1', { email: 'beat@x.ch' })
+    await approveIn('ref1')
+    await waitFor(() => expect(api.approve).toHaveBeenCalledTimes(1))
+    expect(api.approve.mock.calls[0][0]).toMatchObject({ slot: 'referee1', email: 'anna.ref@x.ch' })
     expect(await screen.findByTestId('account-approval-ref1')).toHaveTextContent('Beachref Beat')
     expect(await screen.findByTestId('account-approval-appointed-ref1')).toHaveTextContent('Official entered: Ref Anna')
     // the same person: nothing more

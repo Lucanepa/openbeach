@@ -244,8 +244,8 @@
     "scorer": "Marqueur",
     "assistantScorer": "Marqueur adjoint",
     "lineJudges": "Juges de ligne",
-    "refereeEmail": "E-mail de son compte (facultatif)",
-    "refereeEmailHint": "Seul le compte avec cette adresse peut approuver le résultat en tant que cet arbitre. Seuls les marqueurs de ce match la voient.",
+    "refereeEmail": "E-mail de son compte (nécessaire pour approuver avec le PIN)",
+    "refereeEmailHint": "Seul le compte avec cette adresse peut approuver le résultat en tant que cet arbitre. Sans adresse, cet arbitre signe à la main. Seuls les marqueurs de ce match la voient.",
     "startMatch": "Démarrer le match",
     "testMatch": "Match amical",
     "createMatch": "Créer le match",
@@ -3218,7 +3218,8 @@
       "signedOut": "Connecte-toi sur cet appareil pour approuver avec un PIN",
       "callerRole": "Le compte de cet appareil ne peut pas envoyer d’approbations : il lui faut le rôle de marqueur ou d’arbitre",
       "offline": "Hors ligne : l’approbation avec un PIN revient dès que la connexion revient",
-      "beachOff": "Ce serveur n’approuve pas encore les résultats de beach avec un PIN : signer à la main"
+      "beachOff": "Ce serveur n’approuve pas encore les résultats de beach avec un PIN : signer à la main",
+      "noOfficialEmail": "Aucun e-mail n’a été saisi pour cet arbitre dans la configuration du match, son compte ne peut donc pas être vérifié : signer à la main"
     }
   },
   "brand": {

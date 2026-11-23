@@ -17,7 +17,7 @@
  * finished sets change, the approval is stale: it no longer completes the slot
  * and never prints on the PDF.
  */
-import { officialsList } from './officials_beach'
+import { officialsList, officialEmailOf } from './officials_beach'
 
 /** match.officials role spellings of the three approving officials. */
 const OFFICIAL_ALIASES = Object.freeze({
@@ -143,10 +143,12 @@ export function isApprovalValid(approval, sets) {
  * the first thing to fix. 'signOnly' is the assistant scorer (owner decision:
  * only the 1st and 2nd referee and the scorer approve with a PIN).
  * 'beachOff': the server answered OV_APPROVAL_UNSUPPORTED, it does not
- * approve beach results (yet).
+ * approve beach results (yet). 'noOfficialEmail': a referee slot whose
+ * referee the match setup entered without the address of their account
+ * (PERM-08); it comes before the sign-in and the role, which would not help.
  */
 export const PIN_APPROVAL_REASONS = Object.freeze([
-  'signOnly', 'locked', 'localMatch', 'noCloud', 'serverOff', 'beachOff', 'signedOut', 'callerRole', 'offline'
+  'signOnly', 'locked', 'localMatch', 'noCloud', 'serverOff', 'beachOff', 'noOfficialEmail', 'signedOut', 'callerRole', 'offline'
 ])
 
 /**
@@ -165,23 +167,38 @@ export const PIN_APPROVAL_REASONS = Object.freeze([
  * no beach approvals there), a session (`signedIn`) with a beach scorer or
  * referee role or admin (`callerMayApprove`), and the connection (`online`).
  * `locked`: the match is approved or closed.
+ *
+ * `officials`: match.officials (either stored shape). A referee slot is
+ * offered only when the match stores the address of the appointed referee's
+ * account (officialEmailOf): only that account may approve as that referee
+ * (OpenVolley audit round 3, PERM-08, owner decision 6). Without one this
+ * app does not offer it ('noOfficialEmail': the referee signs by hand). The
+ * backend binds a slot WITH an address to that account (403
+ * OV_APPROVAL_NOT_MATCH_OFFICIAL), but still accepts any beach:referee
+ * account for a beach slot without one, for OpenBeach builds older than this
+ * check, until server.js creates the approvals module with
+ * `beachOfficialAddressRequired: true` (OpenVolley
+ * docs/account-approval-spec.md, OpenBeach). A valid approval of such a slot
+ * (made before) still shows as approved.
  */
 export function pinApprovalState({
   role, approval = null, sets = [], locked = false, hasSeedKey = false, cloudApi = false,
-  feature = 'unknown', signedIn = false, callerMayApprove = false, online = true
+  feature = 'unknown', signedIn = false, callerMayApprove = false, online = true, officials = null
 } = {}) {
   if (role === 'asst-scorer') return { state: 'unavailable', reason: 'signOnly' }
   if (!ROLE_TO_SLOT[role]) return null
   if (isApprovalValid(approval, sets)) return { state: 'approved' }
+  const noAddress = role !== 'scorer' && !officialEmailOf(officials, role)
   const reason = locked ? 'locked'
     : !hasSeedKey ? 'localMatch'
       : !cloudApi ? 'noCloud'
         : feature === 'unavailable' ? 'serverOff'
           : feature === 'unsupported' ? 'beachOff'
-            : !signedIn ? 'signedOut'
-              : !callerMayApprove ? 'callerRole'
-                : !online ? 'offline'
-                  : null
+            : noAddress ? 'noOfficialEmail'
+              : !signedIn ? 'signedOut'
+                : !callerMayApprove ? 'callerRole'
+                  : !online ? 'offline'
+                    : null
   return reason ? { state: 'unavailable', reason } : { state: 'offer' }
 }
 

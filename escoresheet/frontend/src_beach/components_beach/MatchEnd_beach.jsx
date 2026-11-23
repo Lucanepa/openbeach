@@ -799,10 +799,12 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   const signaturesLocked = signatureEditLocked(match, { isApproved: finalActions })
   // The PIN-approval line of an official's box: approved, offered, or why not.
   // Only a beach scorer or referee account (or an admin) may send approvals
-  // of a beach match (the server checks the same)
+  // of a beach match (the server checks the same). A referee slot needs the
+  // address of the appointed referee's account in the officials (PERM-08)
   const pinStateOf = (role) => pinApprovalState({
     role, approval: approvalFor(match, role), sets, locked: signaturesLocked, hasSeedKey: !!match.seed_key,
-    cloudApi, feature: approvalFeature, signedIn, callerMayApprove: mayApproveFrom(access), online
+    cloudApi, feature: approvalFeature, signedIn, callerMayApprove: mayApproveFrom(access), online,
+    officials: match.officials
   })
 
   const signatureFieldMap = {
