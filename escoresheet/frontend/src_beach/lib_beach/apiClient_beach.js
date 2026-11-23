@@ -900,9 +900,13 @@ export const apiAuth = {
     return authRequest('update-user', { access_token: token, email })
   },
 
-  async deleteUser() {
+  // password: the confirmation the backend asks for besides the session
+  // (lib/auth.js confirmIdentity: 403 reauth_required without it, 401
+  // invalid_password when wrong, 429 account_locked), so a tablet left signed
+  // in cannot delete the account (audit SEC-37). Sent only when given.
+  async deleteUser({ password } = {}) {
     const token = getStoredToken()?.access_token
-    const result = await authRequest('delete-account', { access_token: token })
+    const result = await authRequest('delete-account', { access_token: token, ...(password ? { password } : {}) })
     if (!result.error) {
       storeToken(null)
       await dropOldApiCaches()

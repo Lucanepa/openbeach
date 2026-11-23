@@ -2594,6 +2594,9 @@
     "deleteConfirmTitle": "Eliminare il tuo account?",
     "deleteConfirmBody": "L’account {{email}} e il suo profilo vengono eliminati definitivamente. Le partite su questo dispositivo restano qui.",
     "deleteConfirm": "Elimina l’account",
+    "deletePasswordLabel": "La tua password",
+    "deletePasswordHint": "Inserisci la tua password per confermare: un tablet rimasto connesso non può eliminare il tuo account.",
+    "deleteForGood": "Elimina definitivamente",
     "deleted": "Account eliminato.",
     "button": "Account {{email}}",
     "buttonPending": "Account {{email}}: in attesa di approvazione",
@@ -2609,6 +2612,8 @@
       "signOutFailed": "Uscita non riuscita.",
       "saveFailed": "Non salvato. Riprova.",
       "deleteFailed": "L’account non è stato eliminato.",
+      "wrongPassword": "Password errata.",
+      "passwordNeeded": "Inserisci la tua password per confermare.",
       "inviteRejected": "Questo codice non è valido (errato, esaurito o scaduto).",
       "tooManyTries": "Troppi tentativi. Attendi qualche minuto e riprova.",
       "joinFailed": "L'adesione a OpenBeach non è riuscita. Riprova."

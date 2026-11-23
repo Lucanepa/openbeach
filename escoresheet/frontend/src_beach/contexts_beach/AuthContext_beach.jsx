@@ -261,14 +261,16 @@ export function AuthProvider({ children }) {
   const getCachedProfile = useCallback(() => readCachedProfile(), [])
 
   // Delete account: POST /api/auth/delete-account (the backend deletes the
-  // user, its sessions and its profile; apiAuth then drops the stored token)
-  const deleteAccount = useCallback(async () => {
+  // user, its sessions and its profile; apiAuth then drops the stored token).
+  // `password`: the confirmation the backend asks for besides the session
+  // (ProfileModal_beach asks for it).
+  const deleteAccount = useCallback(async ({ password } = {}) => {
     if (!isBackendAvailable() || !user) {
       return { error: { message: 'Not authenticated' } }
     }
 
     try {
-      const { error: deleteError } = await apiAuth.deleteUser()
+      const { error: deleteError } = await apiAuth.deleteUser({ password })
 
       if (deleteError) {
         console.error('Delete account error:', deleteError)

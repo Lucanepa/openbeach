@@ -2594,6 +2594,9 @@
     "deleteConfirmTitle": "Supprimer ton compte ?",
     "deleteConfirmBody": "Le compte {{email}} et son profil sont supprimés définitivement. Les matchs de cet appareil restent ici.",
     "deleteConfirm": "Supprimer le compte",
+    "deletePasswordLabel": "Ton mot de passe",
+    "deletePasswordHint": "Saisis ton mot de passe pour confirmer : une tablette restée connectée ne peut pas supprimer ton compte.",
+    "deleteForGood": "Supprimer définitivement",
     "deleted": "Compte supprimé.",
     "button": "Compte {{email}}",
     "buttonPending": "Compte {{email}} : en attente de validation",
@@ -2609,6 +2612,8 @@
       "signOutFailed": "La déconnexion a échoué.",
       "saveFailed": "Pas enregistré. Réessaie.",
       "deleteFailed": "Le compte n’a pas été supprimé.",
+      "wrongPassword": "Mot de passe incorrect.",
+      "passwordNeeded": "Saisis ton mot de passe pour confirmer.",
       "inviteRejected": "Ce code n’est pas valable (faux, épuisé ou expiré).",
       "tooManyTries": "Trop d’essais. Attends quelques minutes et réessaie.",
       "joinFailed": "L'adhésion à OpenBeach a échoué. Réessaie."

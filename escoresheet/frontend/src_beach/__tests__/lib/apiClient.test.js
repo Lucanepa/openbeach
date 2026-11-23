@@ -467,6 +467,23 @@ describe('openbeach specifics', () => {
     expect(localStorage.getItem('api_auth_token')).toBeNull()
   })
 
+  // Audit SEC-37: the backend wants the password besides the session
+  // (403 reauth_required without it); a refusal keeps the session here
+  it('deleteUser sends the confirming password, and keeps the session when the backend refuses', async () => {
+    const session = { access_token: 'tok', expires_at: Math.floor(Date.now() / 1000) + 3600, user: { id: 'u1' } }
+    localStorage.setItem('api_auth_token', JSON.stringify(session))
+    globalThis.fetch = vi.fn(async () => jsonResponse({ error: { message: 'Confirm it is you: enter your password or use your passkey.', code: 'reauth_required' } }, 403))
+    const refused = await apiAuth.deleteUser()
+    expect(refused.error).toMatchObject({ code: 'reauth_required', status: 403 })
+    expect(JSON.parse(localStorage.getItem('api_auth_token')).access_token).toBe('tok')
+
+    globalThis.fetch = vi.fn(async () => jsonResponse({ data: null, error: null }))
+    const r = await apiAuth.deleteUser({ password: 'pw-1' })
+    expect(r.error).toBeNull()
+    expect(sentBody()).toEqual({ access_token: 'tok', password: 'pw-1' })
+    expect(localStorage.getItem('api_auth_token')).toBeNull()
+  })
+
   it('X-OV-Proto is sent even without a session (anonymous reads)', async () => {
     globalThis.fetch = vi.fn(async () => jsonResponse({ data: [], error: null }))
     await apiFrom('match_live_state').select('*').eq('sport_type', 'beach')

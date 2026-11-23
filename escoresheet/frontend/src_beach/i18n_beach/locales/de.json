@@ -2594,6 +2594,9 @@
     "deleteConfirmTitle": "Dein Konto löschen?",
     "deleteConfirmBody": "Das Konto {{email}} und sein Profil werden endgültig gelöscht. Spiele auf diesem Gerät bleiben hier.",
     "deleteConfirm": "Konto löschen",
+    "deletePasswordLabel": "Dein Passwort",
+    "deletePasswordHint": "Gib zur Bestätigung dein Passwort ein: Ein Tablet, das angemeldet geblieben ist, kann dein Konto so nicht löschen.",
+    "deleteForGood": "Endgültig löschen",
     "deleted": "Konto gelöscht.",
     "button": "Konto {{email}}",
     "buttonPending": "Konto {{email}}: wartet auf Freigabe",
@@ -2609,6 +2612,8 @@
       "signOutFailed": "Abmeldung fehlgeschlagen.",
       "saveFailed": "Nicht gespeichert. Versuch es nochmals.",
       "deleteFailed": "Das Konto wurde nicht gelöscht.",
+      "wrongPassword": "Falsches Passwort.",
+      "passwordNeeded": "Gib zur Bestätigung dein Passwort ein.",
       "inviteRejected": "Dieser Code gilt nicht (falsch, aufgebraucht oder abgelaufen).",
       "tooManyTries": "Zu viele Versuche. Warte ein paar Minuten und versuche es nochmals.",
       "joinFailed": "Der Beitritt zu OpenBeach ist fehlgeschlagen. Versuche es erneut."

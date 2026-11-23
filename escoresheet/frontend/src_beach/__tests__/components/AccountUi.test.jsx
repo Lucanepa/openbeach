@@ -15,7 +15,7 @@ vi.mock('../../ui/volleyui/uiStore.js', async (importOriginal) => {
 
 import UserButton, { accountInitials } from '../../components_beach/auth/UserButton_beach'
 import { SIGNUP_URL, RESET_PASSWORD_URL } from '../../lib_beach/accountLinks_beach'
-import { roleLabels } from '../../components_beach/auth/ProfileModal_beach'
+import { roleLabels, deleteErrorText } from '../../components_beach/auth/ProfileModal_beach'
 
 function signedOut(extra = {}) {
   return { user: null, profile: null, access: { known: false, isPending: false, roles: [] }, loading: false, signIn: vi.fn(async () => ({ error: null })), ...extra }
@@ -197,18 +197,44 @@ describe('the header account button', () => {
     await waitFor(() => expect(auth.current.signOut).toHaveBeenCalled())
   })
 
-  it('deletes the account only after the confirm dialog', async () => {
+  // Audit SEC-37: the backend deletes an account only with its password (or
+  // a passkey) besides the session; OpenBeach sent the session alone, so every
+  // deletion got 403 reauth_required. The confirmation (it used to be a
+  // confirm dialog) now asks for the password and sends it.
+  it('deletes the account only after its confirmation, with the password typed there', async () => {
     auth.current = signedIn()
     render(<UserButton buttonClass="btn" />)
     fireEvent.click(screen.getByTestId('header-account'))
     const dialog = await screen.findByRole('dialog')
-    ui.confirm.mockResolvedValueOnce(false)
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete account' }))
-    await waitFor(() => expect(ui.confirm).toHaveBeenCalledTimes(1))
-    expect(ui.confirm.mock.calls[0][0]).toMatchObject({ tone: 'danger' })
+    const confirm = within(dialog).getByTestId('delete-account-confirm')
+    expect(confirm).toHaveTextContent('Delete your account?')
+    // Cancel: nothing deleted
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }))
+    expect(within(dialog).queryByTestId('delete-account-confirm')).toBeNull()
     expect(auth.current.deleteAccount).not.toHaveBeenCalled()
+
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete account' }))
-    await waitFor(() => expect(auth.current.deleteAccount).toHaveBeenCalled())
+    const again = within(dialog).getByTestId('delete-account-confirm')
+    const button = within(again).getByRole('button', { name: 'Delete for good' })
+    // no password, no request
+    expect(button).toBeDisabled()
+    fireEvent.change(within(again).getByTestId('delete-password'), { target: { value: 'pw-typed' } })
+    fireEvent.click(button)
+    await waitFor(() => expect(auth.current.deleteAccount).toHaveBeenCalledWith({ password: 'pw-typed' }))
+  })
+
+  it('a wrong password or a missing confirmation is said in words; the dialog stays', async () => {
+    auth.current = signedIn({ deleteAccount: vi.fn(async () => ({ error: { message: 'Wrong password.', code: 'invalid_password', status: 401 } })) })
+    render(<UserButton buttonClass="btn" />)
+    fireEvent.click(screen.getByTestId('header-account'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete account' }))
+    const confirm = within(dialog).getByTestId('delete-account-confirm')
+    fireEvent.change(within(confirm).getByTestId('delete-password'), { target: { value: 'wrong' } })
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Delete for good' }))
+    expect(await within(confirm).findByText('Wrong password.')).toBeInTheDocument()
+    expect(within(dialog).getByTestId('delete-account-confirm')).toBeInTheDocument()
   })
 
   it('renders nothing outside an AuthProvider or while loading', () => {
@@ -228,5 +254,15 @@ describe('helpers', () => {
   it('role words: beach and plain roles once each', () => {
     const t = (k) => ({ 'account.roles.scorer': 'Scorer', 'account.roles.admin': 'Admin' })[k] || k
     expect(roleLabels(['scorer', 'beach:scorer', 'admin', 'guest'], t)).toEqual(['Scorer', 'Admin'])
+  })
+
+  it('a refused deletion in words: the backend codes of lib/auth.js confirmIdentity', () => {
+    const t = (k) => k
+    expect(deleteErrorText(t, { code: 'invalid_password', status: 401 })).toBe('account.errors.wrongPassword')
+    expect(deleteErrorText(t, { code: 'reauth_required', status: 403 })).toBe('account.errors.passwordNeeded')
+    expect(deleteErrorText(t, { code: 'account_locked', status: 429 })).toBe('account.errors.tooManyTries')
+    expect(deleteErrorText(t, { network: true, status: 0 })).toBe('account.errors.offline')
+    expect(deleteErrorText(t, { message: 'You are the last super admin.', status: 409 })).toBe('You are the last super admin.')
+    expect(deleteErrorText(t, {})).toBe('account.errors.deleteFailed')
   })
 })

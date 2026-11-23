@@ -7,7 +7,7 @@ import { Field, FormError } from '../../ui/volleyui/Field.jsx'
 import { Input } from '../../ui/volleyui/Input.jsx'
 import { Button } from '../../ui/volleyui/Button.jsx'
 import { Chip } from '../../ui/volleyui/Chip.jsx'
-import { confirmDialog, toast } from '../../ui/volleyui/uiStore.js'
+import { toast } from '../../ui/volleyui/uiStore.js'
 import AuthLayer from './AuthLayer_beach'
 import InviteCodeForm from './InviteCodeForm_beach'
 import ApprovalPinSection from './ApprovalPinSection_beach'
@@ -79,6 +79,19 @@ export function roleLabels(roles, t) {
 }
 
 /**
+ * The words for a refused account deletion: the backend's codes (lib/auth.js
+ * confirmIdentity) in the user's language, else its own message.
+ */
+export function deleteErrorText(t, error) {
+  const code = error?.code
+  if (code === 'invalid_password') return t('account.errors.wrongPassword', 'Wrong password.')
+  if (code === 'reauth_required' || code === 'password_required') return t('account.errors.passwordNeeded', 'Enter your password to confirm.')
+  if (code === 'account_locked' || error?.status === 429) return t('account.errors.tooManyTries', 'Too many tries. Wait a few minutes and try again.')
+  if (error?.network) return t('account.errors.offline', 'No connection: this needs the internet.')
+  return error?.message || t('account.errors.deleteFailed', 'The account was not deleted.')
+}
+
+/**
  * The account of this device: who is signed in, the approval state (with
  * the invite code for a pending account), the name and the optional licence
  * number (no date of birth), sign out (court tablets are shared) and delete
@@ -95,6 +108,11 @@ export default function ProfileModal({ open, onClose }) {
   const [saveError, setSaveError] = useState('')
   const [busy, setBusy] = useState(null) // 'signout' | 'delete'
   const [actionError, setActionError] = useState('')
+  // Delete account: the backend wants the password besides the session, so
+  // a court tablet left signed in cannot delete the account (audit SEC-37)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
     if (!open) return
@@ -105,6 +123,13 @@ export default function ProfileModal({ open, onClose }) {
     setSaveError('')
     setActionError('')
   }, [open, profile])
+
+  // (not on a profile reload: a password being typed stays)
+  useEffect(() => {
+    setConfirmingDelete(false)
+    setDeletePassword('')
+    setDeleteError('')
+  }, [open])
 
   if (!open || !user) return null
 
@@ -153,23 +178,35 @@ export default function ProfileModal({ open, onClose }) {
     onClose?.()
   }
 
-  const handleDelete = async () => {
-    const ok = await confirmDialog({
-      title: t('account.deleteConfirmTitle', 'Delete your account?'),
-      message: t('account.deleteConfirmBody', { email, defaultValue: 'The account {{email}} and its profile are deleted for good. Matches on this device stay here.' }),
-      confirmLabel: t('account.deleteConfirm', 'Delete account'),
-      cancelLabel: t('common.cancel', 'Cancel'),
-      tone: 'danger'
-    })
-    if (!ok) return
-    setBusy('delete')
+  // Delete account: the button opens the confirmation (what goes, and the
+  // password the backend asks for); only its own button deletes
+  const startDelete = () => {
     setActionError('')
-    const { error } = await deleteAccount()
-    setBusy(null)
-    if (error) {
-      setActionError(error.message || t('account.errors.deleteFailed', 'The account was not deleted.'))
+    setDeleteError('')
+    setDeletePassword('')
+    setConfirmingDelete(true)
+  }
+  const cancelDelete = () => {
+    setConfirmingDelete(false)
+    setDeletePassword('')
+    setDeleteError('')
+  }
+  const confirmDelete = async (e) => {
+    e?.preventDefault?.()
+    if (busy || !deletePassword) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setDeleteError(t('account.errors.offline', 'No connection: this needs the internet.'))
       return
     }
+    setBusy('delete')
+    setDeleteError('')
+    const { error } = await deleteAccount({ password: deletePassword })
+    setBusy(null)
+    if (error) {
+      setDeleteError(deleteErrorText(t, error))
+      return
+    }
+    setDeletePassword('')
     toast.success(t('account.deleted', 'Account deleted.'))
     onClose?.()
   }
@@ -270,10 +307,50 @@ export default function ProfileModal({ open, onClose }) {
               <Button variant="dark" size="lg" icon={LogOut} loading={busy === 'signout'} disabled={!!busy} onClick={handleSignOut}>
                 {t('account.signOut', 'Sign out')}
               </Button>
-              <Button variant="danger-outline" size="lg" icon={Trash2} loading={busy === 'delete'} disabled={!!busy} onClick={handleDelete} className="ml-auto">
-                {t('account.deleteAccount', 'Delete account')}
-              </Button>
+              {!confirmingDelete && (
+                <Button variant="danger-outline" size="lg" icon={Trash2} disabled={!!busy} onClick={startDelete} className="ml-auto">
+                  {t('account.deleteAccount', 'Delete account')}
+                </Button>
+              )}
             </div>
+            {confirmingDelete && (
+              <form
+                onSubmit={confirmDelete}
+                noValidate
+                aria-labelledby="ob-delete-title"
+                className="space-y-3 rounded-lg border border-red-200 bg-red-50/60 px-3 py-3"
+                data-testid="delete-account-confirm"
+              >
+                <div>
+                  <h3 id="ob-delete-title" className="text-sm font-semibold text-red-900">{t('account.deleteConfirmTitle', 'Delete your account?')}</h3>
+                  <p className="mt-0.5 text-xs text-red-900/80">
+                    {t('account.deleteConfirmBody', { email, defaultValue: 'The account {{email}} and its profile are deleted for good. Matches on this device stay here.' })}
+                  </p>
+                </div>
+                <Field
+                  label={t('account.deletePasswordLabel', 'Your password')}
+                  hint={t('account.deletePasswordHint', 'Enter your password to confirm: a tablet left signed in cannot delete your account.')}
+                  error={deleteError || undefined}
+                >
+                  <Input
+                    type="password"
+                    value={deletePassword}
+                    onChange={(e) => { setDeletePassword(e.target.value); setDeleteError('') }}
+                    autoComplete="current-password"
+                    autoFocus
+                    data-testid="delete-password"
+                  />
+                </Field>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="secondary" size="lg" disabled={busy === 'delete'} onClick={cancelDelete}>
+                    {t('common.cancel', 'Cancel')}
+                  </Button>
+                  <Button type="submit" variant="danger" size="lg" icon={Trash2} loading={busy === 'delete'} disabled={!!busy || !deletePassword} className="ml-auto">
+                    {t('account.deleteForGood', 'Delete for good')}
+                  </Button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       </Modal>

@@ -2594,6 +2594,9 @@
     "deleteConfirmTitle": "Dis Konto lösche?",
     "deleteConfirmBody": "S Konto {{email}} und sis Profil werded für immer glöscht. Spiil uf däm Grät bliibed da.",
     "deleteConfirm": "Konto lösche",
+    "deletePasswordLabel": "Dis Passwort",
+    "deletePasswordHint": "Gib zur Bestätigung dis Passwort ii: En Tablet, wo aagmäldet blibe isch, chan dis Konto so nöd lösche.",
+    "deleteForGood": "Für immer lösche",
     "deleted": "Konto glöscht.",
     "button": "Konto {{email}}",
     "buttonPending": "Konto {{email}}: wartet uf Freigab",
@@ -2609,6 +2612,8 @@
       "signOutFailed": "Abmäldig hät nöd klappt.",
       "saveFailed": "Nöd gspeicheret. Probier es nomal.",
       "deleteFailed": "S Konto isch nöd glöscht worde.",
+      "wrongPassword": "Falsches Passwort.",
+      "passwordNeeded": "Gib zur Bestätigung dis Passwort ii.",
       "inviteRejected": "De Code gilt nöd (falsch, ufbruucht oder abglaufe).",
       "tooManyTries": "Z vill Versüech. Wart es paar Minute und probier s nomal.",
       "joinFailed": "De Biitritt zu OpenBeach hät nöd klappt. Probier s nomal."

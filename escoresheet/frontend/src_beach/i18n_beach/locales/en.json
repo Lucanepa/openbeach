@@ -2594,6 +2594,9 @@
     "deleteConfirmTitle": "Delete your account?",
     "deleteConfirmBody": "The account {{email}} and its profile are deleted for good. Matches on this device stay here.",
     "deleteConfirm": "Delete account",
+    "deletePasswordLabel": "Your password",
+    "deletePasswordHint": "Enter your password to confirm: a tablet left signed in cannot delete your account.",
+    "deleteForGood": "Delete for good",
     "deleted": "Account deleted.",
     "button": "Account {{email}}",
     "buttonPending": "Account {{email}}: waiting for approval",
@@ -2609,6 +2612,8 @@
       "signOutFailed": "Sign-out failed.",
       "saveFailed": "Not saved. Try again.",
       "deleteFailed": "The account was not deleted.",
+      "wrongPassword": "Wrong password.",
+      "passwordNeeded": "Enter your password to confirm.",
       "inviteRejected": "This code is not valid (wrong, used up or expired).",
       "tooManyTries": "Too many tries. Wait a few minutes and try again.",
       "joinFailed": "Joining OpenBeach failed. Try again."
