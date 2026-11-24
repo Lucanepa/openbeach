@@ -88,6 +88,8 @@ import { AppSpinner } from '../ui/volleyui/AppSpinner.jsx'
 import { modalCancelClass, modalPrimaryClass, ActionSheet, ActionSheetItem } from '../ui/volleyui/Modal.jsx'
 import { dayLabel, timeSecondsLabel } from '../ui/volleyui/format.js'
 import { openAppWindow } from '../utils_beach/openAppWindow_beach'
+// The PDF sheet window's messages: own origin and window only, no PINs (audit SEC-43)
+import { isRefreshRequestFrom, postScoresheetRefresh, scoresheetErrorFromEvent, scoresheetMatch } from '../utils_beach/scoresheetMessages_beach'
 import { TEAM_COLOUR_MARK, discPaint, effectiveTeamColour, isLightColour, teamBoxStyle } from '../utils_beach/teamColours_beach'
 import { preload, usePreloaded } from '../utils_beach/preload_beach'
 import { displayIdValue, readManageLicence } from '../utils_beach/idValue_beach'
@@ -2930,18 +2932,22 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       }
 
       console.log('[Scoreboard] Sending refresh with events count:', events?.length)
-      // Send data directly in the message (sessionStorage is per-window, not shared)
-      scoresheetWindowRef.current.postMessage({ type: 'REFRESH_SCORESHEET', data: scoresheetData }, '*')
+      // Send data directly in the message (sessionStorage is per-window, not
+      // shared): to this app's origin only, without the match's PINs (it went
+      // to '*' with every PIN, to whatever page the window showed by then)
+      postScoresheetRefresh(scoresheetWindowRef.current, scoresheetData)
       console.log('[Scoreboard] Message sent with data')
     } catch (err) {
       console.error('[refreshScoresheet] Error:', err)
     }
   }, [matchId])
 
-  // Listen for refresh requests from the PDF scoresheet window (auto-refresh every 3s + manual button)
+  // Listen for refresh requests from the PDF scoresheet window (auto-refresh
+  // every 3s + manual button): only from the sheet window this scoretable
+  // opened, on its own origin (any page could ask for the whole match before)
   useEffect(() => {
     const handleRefreshRequest = (event) => {
-      if (event.data?.type === 'REQUEST_SCORESHEET_REFRESH') {
+      if (isRefreshRequestFrom(event, scoresheetWindowRef.current)) {
         refreshScoresheet()
       }
     }
@@ -7947,11 +7953,13 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       const team2WithCountry = data?.team2Team ? { ...data.team2Team, country: match?.team2Country || '' } : { name: '', country: match?.team2Country || '' }
 
       const scoresheetData = {
-        match: {
+        // (no PINs: the sheet shows none, and the window gets its live
+        // updates without them too)
+        match: scoresheetMatch({
           ...match,
           team_1Country: match?.team1Country || '',
           team_2Country: match?.team2Country || ''
-        },
+        }),
         team_1Team: team1WithCountry,
         team_2Team: team2WithCountry,
         team_1Players: data?.team1Players || [],
@@ -7972,12 +7980,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
       // Store reference for live updates
       if (!action) scoresheetWindowRef.current = opened.window
 
+      // Only the error of the sheet window opened here (this origin; that
+      // window when it is known), as plain clipped text: any other page could
+      // show its own text in this dialog for 30 s
+      const sheetWindow = opened.window || null
       const errorListener = (event) => {
-        if (event.data && event.data.type === 'SCORESHEET_ERROR') {
-          setScoresheetErrorModal({
-            error: event.data.error || 'Unknown error',
-            details: event.data.details || event.data.stack || ''
-          })
+        const report = scoresheetErrorFromEvent(event, { source: sheetWindow })
+        if (report) {
+          setScoresheetErrorModal(report)
           window.removeEventListener('message', errorListener)
         }
       }

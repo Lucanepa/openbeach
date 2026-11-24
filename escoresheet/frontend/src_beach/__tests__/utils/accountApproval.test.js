@@ -10,6 +10,11 @@ import {
   approvalsCompletingSlots, approvalsStillValid, normalizeApprovalQuery, pinApprovalState, PIN_APPROVAL_REASONS,
   callerMayApprove, APPROVAL_PIN_ROLES, signatureFieldOf
 } from '../../utils_beach/accountApproval_beach'
+import en from '../../i18n_beach/locales/en.json'
+import de from '../../i18n_beach/locales/de.json'
+import deCH from '../../i18n_beach/locales/de-CH.json'
+import fr from '../../i18n_beach/locales/fr.json'
+import it_ from '../../i18n_beach/locales/it.json'
 
 const set = (index, team1Points, team2Points, finished = true) => ({ index, team1Points, team2Points, finished })
 // A beach match to 21 / 21 / 15
@@ -74,7 +79,9 @@ describe('beach roles and the PIN line', () => {
     expect(signatureFieldOf({}, 'ref1')).toBe('ref1Signature')
   })
   it('every reason in order, the first one to fix', () => {
-    const ok = { role: 'ref1', sets: VECTOR_SETS, hasSeedKey: true, cloudApi: true, feature: 'available', signedIn: true, callerMayApprove: true, online: true }
+    // (the match stores the 1st referee's address: a slot without one is offered no account approval, below)
+    const officials = [{ role: '1st referee', firstName: 'Anna', lastName: 'Muster', email: 'anna.muster@example.ch' }]
+    const ok = { role: 'ref1', sets: VECTOR_SETS, hasSeedKey: true, cloudApi: true, feature: 'available', signedIn: true, callerMayApprove: true, online: true, officials }
     expect(pinApprovalState(ok)).toEqual({ state: 'offer' })
     expect(pinApprovalState({ ...ok, role: 'asst-scorer' })).toEqual({ state: 'unavailable', reason: 'signOnly' })
     expect(pinApprovalState({ ...ok, role: 'captain-a' })).toBeNull()
@@ -89,6 +96,49 @@ describe('beach roles and the PIN line', () => {
     expect(pinApprovalState({ ...ok, online: false }).reason).toBe('offline')
     expect(pinApprovalState({ ...ok, approval: record({ result_key: VECTOR_KEY }) })).toEqual({ state: 'approved' })
     expect(PIN_APPROVAL_REASONS).not.toContain('beach')
+  })
+
+  // OpenVolley audit round 3, PERM-08 (owner decision 6): only the appointed
+  // referee's account approves a referee slot. The backend still accepts any
+  // beach:referee account for a beach slot without a stored address (older
+  // OpenBeach builds), so this app does not offer that slot at all.
+  it('a referee slot without the stored address of the referee\'s account offers no account approval', () => {
+    const base = { sets: VECTOR_SETS, hasSeedKey: true, cloudApi: true, feature: 'available', signedIn: true, callerMayApprove: true, online: true }
+    const named = [
+      { role: '1st referee', firstName: 'Anna', lastName: 'Muster' },
+      { role: '2nd referee', firstName: 'Bea', lastName: 'Zweite', email: '' },
+      { role: 'scorer', firstName: 'Sam', lastName: 'Scorer' }
+    ]
+    const noAddress = { state: 'unavailable', reason: 'noOfficialEmail' }
+    expect(pinApprovalState({ ...base, role: 'ref1', officials: named })).toEqual(noAddress)
+    expect(pinApprovalState({ ...base, role: 'ref2', officials: named })).toEqual(noAddress)
+    // no officials at all, or not an address
+    expect(pinApprovalState({ ...base, role: 'ref1' })).toEqual(noAddress)
+    expect(pinApprovalState({ ...base, role: 'ref1', officials: [{ role: '1st referee', firstName: 'A', email: 'anna@' }] })).toEqual(noAddress)
+    // the scorer's slot is the match's own accounts: no address needed
+    expect(pinApprovalState({ ...base, role: 'scorer', officials: named })).toEqual({ state: 'offer' })
+    // the address in either stored shape (the list, an older manual adjustment's object)
+    expect(pinApprovalState({ ...base, role: 'ref1', officials: [{ ...named[0], email: ' Anna@Example.CH ' }] })).toEqual({ state: 'offer' })
+    expect(pinApprovalState({ ...base, role: 'ref2', officials: { ref2: { firstName: 'Bea', lastName: 'Zweite', email: 'bea@example.ch' } } })).toEqual({ state: 'offer' })
+    // it comes before the sign-in, the role and the connection (they would not help), after the match and server reasons
+    expect(pinApprovalState({ ...base, role: 'ref1', officials: named, signedIn: false, callerMayApprove: false, online: false }).reason).toBe('noOfficialEmail')
+    expect(pinApprovalState({ ...base, role: 'ref1', officials: named, locked: true }).reason).toBe('locked')
+    expect(pinApprovalState({ ...base, role: 'ref1', officials: named, hasSeedKey: false }).reason).toBe('localMatch')
+    expect(pinApprovalState({ ...base, role: 'ref1', officials: named, feature: 'unsupported' }).reason).toBe('beachOff')
+    // an approval made before (it matches the result) still shows
+    expect(pinApprovalState({ ...base, role: 'ref1', officials: named, approval: record() })).toEqual({ state: 'approved' })
+    expect(PIN_APPROVAL_REASONS.indexOf('noOfficialEmail')).toBe(PIN_APPROVAL_REASONS.indexOf('signedOut') - 1)
+  })
+
+  it('every reason has its line in all 5 locales', () => {
+    const LOCALES = { en, de, 'de-CH': deCH, fr, it: it_ }
+    for (const [name, loc] of Object.entries(LOCALES)) {
+      for (const reason of PIN_APPROVAL_REASONS) {
+        expect(typeof loc.approval?.why?.[reason], `${name} approval.why.${reason}`).toBe('string')
+        expect(loc.approval.why[reason].trim(), `${name} approval.why.${reason}`).not.toBe('')
+      }
+    }
+    expect(en.approval.why.noOfficialEmail).toBe('No email was entered for this referee in the match setup, so their account cannot be checked: sign by hand')
   })
 })
 

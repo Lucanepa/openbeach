@@ -7,8 +7,10 @@ import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
 import { PWA_INCLUDE_ASSETS, PWA_ICONS, THEME_COLOR } from './pwa-icons.js'
-import { IGNORE_URL_PARAMETERS } from './pwa-workbox.js'
+import { IGNORE_URL_PARAMETERS, MAIN_RUNTIME_CACHING } from './pwa-workbox.js'
 import { APP_PAGES } from './scripts/subdomain-pages.js'
+import { themeBoot } from './theme-boot.js'
+import { cspMeta } from './csp.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -41,21 +43,17 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    // The Android app's Content-Security-Policy as a <meta> (no server sends
+    // it a header; the web builds get a _headers file, build-subdomains.js).
+    // Its hook runs last (order 'post'), so the <meta> is first in <head>: a
+    // policy <meta> governs only what comes after it.
+    cspMeta({ enabled: isCapacitor }),
     // Colour theme (utils_beach/theme_beach.js): set <html data-theme> before
     // the first paint, so a dark or e-ink page does not flash light while the
     // bundle loads, and follow a change made in another tab. Not on the PDF
-    // scoresheet page: it is the paper form.
-    {
-      name: 'theme-boot',
-      transformIndexHtml(html, ctx) {
-        if (ctx.path.endsWith('/scoresheet_beach.html')) return html
-        return [{
-          tag: 'script',
-          injectTo: 'head-prepend',
-          children: "(function(){var r=document.documentElement;function a(){var t;try{t=localStorage.getItem('theme')}catch(e){}if(t==='dark'||t==='eink')r.setAttribute('data-theme',t);else r.removeAttribute('data-theme')}a();addEventListener('storage',function(e){if(e.key==='theme'||e.key===null)a()})})()",
-        }]
-      },
-    },
+    // scoresheet page: it is the paper form. (theme-boot.js: the CSP allows
+    // this inline script by its hash, csp.js)
+    themeBoot(),
     // Vite injects the stylesheets of the CSS chunks that several pages share
     // (tailwind_beach, flag-icons) in a racy order, so two builds of the same
     // commit could differ in admin_beach.html / index.html. F-Droid rebuilds
@@ -112,41 +110,9 @@ export default defineConfig({
         // A page the app opens with a query (?mode=local, ?action=print,
         // ?cache_bust=..) is its precached file, offline too (pwa-workbox.js)
         ignoreURLParametersMatching: IGNORE_URL_PARAMETERS,
-        // Use NetworkFirst for API calls, but CacheFirst for assets
-        runtimeCaching: [
-          {
-            // The account approvals and the approval PIN status are never
-            // answered from a cache: the NetworkFirst route below falls back
-            // to the last copy after 3 s, and a stale list would bring back
-            // an approval undone or voided since and pass the re-check
-            // before "Confirm and approve" (MatchEnd_beach)
-            urlPattern: /^https:\/\/[^/]+\/api\/(?:approvals|account\/approval)/,
-            handler: 'NetworkOnly'
-          },
-          {
-            urlPattern: /^https:\/\/.*\.(?:png|jpg|jpeg|svg|gif|webp|woff|woff2|ttf|eot)$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'static-assets',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-              }
-            }
-          },
-          {
-            urlPattern: /^https:\/\/.*/,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'network-cache',
-              networkTimeoutSeconds: 3,
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24 // 1 day
-              }
-            }
-          }
-        ]
+        // The API from the network only (first), CacheFirst for images and
+        // fonts; no catch-all NetworkFirst route (pwa-workbox.js)
+        runtimeCaching: MAIN_RUNTIME_CACHING
       },
       manifest: {
         name: process.env.VITE_APP_TITLE || 'OpenBeach eScoresheet',

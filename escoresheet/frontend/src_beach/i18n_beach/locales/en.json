@@ -244,6 +244,8 @@
     "scorer": "Scorer",
     "assistantScorer": "Assistant scorer",
     "lineJudges": "Line judges",
+    "refereeEmail": "Email of their account (needed to approve with PIN)",
+    "refereeEmailHint": "Only the account with this address can approve the result as this referee. Without an address, this referee signs by hand. Only this match's scorers see it.",
     "startMatch": "Start Match",
     "testMatch": "Test Match",
     "createMatch": "Create match",
@@ -1234,6 +1236,14 @@
     "eventBasedNote": "Note: Each download creates a new file in your Downloads folder",
     "lastBackup": "Last backup",
     "downloadBackupNow": "Download backup now",
+    "exportToDocuments": "Export to Documents",
+    "exportToDocumentsHint": "Backups and logs stay in the app. This copies them to the Documents folder, for a USB cable or another app.",
+    "export": "Export",
+    "exportingToDocuments": "Exporting…",
+    "exportedToDocuments": "Copied {{backups}} match backups and {{logs}} log files to {{folder}}. These copies are yours: the app does not delete them.",
+    "exportToDocumentsSomeFailed_one": "1 file could not be copied.",
+    "exportToDocumentsSomeFailed_other": "{{count}} files could not be copied.",
+    "exportToDocumentsFailed": "Nothing could be copied to Documents: {{error}}",
     "backingUp": "Backing up...",
     "restoreMatch": "Restore match",
     "restoreFromCloudDesc": "Restore from a specific backup point in time",
@@ -2556,7 +2566,8 @@
     "sets": "Sets",
     "sanctions": "Sanctions",
     "sanction": "sanction",
-    "failed": "Could not restore the match."
+    "failed": "Could not restore the match.",
+    "untrusted": "This file is not encrypted, so nothing shows that it comes from this app: anyone who had it could have changed it. Restore it only if you know where it was kept."
   },
   "appWindow": {
     "pdfSaveUnsupported": "The tablet app cannot save PDF files: the match-end approval uploads the scoresheet, or open it on a computer.",
@@ -2594,6 +2605,9 @@
     "deleteConfirmTitle": "Delete your account?",
     "deleteConfirmBody": "The account {{email}} and its profile are deleted for good. Matches on this device stay here.",
     "deleteConfirm": "Delete account",
+    "deletePasswordLabel": "Your password",
+    "deletePasswordHint": "Enter your password to confirm: a tablet left signed in cannot delete your account.",
+    "deleteForGood": "Delete for good",
     "deleted": "Account deleted.",
     "button": "Account {{email}}",
     "buttonPending": "Account {{email}}: waiting for approval",
@@ -2609,6 +2623,8 @@
       "signOutFailed": "Sign-out failed.",
       "saveFailed": "Not saved. Try again.",
       "deleteFailed": "The account was not deleted.",
+      "wrongPassword": "Wrong password.",
+      "passwordNeeded": "Enter your password to confirm.",
       "inviteRejected": "This code is not valid (wrong, used up or expired).",
       "tooManyTries": "Too many tries. Wait a few minutes and try again.",
       "joinFailed": "Joining OpenBeach failed. Try again."
@@ -3157,6 +3173,8 @@
       "passwordInvalid": "Wrong password.",
       "roleRequired": "This account does not have the role for this signature.",
       "notMatchScorer": "Only the scorer of this match can approve as scorer.",
+      "notMatchOfficial": "This is not the email entered for this referee in the match setup.",
+      "officialEmailMissing": "The match has no email for this referee: enter it in the match setup first.",
       "nameRequired": "The account has no name. Add it in the profile first.",
       "oneSlot": "This account has already approved another signature of this match.",
       "slotTaken": "Someone else has already approved this signature.",
@@ -3200,7 +3218,8 @@
       "signedOut": "Sign in on this device to approve with a PIN",
       "callerRole": "The account on this device cannot send approvals: it needs the scorer or referee role",
       "offline": "Offline: approval with a PIN is offered again when back online",
-      "beachOff": "This server does not approve beach results with a PIN yet: sign by hand"
+      "beachOff": "This server does not approve beach results with a PIN yet: sign by hand",
+      "noOfficialEmail": "No email was entered for this referee in the match setup, so their account cannot be checked: sign by hand"
     }
   },
   "brand": {
@@ -3307,5 +3326,19 @@
     "enterCode": "Live screen code",
     "join": "Join",
     "badCode": "This is not a live screen code (8 letters and digits)."
+  },
+  "backupUnlock": {
+    "title": "Encrypted backup",
+    "intro": "This backup file is encrypted. Type the match's game PIN or referee PIN to open it.",
+    "game": "Match {{n}}",
+    "saved": "Saved {{when}}",
+    "pinLabel": "Game PIN or referee PIN",
+    "open": "Open",
+    "opening": "Opening…",
+    "wrongPin": "Wrong PIN: it is neither the game PIN nor the referee PIN of this match.",
+    "damaged": "The backup file is damaged and cannot be read.",
+    "newer": "This backup was saved by a newer version of OpenBeach. Update the app to open it.",
+    "unsupported": "This device cannot open encrypted backups.",
+    "failed": "The backup could not be opened: {{error}}"
   }
 }

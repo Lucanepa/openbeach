@@ -244,6 +244,8 @@
     "scorer": "Marqueur",
     "assistantScorer": "Marqueur adjoint",
     "lineJudges": "Juges de ligne",
+    "refereeEmail": "E-mail de son compte (nécessaire pour approuver avec le PIN)",
+    "refereeEmailHint": "Seul le compte avec cette adresse peut approuver le résultat en tant que cet arbitre. Sans adresse, cet arbitre signe à la main. Seuls les marqueurs de ce match la voient.",
     "startMatch": "Démarrer le match",
     "testMatch": "Match amical",
     "createMatch": "Créer le match",
@@ -1234,6 +1236,14 @@
     "eventBasedNote": "Note : Chaque téléchargement crée un nouveau fichier dans le dossier Téléchargements",
     "lastBackup": "Dernière sauvegarde",
     "downloadBackupNow": "Télécharger maintenant",
+    "exportToDocuments": "Exporter vers Documents",
+    "exportToDocumentsHint": "Les sauvegardes et les journaux restent dans l’app. Ceci les copie dans le dossier Documents, pour un câble USB ou une autre app.",
+    "export": "Exporter",
+    "exportingToDocuments": "Export en cours…",
+    "exportedToDocuments": "{{backups}} sauvegardes de match et {{logs}} fichiers journaux copiés dans {{folder}}. Ces copies sont à toi : l’app ne les supprime pas.",
+    "exportToDocumentsSomeFailed_one": "1 fichier n’a pas pu être copié.",
+    "exportToDocumentsSomeFailed_other": "{{count}} fichiers n’ont pas pu être copiés.",
+    "exportToDocumentsFailed": "Rien n’a pu être copié vers Documents : {{error}}",
     "backingUp": "Sauvegarde...",
     "restoreMatch": "Restore Match",
     "restoreFromCloudDesc": "Restore from a specific backup point in time",
@@ -2556,7 +2566,8 @@
     "sets": "Sets",
     "sanctions": "Sanctions",
     "sanction": "sanction",
-    "failed": "Impossible de restaurer le match."
+    "failed": "Impossible de restaurer le match.",
+    "untrusted": "Ce fichier n’est pas chiffré : rien ne montre qu’il vient de cette app, et toute personne qui l’a eu a pu le modifier. Ne le restaure que si tu sais où il était conservé."
   },
   "appWindow": {
     "pdfSaveUnsupported": "L'application tablette ne peut pas enregistrer de PDF : l'approbation en fin de match téléverse la feuille, ou ouvre-la sur un ordinateur.",
@@ -2594,6 +2605,9 @@
     "deleteConfirmTitle": "Supprimer ton compte ?",
     "deleteConfirmBody": "Le compte {{email}} et son profil sont supprimés définitivement. Les matchs de cet appareil restent ici.",
     "deleteConfirm": "Supprimer le compte",
+    "deletePasswordLabel": "Ton mot de passe",
+    "deletePasswordHint": "Saisis ton mot de passe pour confirmer : une tablette restée connectée ne peut pas supprimer ton compte.",
+    "deleteForGood": "Supprimer définitivement",
     "deleted": "Compte supprimé.",
     "button": "Compte {{email}}",
     "buttonPending": "Compte {{email}} : en attente de validation",
@@ -2609,6 +2623,8 @@
       "signOutFailed": "La déconnexion a échoué.",
       "saveFailed": "Pas enregistré. Réessaie.",
       "deleteFailed": "Le compte n’a pas été supprimé.",
+      "wrongPassword": "Mot de passe incorrect.",
+      "passwordNeeded": "Saisis ton mot de passe pour confirmer.",
       "inviteRejected": "Ce code n’est pas valable (faux, épuisé ou expiré).",
       "tooManyTries": "Trop d’essais. Attends quelques minutes et réessaie.",
       "joinFailed": "L'adhésion à OpenBeach a échoué. Réessaie."
@@ -3157,6 +3173,8 @@
       "passwordInvalid": "Mot de passe erroné.",
       "roleRequired": "Ce compte n'a pas le rôle requis pour cette signature.",
       "notMatchScorer": "Seul le marqueur de ce match peut approuver en tant que marqueur.",
+      "notMatchOfficial": "Ce n'est pas l'e-mail saisi pour cet arbitre dans la configuration du match.",
+      "officialEmailMissing": "Le match n'a pas d'e-mail pour cet arbitre : saisis-le d'abord dans la configuration du match.",
       "nameRequired": "Le compte n'a pas de nom. Ajoute-le d'abord dans le profil.",
       "oneSlot": "Ce compte a déjà approuvé une autre signature de ce match.",
       "slotTaken": "Quelqu'un d'autre a déjà approuvé cette signature.",
@@ -3200,7 +3218,8 @@
       "signedOut": "Connecte-toi sur cet appareil pour approuver avec un PIN",
       "callerRole": "Le compte de cet appareil ne peut pas envoyer d’approbations : il lui faut le rôle de marqueur ou d’arbitre",
       "offline": "Hors ligne : l’approbation avec un PIN revient dès que la connexion revient",
-      "beachOff": "Ce serveur n’approuve pas encore les résultats de beach avec un PIN : signer à la main"
+      "beachOff": "Ce serveur n’approuve pas encore les résultats de beach avec un PIN : signer à la main",
+      "noOfficialEmail": "Aucun e-mail n’a été saisi pour cet arbitre dans la configuration du match, son compte ne peut donc pas être vérifié : signer à la main"
     }
   },
   "brand": {
@@ -3307,5 +3326,19 @@
     "enterCode": "Code de l’écran en direct",
     "join": "Rejoindre",
     "badCode": "Ce n’est pas un code d’écran en direct (8 lettres et chiffres)."
+  },
+  "backupUnlock": {
+    "title": "Sauvegarde chiffrée",
+    "intro": "Ce fichier de sauvegarde est chiffré. Saisis le PIN du match ou le PIN arbitre pour l’ouvrir.",
+    "game": "Match {{n}}",
+    "saved": "Enregistrée le {{when}}",
+    "pinLabel": "PIN du match ou PIN arbitre",
+    "open": "Ouvrir",
+    "opening": "Ouverture…",
+    "wrongPin": "PIN incorrect : ce n’est ni le PIN du match ni le PIN arbitre de ce match.",
+    "damaged": "Le fichier de sauvegarde est endommagé et ne peut pas être lu.",
+    "newer": "Cette sauvegarde a été enregistrée par une version plus récente d’OpenBeach. Mets l’app à jour pour l’ouvrir.",
+    "unsupported": "Cet appareil ne peut pas ouvrir les sauvegardes chiffrées.",
+    "failed": "Impossible d’ouvrir la sauvegarde : {{error}}"
   }
 }

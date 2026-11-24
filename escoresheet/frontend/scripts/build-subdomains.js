@@ -23,9 +23,10 @@ import { readFileSync, writeFileSync, existsSync, rmSync, renameSync, copyFileSy
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { PWA_INCLUDE_ASSETS, PWA_ICONS, THEME_COLOR } from '../pwa-icons.js'
-import { IGNORE_URL_PARAMETERS } from '../pwa-workbox.js'
+import { IGNORE_URL_PARAMETERS, SUBDOMAIN_RUNTIME_CACHING } from '../pwa-workbox.js'
 import { subdomains, htmlFor, hostFor, missingFromBuild } from './subdomain-pages.js'
 import { precacheUnderFinalName } from './subdomain-precache.js'
+import { headersFor, buildChannel } from '../csp.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -92,33 +93,9 @@ async function buildSubdomain(subdomain, basePath = '/') {
             // Same offline rule as the main build (pwa-workbox.js): /?cache_bust=..
             // is the precached index.html
             ignoreURLParametersMatching: IGNORE_URL_PARAMETERS,
-            runtimeCaching: [
-              {
-                urlPattern: /^https?:\/\/.*\/api\/.*/i,
-                handler: 'NetworkFirst',
-                options: {
-                  cacheName: 'api-cache',
-                  expiration: { maxEntries: 50, maxAgeSeconds: 86400 },
-                  networkTimeoutSeconds: 10
-                }
-              },
-              {
-                urlPattern: /\.(?:js|css|png|jpg|jpeg|svg|gif|woff|woff2)$/,
-                handler: 'CacheFirst',
-                options: {
-                  cacheName: 'static-assets',
-                  expiration: { maxEntries: 100, maxAgeSeconds: 2592000 }
-                }
-              },
-              {
-                urlPattern: /\.html$/,
-                handler: 'NetworkFirst',
-                options: {
-                  cacheName: 'html-cache',
-                  expiration: { maxEntries: 10, maxAgeSeconds: 86400 }
-                }
-              }
-            ],
+            // The API from the network only, first (one account's answers
+            // were kept for the next: pwa-workbox.js API_NETWORK_ONLY_ROUTE)
+            runtimeCaching: SUBDOMAIN_RUNTIME_CACHING,
             navigateFallbackDenylist: [/^\/api\//],
             cleanupOutdatedCaches: true
           },
@@ -176,6 +153,12 @@ async function buildSubdomain(subdomain, basePath = '/') {
     if (existsSync(finalHtmlPath)) {
       copyFileSync(finalHtmlPath, resolve(outDir, '404.html'))
     }
+
+    // The site's security headers (csp.js: the Content-Security-Policy,
+    // Report-Only on a preview build; frame protection; nosniff; referrer),
+    // which Cloudflare Pages sends from _headers (audit SEC-44). After the
+    // public_beach copy, so nothing there replaces it.
+    writeFileSync(resolve(outDir, '_headers'), headersFor(subdomain, buildChannel()))
 
     // A site without a page the app opens (the match-end PDF's sheet among
     // them) must not go live: fail the build, Cloudflare Pages keeps the last

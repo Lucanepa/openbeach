@@ -244,6 +244,8 @@
     "scorer": "Segnapunti",
     "assistantScorer": "Ass. segnapunti",
     "lineJudges": "Giudici di linea",
+    "refereeEmail": "E-mail del suo account (necessaria per approvare con PIN)",
+    "refereeEmailHint": "Solo l'account con questo indirizzo può approvare il risultato come questo arbitro. Senza indirizzo, questo arbitro firma a mano. La vedono solo i segnapunti di questa partita.",
     "startMatch": "Inizia Partita",
     "testMatch": "Partita Test",
     "createMatch": "Crea partita",
@@ -1234,6 +1236,14 @@
     "eventBasedNote": "Nota: Ogni download crea un nuovo file nella cartella Download",
     "lastBackup": "Ultimo backup",
     "downloadBackupNow": "Scarica backup ora",
+    "exportToDocuments": "Esporta in Documenti",
+    "exportToDocumentsHint": "I backup e i log restano nell’app. Questo li copia nella cartella Documenti, per un cavo USB o un’altra app.",
+    "export": "Esporta",
+    "exportingToDocuments": "Esportazione…",
+    "exportedToDocuments": "{{backups}} backup di partite e {{logs}} file di log copiati in {{folder}}. Queste copie sono tue: l’app non le elimina.",
+    "exportToDocumentsSomeFailed_one": "1 file non è stato copiato.",
+    "exportToDocumentsSomeFailed_other": "{{count}} file non sono stati copiati.",
+    "exportToDocumentsFailed": "Non è stato possibile copiare nulla in Documenti: {{error}}",
     "backingUp": "Backup in corso...",
     "restoreMatch": "Ripristina partita",
     "restoreFromCloudDesc": "Ripristina da un backup specifico",
@@ -2556,7 +2566,8 @@
     "sets": "Set",
     "sanctions": "Sanzioni",
     "sanction": "sanzione",
-    "failed": "Impossibile ripristinare la partita."
+    "failed": "Impossibile ripristinare la partita.",
+    "untrusted": "Questo file non è cifrato: niente mostra che venga da questa app, e chiunque l’abbia avuto può averlo modificato. Ripristinalo solo se sai dove era conservato."
   },
   "appWindow": {
     "pdfSaveUnsupported": "L'app per tablet non può salvare file PDF: l'approvazione a fine partita carica il referto, oppure aprilo su un computer.",
@@ -2594,6 +2605,9 @@
     "deleteConfirmTitle": "Eliminare il tuo account?",
     "deleteConfirmBody": "L’account {{email}} e il suo profilo vengono eliminati definitivamente. Le partite su questo dispositivo restano qui.",
     "deleteConfirm": "Elimina l’account",
+    "deletePasswordLabel": "La tua password",
+    "deletePasswordHint": "Inserisci la tua password per confermare: un tablet rimasto connesso non può eliminare il tuo account.",
+    "deleteForGood": "Elimina definitivamente",
     "deleted": "Account eliminato.",
     "button": "Account {{email}}",
     "buttonPending": "Account {{email}}: in attesa di approvazione",
@@ -2609,6 +2623,8 @@
       "signOutFailed": "Uscita non riuscita.",
       "saveFailed": "Non salvato. Riprova.",
       "deleteFailed": "L’account non è stato eliminato.",
+      "wrongPassword": "Password errata.",
+      "passwordNeeded": "Inserisci la tua password per confermare.",
       "inviteRejected": "Questo codice non è valido (errato, esaurito o scaduto).",
       "tooManyTries": "Troppi tentativi. Attendi qualche minuto e riprova.",
       "joinFailed": "L'adesione a OpenBeach non è riuscita. Riprova."
@@ -3157,6 +3173,8 @@
       "passwordInvalid": "Password errata.",
       "roleRequired": "Questo account non ha il ruolo per questa firma.",
       "notMatchScorer": "Solo il segnapunti di questa partita può approvare come segnapunti.",
+      "notMatchOfficial": "Non è l'e-mail inserita per questo arbitro nella configurazione partita.",
+      "officialEmailMissing": "La partita non ha un'e-mail per questo arbitro: inseriscila prima nella configurazione partita.",
       "nameRequired": "L'account non ha un nome. Aggiungilo prima nel profilo.",
       "oneSlot": "Questo account ha già approvato un'altra firma di questa partita.",
       "slotTaken": "Qualcun altro ha già approvato questa firma.",
@@ -3200,7 +3218,8 @@
       "signedOut": "Accedi su questo dispositivo per approvare con PIN",
       "callerRole": "L’account di questo dispositivo non può inviare approvazioni: serve il ruolo di segnapunti o di arbitro",
       "offline": "Offline: l’approvazione con PIN torna disponibile appena sei online",
-      "beachOff": "Questo server non approva ancora i risultati di beach con un PIN: firma a mano"
+      "beachOff": "Questo server non approva ancora i risultati di beach con un PIN: firma a mano",
+      "noOfficialEmail": "Per questo arbitro non è stata inserita nessuna e-mail nella configurazione partita, quindi il suo account non può essere verificato: firma a mano"
     }
   },
   "brand": {
@@ -3307,5 +3326,19 @@
     "enterCode": "Codice schermo live",
     "join": "Partecipa",
     "badCode": "Questo non è un codice schermo live (8 lettere e cifre)."
+  },
+  "backupUnlock": {
+    "title": "Backup cifrato",
+    "intro": "Questo file di backup è cifrato. Inserisci il PIN partita o il PIN arbitro della partita per aprirlo.",
+    "game": "Partita {{n}}",
+    "saved": "Salvato il {{when}}",
+    "pinLabel": "PIN partita o PIN arbitro",
+    "open": "Apri",
+    "opening": "Apertura…",
+    "wrongPin": "PIN errato: non è né il PIN partita né il PIN arbitro di questa partita.",
+    "damaged": "Il file di backup è danneggiato e non può essere letto.",
+    "newer": "Questo backup è stato salvato da una versione più recente di OpenBeach. Aggiorna l’app per aprirlo.",
+    "unsupported": "Questo dispositivo non può aprire i backup cifrati.",
+    "failed": "Impossibile aprire il backup: {{error}}"
   }
 }

@@ -12,6 +12,11 @@ import { gameNumberValue } from '../../src_beach/utils_beach/gameNumber_beach.js
 import { displayIdValue } from '../../src_beach/utils_beach/idValue_beach.js';
 import { fitPageContent } from './pageFit_beach';
 import { fitNameBox } from './nameFit_beach';
+// The scoretable's messages: its own origin and window only (audit SEC-43)
+// @ts-ignore - JS module
+import { refreshDataFromEvent, requestScoresheetRefresh } from '../../src_beach/utils_beach/scoresheetMessages_beach.js';
+// @ts-ignore - JS module
+import { getOpenerWindow } from '../../src_beach/utils_beach/appWindowGuest_beach.js';
 
 // The sheet's many debug lines (whole match objects) only when asked for:
 // localStorage obScoresheetDebug = '1'. Logging them always slowed the
@@ -333,15 +338,19 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
   };
   const get = (k: string) => dataRef.current[k] || data[k]; // Read from ref first, fallback to state
 
-  // Listen for refresh messages from parent window
+  // Listen for refresh messages from the window that opened this sheet: its
+  // own origin and that window only. Any other page (one that framed or
+  // opened the sheet) posted invented teams and scores into the official
+  // sheet, which then rendered and saved them (audit SEC-43).
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       debugLog('[eScoresheet] Received message:', event.data?.type);
-      if (event.data?.type === 'REFRESH_SCORESHEET') {
+      const refreshed = refreshDataFromEvent(event, { opener: getOpenerWindow() });
+      if (refreshed) {
         debugLog('[eScoresheet] REFRESH_SCORESHEET received!');
         // Get data directly from message (sessionStorage is per-window, not shared)
         try {
-          const newMatchData = event.data?.data;
+          const newMatchData = refreshed;
           debugLog('[eScoresheet] Received data, events count:', newMatchData?.events?.length);
           if (newMatchData) {
             // Reset data and update matchData to trigger re-initialization
@@ -3872,7 +3881,8 @@ export default function OpenbeachScoresheet({ matchData: initialMatchData, onDat
   useEffect(() => {
     const interval = setInterval(() => {
       if (window.opener && !window.opener.closed) {
-        window.opener.postMessage({ type: 'REQUEST_SCORESHEET_REFRESH' }, '*');
+        // to the app's own origin only (it was '*')
+        requestScoresheetRefresh(window.opener);
       }
     }, 3000);
     return () => clearInterval(interval);

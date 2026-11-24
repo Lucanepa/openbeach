@@ -18,7 +18,7 @@ import { useAuth } from '../contexts_beach/AuthContext_beach'
 import { approvalsApi, approvalErrorKey, isApprovalUnavailable, isApprovalUnsupported } from '../lib_beach/approvalsApi_beach'
 import {
   ROLE_TO_SLOT, approvalFor, isApprovalValid, slotComplete, approvalLine, approvalsBySlot, approvalSummary,
-  resultKey, rememberApprovalEmail, namesDiffer, approvalsCompletingSlots, approvalsStillValid, pinApprovalState,
+  resultKey, rememberApprovalEmail, namesDiffer, appointedNameIfDiffers, approvalsCompletingSlots, approvalsStillValid, pinApprovalState,
   callerMayApprove as mayApproveFrom
 } from '../utils_beach/accountApproval_beach'
 import AccountApprovalDialog from './AccountApprovalDialog_beach'
@@ -799,10 +799,12 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   const signaturesLocked = signatureEditLocked(match, { isApproved: finalActions })
   // The PIN-approval line of an official's box: approved, offered, or why not.
   // Only a beach scorer or referee account (or an admin) may send approvals
-  // of a beach match (the server checks the same)
+  // of a beach match (the server checks the same). A referee slot needs the
+  // address of the appointed referee's account in the officials (PERM-08)
   const pinStateOf = (role) => pinApprovalState({
     role, approval: approvalFor(match, role), sets, locked: signaturesLocked, hasSeedKey: !!match.seed_key,
-    cloudApi, feature: approvalFeature, signedIn, callerMayApprove: mayApproveFrom(access), online
+    cloudApi, feature: approvalFeature, signedIn, callerMayApprove: mayApproveFrom(access), online,
+    officials: match.officials
   })
 
   const signatureFieldMap = {
@@ -1017,8 +1019,15 @@ export default function MatchEnd({ matchId, onGoHome, onReopenLastSet, onManualA
   // Undo), "Approve with PIN", or one line saying why not. Never empty.
   const renderPinLine = (role, pin, approval, { isSigned, disabled }) => {
     if (pin.state === 'approved') {
+      // Another person than the official entered approved (PERM-08): both names show
+      const appointed = appointedNameIfDiffers(match, role, approval)
       return (
         <div className="flex flex-col gap-1.5">
+          {appointed && (
+            <div className="text-xs leading-snug text-amber-800" data-testid={`account-approval-appointed-${role}`}>
+              {t('approval.officialEntered', { name: appointed })}
+            </div>
+          )}
           {isSigned && (
             // Signed by hand AND approved: the approval as a compact line
             <div

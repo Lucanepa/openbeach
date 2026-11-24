@@ -8,6 +8,7 @@ import { IDBFactory, IDBKeyRange } from 'fake-indexeddb'
 import { subscribeMatchWrites } from '../../utils_beach/nativeBackup/matchWriteHook_beach'
 import { createNativeBackupEngine } from '../../utils_beach/nativeBackup/engine_beach'
 import { LATEST_FILE } from '../../utils_beach/nativeBackup/rotation_beach'
+import { openEnvelope } from '../../utils_beach/backupCrypto/envelope_beach'
 
 // The setup file replaces window.indexedDB with a stub; the real db_beach
 // instance captures Dexie.dependencies when it is constructed, so they are
@@ -115,7 +116,7 @@ describe('subscribeMatchWrites on the real Dexie database', () => {
     expect(onWrite).toHaveBeenCalledTimes(2)
   })
 
-  it('with the engine: the scoreboard write sequence of a point gives one complete file without PINs', async () => {
+  it('with the engine: the scoreboard write sequence of a point gives one complete encrypted file without PINs', async () => {
     const files = new Map()
     const store = {
       info: async () => ({ folder: '/b' }),
@@ -137,7 +138,10 @@ describe('subscribeMatchWrites on the real Dexie database', () => {
 
     expect(store.write).toHaveBeenCalledTimes(1)
     const [, text] = [...files].find(([k]) => !k.endsWith(LATEST_FILE))
-    const data = JSON.parse(text)
+    // sealed with the game PIN and the referee PIN (audit SEC-22): no name,
+    // no PIN in the file, and the referee PIN opens it
+    expect(text).not.toMatch(/123456|654321|111222|Müller/)
+    const { data } = await openEnvelope(JSON.parse(text), '654321')
     expect(data.events).toHaveLength(1)
     expect(data.events[0].stateSnapshot).toEqual({ team1Points: 1 })
     expect(data.sets[0].team1Points).toBe(1)

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { createHash } from 'node:crypto'
+import { createHash, createHmac } from 'node:crypto'
 import {
   LIVE_CODE_ALPHABET, LIVE_SCREEN_KEY, isLiveCode, normalizeLiveCode, newLiveCode, formatLiveCode,
   liveCodeUrl, localTvUrl, courtSecretOf, courtTokenFor, cachedCourtToken, getLiveCode, setLiveCode,
@@ -70,6 +70,27 @@ describe('court token', () => {
   it('cached for the live push, which cannot wait', async () => {
     expect(cachedCourtToken(match)).toBe(null) // starts the work
     await new Promise((r) => setTimeout(r, 10))
+    expect(cachedCourtToken(match)).toBe(expectedToken(match.seed_key))
+  })
+
+  // OpenVolley audit 2611 SEC-07 / SR-3: the seed key is the match's public
+  // id, so its hash let anyone overwrite the court on every TV. A match with
+  // a game PIN takes its token from the PIN, which every scoring device of it
+  // knows (a second tablet, a restore: still one court) and the public does not.
+  it('a match with a game PIN: an HMAC of its seed key keyed with the PIN, the same on every device, never the seed key\'s hash', async () => {
+    const withPin = { ...match, gamePin: '482913' }
+    const hmac = (pin, text) => createHmac('sha256', pin).update(text).digest('hex').slice(0, 32)
+    const token = await courtTokenFor(withPin)
+    expect(token).toBe(hmac('482913', `court\0${match.seed_key}`))
+    expect(token).not.toBe(expectedToken(match.seed_key))
+    // the second tablet of the match (another local id, the PIN as a number)
+    expect(await courtTokenFor({ id: 99, seed_key: match.seed_key, gamePin: 482913 })).toBe(token)
+    // another PIN or another match: another court
+    expect(await courtTokenFor({ ...withPin, gamePin: '482914' })).not.toBe(token)
+    expect(await courtTokenFor({ ...withPin, seed_key: 'match_1700000000001_def456' })).not.toBe(token)
+    // the cache keeps them apart
+    await courtTokenFor(match)
+    expect(cachedCourtToken(withPin)).toBe(token)
     expect(cachedCourtToken(match)).toBe(expectedToken(match.seed_key))
   })
 })

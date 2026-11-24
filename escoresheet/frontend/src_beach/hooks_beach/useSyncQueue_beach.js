@@ -334,10 +334,10 @@ const redactText = (text) => text.replace(PIN_IN_TEXT, '$1[redacted]')
 const LOG_REDACT_DEPTH = 6
 
 /**
- * A value for the console (and so for uploaded logs): PIN fields left out at
- * any depth (game_pin, connection_pins, refereePin, ...), PIN values in error
- * texts masked, the scoresheet remarks as their length only. Anything else is
- * passed through unchanged.
+ * A value for the console (and so for uploaded logs): PIN fields and email
+ * addresses left out at any depth (game_pin, connection_pins, refereePin,
+ * officials[].email, ...), PIN values in error texts masked, the scoresheet
+ * remarks as their length only. Anything else is passed through unchanged.
  */
 export function redactForLog(value, depth = 0) {
   if (typeof value === 'string') return redactText(value)
@@ -351,7 +351,9 @@ export function redactForLog(value, depth = 0) {
   if (proto !== Object.prototype && proto !== null) return value
   const out = {}
   for (const [k, v] of Object.entries(value)) {
-    if (isSecretLogKey(k)) continue
+    // a PIN, or an address (the appointed referees' account addresses in
+    // officials, PERM-08)
+    if (isSecretLogKey(k) || k === 'email') continue
     // the scoresheet remarks: their length only, like the activity log
     out[k] = k === 'remarks' && typeof v === 'string' ? `[${v.length} characters]` : redactForLog(v, depth + 1)
   }

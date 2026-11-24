@@ -89,18 +89,36 @@ const tokenRenewedAt = new Map()
 /**
  * The API fallback read a remembered match without its rosters: the match
  * token expired (or the backend restarted without a fixed token secret).
- * Renew it with the remembered PIN (cloud PIN check, at most once a minute).
+ * Renew it with the remembered PIN (cloud PIN check, at most once a minute),
+ * for this match only (matchExternalId: the backend compares the PIN with it
+ * and counts a failure in its own scope, never a lookup among every match,
+ * OpenVolley audit SEC-06).
  * @returns {Promise<boolean>} true when a new token was remembered
  */
 async function renewMatchToken(matchId, row) {
   const a = matchAccessFor(matchId)
   if (!a?.pin || !a.type || !row || typeof row !== 'object' || 'players_team1' in row) return false
   const key = String(matchId)
+  // a LAN relay's numeric id names no cloud match: nothing to renew there
+  if (!pinMatchKey(key)) return false
   const last = tokenRenewedAt.get(key)
   if (last !== undefined && Date.now() - last < TOKEN_RENEW_MS) return false
   tokenRenewedAt.set(key, Date.now())
-  const r = await validatePinSupabase(a.pin, a.type)
+  const r = await validatePinSupabase(a.pin, a.type, { matchExternalId: key })
   return !!(r?.success && r.token && String(r.match?.id) === key)
+}
+
+/**
+ * The key a PIN check names its match by: a match's seed key (the cloud's
+ * external_id, the relay room), trimmed; null for none. A number (a LAN
+ * relay's own id) only names a room on that relay (`relay` true).
+ */
+export function pinMatchKey(value, { relay = false } = {}) {
+  if (typeof value === 'number') return relay && Number.isFinite(value) ? String(value) : null
+  if (typeof value !== 'string') return null
+  const key = value.trim()
+  if (!key || key.length > 128) return null
+  return !relay && /^\d+$/.test(key) ? null : key
 }
 
 /** Forget a match's access (exit, PIN no longer valid). No argument: all. */
@@ -229,11 +247,23 @@ export function fromWireListRow(row) {
 }
 
 /**
- * Validate PIN and get match data from server
+ * Validate PIN and get match data from server (the relay's validate-pin).
+ * `matchId` (the room key: the match's seed key) or `gameNumber`: the match
+ * the tablet picked. The relay then compares the PIN with that match only,
+ * in that match's own brute-force scope; without either it looks the PIN up
+ * among every room it holds, and the OpenVolley backend's lock of those
+ * lookups refused every OpenBeach referee (audit SEC-06). Relays from before
+ * 2026-11 ignore both fields; an answer for another match than the one named
+ * is no answer for it. A refusal throws an Error with the answer's `status`
+ * (429: too many wrong PINs from this address, nothing was compared).
  */
-export async function validatePin(pin, type = 'referee') {
+export async function validatePin(pin, type = 'referee', { matchId = null, gameNumber = null } = {}) {
   const serverUrl = getServerUrl()
-  
+  const named = pinMatchKey(matchId, { relay: true })
+  const game = !named && gameNumber !== null && gameNumber !== undefined && String(gameNumber).trim() !== ''
+    ? String(gameNumber).trim().slice(0, 32)
+    : null
+
   try {
     const response = await fetch(`${serverUrl}/api/match/validate-pin`, {
       method: 'POST',
@@ -244,7 +274,9 @@ export async function validatePin(pin, type = 'referee') {
         pin: String(pin).trim(),
         type,
         // the relay answers beach rooms only (a PIN may collide with indoor)
-        sport: SPORT_TYPE
+        sport: SPORT_TYPE,
+        ...(named ? { matchId: named } : {}),
+        ...(game ? { gameNumber: game } : {})
       })
     })
 
@@ -257,7 +289,7 @@ export async function validatePin(pin, type = 'referee') {
         // If response is not JSON, use status text
         errorMessage = response.statusText || errorMessage
       }
-      throw new Error(errorMessage)
+      throw Object.assign(new Error(errorMessage), { status: response.status })
     }
 
     // Check if response has content
@@ -275,6 +307,10 @@ export async function validatePin(pin, type = 'referee') {
     }
     // The cloud relay also holds indoor matches: a PIN of one is not ours
     if (result?.success && isOtherSportMatch(result.match)) {
+      return { success: false, error: 'Invalid PIN code' }
+    }
+    // An older relay that ignored the named match answered with another one
+    if (result?.success && named && String(result.match?.id ?? '') !== named) {
       return { success: false, error: 'Invalid PIN code' }
     }
     if (result?.success && result.match?.id != null) {
@@ -1253,13 +1289,20 @@ export const BEACH_PIN_TYPES = Object.freeze(['referee', 'bench_team1', 'bench_t
  * reach the browser: the server compares them. On success the PIN and the
  * match token are remembered for the match (rememberMatchAccess), so the
  * relay subscription and the match reads that follow get the rosters.
+ * `matchExternalId`: the match the tablet picked or stored (its seed key).
+ * The backend compares the PIN with that match only and counts a wrong one
+ * in that match's own scope. Without it the backend looks the PIN up among
+ * every open beach match: one guess tested against all of them, and the
+ * lookups' shared lock refused every OpenBeach referee (OpenVolley audit
+ * SEC-06). An answer for another match is no answer for it.
  * Bounded by `timeoutMs`: on a venue network without internet this check must
  * fail fast so the caller can fall back to the LAN relay.
  * @param {string} pin
  * @param {'referee'|'bench_team1'|'bench_team2'} [type]
+ * @param {{ matchExternalId?: string|null, timeoutMs?: number, fetchImpl?: Function }} [options]
  * @returns {Promise<{success: boolean, match?: object, token?: string|null, error?: string}>}
  */
-export async function validatePinSupabase(pin, type = 'referee', { timeoutMs = 3000, fetchImpl = fetch } = {}) {
+export async function validatePinSupabase(pin, type = 'referee', { matchExternalId = null, timeoutMs = 3000, fetchImpl = fetch } = {}) {
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
   const timer = controller && timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : null
   try {
@@ -1274,11 +1317,12 @@ export async function validatePinSupabase(pin, type = 'referee', { timeoutMs = 3
 
     const apiUrl = getCloudApiUrl('/api/match/validate-connection-pin')
     if (!apiUrl) return { success: false, error: 'Backend not available', unreachable: true }
+    const named = pinMatchKey(matchExternalId)
 
     const response = await fetchImpl(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin: pinStr, type, sport: SPORT_TYPE }),
+      body: JSON.stringify({ pin: pinStr, type, sport: SPORT_TYPE, ...(named ? { matchExternalId: named } : {}) }),
       ...(controller ? { signal: controller.signal } : {})
     })
 
@@ -1305,6 +1349,9 @@ export async function validatePinSupabase(pin, type = 'referee', { timeoutMs = 3
     }
     // A backend that ignores `sport` would answer with an indoor match
     if ((result.match.sportType ?? result.match.sport_type) !== SPORT_TYPE) {
+      return { success: false, error: 'Invalid PIN code' }
+    }
+    if (named && String(result.match.id ?? '') !== named) {
       return { success: false, error: 'Invalid PIN code' }
     }
 

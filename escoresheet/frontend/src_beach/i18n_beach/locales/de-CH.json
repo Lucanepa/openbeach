@@ -244,6 +244,8 @@
     "scorer": "Schriiber",
     "assistantScorer": "Assistenz-Schriiber",
     "lineJudges": "Linierichter",
+    "refereeEmail": "E-Mail vom Konto (nötig zum mit PIN genehmige)",
+    "refereeEmailHint": "Nur s Konto mit dere Adrässe chan s Resultat als dä Schiri genehmige. Ohni Adrässe underschriibt dä Schiri vo Hand. Nur d Schriiber vo däm Spiil gsehnd si.",
     "startMatch": "Spiil starte",
     "testMatch": "Testspiil",
     "createMatch": "Spiil erstelle",
@@ -1234,6 +1236,14 @@
     "eventBasedNote": "Hiwiis: Jede Download erstellt e neui Datei im Download-Ordner",
     "lastBackup": "Letschti Sicherig",
     "downloadBackupNow": "Backup jetzt abelade",
+    "exportToDocuments": "Nach Dokumente exportiere",
+    "exportToDocumentsHint": "Backups und Logs bliibed i de App. Das da kopiert sie in de Ordner Dokumente, für es USB-Kabel oder en anderi App.",
+    "export": "Exportiere",
+    "exportingToDocuments": "Wird exportiert…",
+    "exportedToDocuments": "{{backups}} Spiil-Backups und {{logs}} Log-Dateie nach {{folder}} kopiert. Die Kopie ghöred dir: D App löscht sie nöd.",
+    "exportToDocumentsSomeFailed_one": "1 Datei hät nöd chönne kopiert werde.",
+    "exportToDocumentsSomeFailed_other": "{{count}} Dateie händ nöd chönne kopiert werde.",
+    "exportToDocumentsFailed": "Es hät nüt chönne nach Dokumente kopiert werde: {{error}}",
     "backingUp": "Sicherig lauft...",
     "restoreMatch": "Spiil widerherstelle",
     "restoreFromCloudDesc": "Vo emne bestimmte Backup-Ziitpunkt widerherstelle",
@@ -2556,7 +2566,8 @@
     "sets": "Sätz",
     "sanctions": "Sanktione",
     "sanction": "Sanktion",
-    "failed": "S Spiil hät nöd chöne widerhergstellt werde."
+    "failed": "S Spiil hät nöd chöne widerhergstellt werde.",
+    "untrusted": "Die Datei isch nöd verschlüsselt. Nüt zeigt, dass sie us dere App chunnt: Wer sie gha hät, hät sie chöne ändere. Stell sie nume wider her, wenn du weisch, wo sie ufbewahrt gsii isch."
   },
   "appWindow": {
     "pdfSaveUnsupported": "D Tablet-App cha kei PDF-Dateie speichere: D Genehmigung am Spiilend ladet s Matchblatt ufe, oder mach s uf emne Computer uf.",
@@ -2594,6 +2605,9 @@
     "deleteConfirmTitle": "Dis Konto lösche?",
     "deleteConfirmBody": "S Konto {{email}} und sis Profil werded für immer glöscht. Spiil uf däm Grät bliibed da.",
     "deleteConfirm": "Konto lösche",
+    "deletePasswordLabel": "Dis Passwort",
+    "deletePasswordHint": "Gib zur Bestätigung dis Passwort ii: En Tablet, wo aagmäldet blibe isch, chan dis Konto so nöd lösche.",
+    "deleteForGood": "Für immer lösche",
     "deleted": "Konto glöscht.",
     "button": "Konto {{email}}",
     "buttonPending": "Konto {{email}}: wartet uf Freigab",
@@ -2609,6 +2623,8 @@
       "signOutFailed": "Abmäldig hät nöd klappt.",
       "saveFailed": "Nöd gspeicheret. Probier es nomal.",
       "deleteFailed": "S Konto isch nöd glöscht worde.",
+      "wrongPassword": "Falsches Passwort.",
+      "passwordNeeded": "Gib zur Bestätigung dis Passwort ii.",
       "inviteRejected": "De Code gilt nöd (falsch, ufbruucht oder abglaufe).",
       "tooManyTries": "Z vill Versüech. Wart es paar Minute und probier s nomal.",
       "joinFailed": "De Biitritt zu OpenBeach hät nöd klappt. Probier s nomal."
@@ -3157,6 +3173,8 @@
       "passwordInvalid": "Falschs Passwort.",
       "roleRequired": "Das Konto hät nöd d Rolle für die Underschrift.",
       "notMatchScorer": "Nur de Schriiber vo däm Spiil chan als Schriiber genehmige.",
+      "notMatchOfficial": "Das isch nöd d E-Mail, wo i de Spiiliirichtig für dä Schiri erfasst isch.",
+      "officialEmailMissing": "Für dä Schiri isch kei E-Mail erfasst: träg si zersch i de Spiiliirichtig ii.",
       "nameRequired": "S Konto hät kei Name. Zersch im Profil ergänze.",
       "oneSlot": "Das Konto hät scho en anderi Underschrift vo däm Spiil genehmigt.",
       "slotTaken": "Öpper anders hät die Underschrift scho genehmigt.",
@@ -3200,7 +3218,8 @@
       "signedOut": "Mäld dich uf däm Grät aa, zum mit PIN genehmige",
       "callerRole": "S Konto uf däm Grät cha kei Genehmigunge schicke: es bruucht d Rolle Schriiber oder Schiri",
       "offline": "Offline: d Genehmigung mit PIN chunnt wieder, sobald du online bisch",
-      "beachOff": "De Server genehmigt Beachresultat no nöd mit PIN: vo Hand underschriibe"
+      "beachOff": "De Server genehmigt Beachresultat no nöd mit PIN: vo Hand underschriibe",
+      "noOfficialEmail": "Für dä Schiri isch i de Spiiliirichtig kei E-Mail erfasst worde, drum cha sis Konto nöd prüeft werde: vo Hand underschriibe"
     }
   },
   "brand": {
@@ -3307,5 +3326,19 @@
     "enterCode": "Live-Bildschirm-Code",
     "join": "Biiträte",
     "badCode": "Das isch kein Live-Bildschirm-Code (8 Buechstabe und Ziffere)."
+  },
+  "backupUnlock": {
+    "title": "Verschlüsselti Sicherig",
+    "intro": "Die Sicherigsdatei isch verschlüsselt. Gib d Spiil-PIN oder d Schiri-PIN vom Spiil ii, zum sie uftue.",
+    "game": "Spiil {{n}}",
+    "saved": "Gspeicheret {{when}}",
+    "pinLabel": "Spiil-PIN oder Schiri-PIN",
+    "open": "Uftue",
+    "opening": "Wird ufgmacht…",
+    "wrongPin": "Falschi PIN: Das isch weder d Spiil-PIN no d Schiri-PIN vo dem Spiil.",
+    "damaged": "D Sicherigsdatei isch beschädigt und cha nöd gläse werde.",
+    "newer": "Die Sicherig isch vo ere neuere Version vo OpenBeach gspeicheret worde. Aktualisier d App, zum sie uftue.",
+    "unsupported": "Das Gerät cha kei verschlüsselti Sicherige uftue.",
+    "failed": "D Sicherig hät nöd chöne ufgmacht werde: {{error}}"
   }
 }

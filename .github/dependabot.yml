@@ -1,6 +1,7 @@
 # Update proposals as pull requests, reviewed like any other change: the npm
-# lock file of the frontend and the Android build (Gradle). The repository
-# has no workflows, so there are no actions to pin.
+# lock file of the frontend, the Android build (Gradle) and the commit pins
+# of the workflows' actions (.github/workflows: the dependency audit and the
+# leak scan).
 # Security updates come as soon as an advisory is published; the rest weekly.
 version: 2
 updates:
@@ -28,3 +29,11 @@ updates:
         update-types: [version-update:semver-major]
       - dependency-name: com.android.tools.build:gradle
         update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']

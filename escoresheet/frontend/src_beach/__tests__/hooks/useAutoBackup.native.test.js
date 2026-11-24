@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { useMemoryLocalStorage } from '../helpers/memoryStorage'
+import { isEncryptedBackup, openEnvelope } from '../../utils_beach/backupCrypto/envelope_beach'
 
 // The desktop app (Tauri): a native backup file of the open match at every
 // scoring event, through the shared backup_* commands; never a download.
@@ -19,6 +20,8 @@ const { fakeDb, state } = vi.hoisted(() => {
     }
   }
   const fakeDb = { events: hookTable(), sets: hookTable(), matches: hookTable(), players: hookTable() }
+  // the engine reads the match row for its PINs (the encryption's warm)
+  fakeDb.matches.get = async () => structuredClone(state.match)
   // Runs the hooks of one write and commits its transaction
   fakeDb.write = (table, type, ...args) => {
     const complete = []
@@ -99,7 +102,11 @@ describe('useAutoBackup in the desktop app', () => {
     })
     await waitFor(() => expect(writes).toHaveLength(2))
     expect(writes[1].fileName).toMatch(/-00001\.json$/)
-    expect(JSON.parse(writes[1].contents)).toMatchObject({ version: 1, sets: [{ team1Points: 1 }], events: [{ seq: 1 }] })
+    // sealed with the game PIN (audit SEC-22), which opens it
+    const envelope = JSON.parse(writes[1].contents)
+    expect(isEncryptedBackup(envelope)).toBe(true)
+    const { data: inside } = await openEnvelope(envelope, '135791')
+    expect(inside).toMatchObject({ version: 1, sets: [{ team1Points: 1 }], events: [{ seq: 1 }] })
 
     // a timeout of another match does not back up this one
     act(() => fakeDb.write('events', 'creating', undefined, { matchId: 8, type: 'timeout' }))

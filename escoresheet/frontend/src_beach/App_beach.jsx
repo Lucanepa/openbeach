@@ -28,6 +28,7 @@ import {
 } from './utils_beach/deviceSelfCheck_beach'
 import SyncSignInBanner, { SYNC_BANNER_SPACE_VAR } from './components_beach/auth/SyncSignInBanner_beach'
 import useAutoBackup from './hooks_beach/useAutoBackup_beach'
+import useBackupUnlock from './hooks_beach/useBackupUnlock_beach'
 import { useDashboardServer } from './hooks_beach/useDashboardServer_beach'
 // Beach volleyball ball image
 const ballImage = '/beachball.png'
@@ -74,6 +75,8 @@ import { cn } from './ui/volleyui/cn.js'
 import { confirmDialog, toast } from './ui/volleyui/uiStore.js'
 import { DEFAULT_TEAM1_COLOUR, DEFAULT_TEAM2_COLOUR } from './utils_beach/teamColours_beach'
 import { readManageLicence, cleanIdValue, licenceOf } from './utils_beach/idValue_beach'
+import { securePin } from './utils_beach/pin_beach'
+import { REFEREE_ROLES, officialRole, cleanOfficialEmail } from './utils_beach/officials_beach'
 
 function parseDateTime(dateTime) {
   const [datePart, timePart] = dateTime.split(' ')
@@ -83,13 +86,9 @@ function parseDateTime(dateTime) {
   return date.toISOString()
 }
 
+// A match's referee PIN: crypto.getRandomValues, never Math.random (pin_beach)
 function generateRefereePin() {
-  const chars = '0123456789'
-  let pin = ''
-  for (let i = 0; i < 6; i++) {
-    pin += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return pin
+  return securePin()
 }
 
 export default function App() {
@@ -133,6 +132,8 @@ export default function App() {
   const [cloudBackupLoading, setCloudBackupLoading] = useState(false)
   const [cloudBackupError, setCloudBackupError] = useState('')
   const [restorePreviewData, setRestorePreviewData] = useState(null) // { data, source: 'database'|'cloud'|'local' }
+  // An encrypted app backup file opens with the match's game PIN or referee PIN (audit SEC-22)
+  const { unlock: unlockBackup, dialog: backupUnlockDialog } = useBackupUnlock()
   const [testMatchLoading, setTestMatchLoading] = useState(false)
   const [newMatchMenuOpen, setNewMatchMenuOpen] = useState(false)
   const [homeOptionsModal, setHomeOptionsModal] = useState(false)
@@ -1678,14 +1679,19 @@ export default function App() {
       })
     }
 
-    // Build officials array
-    const officials = (compMatch.officials || []).map(o => ({
-      role: o.role || '',
-      firstName: o.firstName || o.first_name || '',
-      lastName: o.lastName || o.last_name || '',
-      country: o.country || '',
-      dob: licenceOf(o.dob)
-    }))
+    // Build officials array (an appointed referee's account address comes
+    // along: only that account approves as them, PERM-08)
+    const officials = (compMatch.officials || []).map(o => {
+      const email = REFEREE_ROLES.includes(officialRole(o.role)) ? cleanOfficialEmail(o.email) : null
+      return {
+        role: o.role || '',
+        firstName: o.firstName || o.first_name || '',
+        lastName: o.lastName || o.last_name || '',
+        country: o.country || '',
+        dob: licenceOf(o.dob),
+        ...(email ? { email } : {})
+      }
+    })
 
     // Parse scheduled_at
     const scheduledAt = compMatch.scheduled_at || null
@@ -3109,8 +3115,12 @@ export default function App() {
                             // Show preview instead of immediately restoring. A
                             // whole-database export (the set-end download) and a
                             // Match End file (the ZIP's MatchData JSON) are
-                            // previewed and restored as the match they hold.
-                            setRestorePreviewData({ data: matchBackupFromFile(jsonData), source: 'local' })
+                            // previewed and restored as the match they hold. An
+                            // encrypted app backup file is opened with a PIN
+                            // first (audit SEC-22); cancelled: nothing happens.
+                            const data = await unlockBackup(matchBackupFromFile(jsonData))
+                            if (!data) return
+                            setRestorePreviewData({ data, source: 'local' })
                           } catch (err) {
                             setRestoreError(err.message || 'Failed to restore from file')
                           } finally {
@@ -3180,6 +3190,9 @@ export default function App() {
                 }
               }}
             />
+
+            {/* The PIN of an encrypted backup file (useBackupUnlock_beach), above the Restore match dialog */}
+            {backupUnlockDialog}
 
             {/* Competition Match Picker (off until the backend serves competitions) */}
             {COMPETITIONS_ENABLED && (

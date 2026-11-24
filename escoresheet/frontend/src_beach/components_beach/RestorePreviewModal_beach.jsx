@@ -4,6 +4,7 @@ import { Button } from '../ui/volleyui/Button.jsx'
 import { Block } from '../ui/volleyui/Card.jsx'
 import { NOTICE } from '../ui/volleyui/tones.js'
 import { cn } from '../ui/volleyui/cn.js'
+import { backupFileTrust } from '../utils_beach/backupCrypto/envelope_beach'
 
 const points = (v) => (typeof v === 'number' ? v : Number(v) || 0)
 // An event's set in either shape: a local / JSON backup's setIndex, the
@@ -92,6 +93,9 @@ function Lineup({ lineup, t }) {
 /**
  * "Restore this match?": what the backup holds, then Restore / Choose another
  * / Cancel. Light volleyui dialog; the restore itself stays in App_beach.
+ * A file from the device that no PIN opened (backupFileTrust 'plain': a
+ * download, an older version's backup file) is marked as not verified: it
+ * could have been edited or planted (audit SEC-22).
  */
 export default function RestorePreviewModal({ preview, loading = false, error = '', onConfirm, onSelectAnother, onCancel }) {
   const { t } = useTranslation()
@@ -104,6 +108,8 @@ export default function RestorePreviewModal({ preview, loading = false, error = 
     : preview.source === 'cloud'
       ? t('restorePreview.fromCloud', 'From a cloud backup')
       : t('restorePreview.fromFile', 'From a local file')
+  const fromFile = preview.source !== 'database' && preview.source !== 'cloud'
+  const untrusted = fromFile && backupFileTrust(preview.data) === 'plain'
 
   return (
     <div className="ov-kit" style={{ position: 'relative', zIndex: 1000 }}>
@@ -131,6 +137,12 @@ export default function RestorePreviewModal({ preview, loading = false, error = 
           </>
         )}
       >
+        {untrusted && (
+          <div role="note" className={NOTICE.warning} data-testid="restore-preview-untrusted">
+            {t('restorePreview.untrusted')}
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-3 rounded-xl border border-stone-200/70 bg-stone-50/60 p-4">
           <div className="min-w-0 flex-1 text-center">
             <div className="truncate text-base font-semibold text-stone-900">{team1}</div>
