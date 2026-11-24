@@ -25,9 +25,9 @@ Binaries:
   https://github.com/Lucanepa/openbeach/releases/download/android-v%v/com.openvolley.beach_%c.apk
 
 Builds:
-  - versionName: 3.1.1
-    versionCode: 30010010
-    commit: c98c528ab972e6016a07cbce11f8e8be2467f980
+  - versionName: 26.11.0
+    versionCode: 260110000
+    commit: 3887a69275aeac552ac4650a854ab259dbb8ba10
     subdir: escoresheet/frontend/android/app
     sudo:
       - echo "deb https://deb.debian.org/debian forky main" > /etc/apt/sources.list.d/forky.list
@@ -50,5 +50,5 @@ AllowedAPKSigningKeys: 9faf8e1947e491a769a6da717afaa553c44de6fa9576dbceee19f099d
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^android-v[\d.]+$
-CurrentVersion: 3.1.1
-CurrentVersionCode: 30010010
+CurrentVersion: 26.11.0
+CurrentVersionCode: 260110000
