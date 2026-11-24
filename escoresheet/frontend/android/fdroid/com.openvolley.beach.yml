@@ -1,0 +1,54 @@
+# Reference copy of the fdroiddata recipe (metadata/com.openvolley.beach.yml),
+# adapted from OpenVolley's (android/fdroid/com.openvolley.escoresheet.yml).
+# AllowedAPKSigningKeys is the SHA-256 of the OpenBeach signing certificate
+# (~/.config/openbeach-android/cert.sha256; never OpenVolley's 2c7f9db4…).
+# Check a signed APK against it:
+#   apksigner verify --print-certs <signed apk> | grep SHA-256
+# The owner-signed APK must be on the GitHub release android-v<versionName>
+# as com.openvolley.beach_<versionCode>.apk (Binaries below), so F-Droid can
+# check its own build against it byte for byte (ANDROID.md).
+# No 2.0.0 build: its stylesheet order was not reproducible, so F-Droid's
+# rebuild would not match the signed APK (ANDROID.md, stable-css-order).
+Categories:
+  - Sports & Health
+License: GPL-3.0-or-later
+AuthorName: Luca Canepa
+WebSite: https://beach.openvolley.app
+SourceCode: https://github.com/Lucanepa/openbeach
+IssueTracker: https://github.com/Lucanepa/openbeach/issues
+
+AutoName: OpenBeach
+
+RepoType: git
+Repo: https://github.com/Lucanepa/openbeach.git
+Binaries: 
+  https://github.com/Lucanepa/openbeach/releases/download/android-v%v/com.openvolley.beach_%c.apk
+
+Builds:
+  - versionName: 26.11.0
+    versionCode: 260110000
+    commit: 3887a69275aeac552ac4650a854ab259dbb8ba10
+    subdir: escoresheet/frontend/android/app
+    sudo:
+      - echo "deb https://deb.debian.org/debian forky main" > /etc/apt/sources.list.d/forky.list
+      - apt-get update
+      - apt-get install -y -t forky nodejs npm
+    init:
+      - cd ../..
+      - npm ci --ignore-scripts
+    gradle:
+      - yes
+    prebuild:
+      - cd ../..
+      - CAPACITOR=true VITE_BACKEND_URL=https://backend.openvolley.app npx vite build
+        --outDir dist-capacitor --emptyOutDir
+      - npx cap sync android
+    scandelete:
+      - escoresheet/frontend/node_modules
+
+AllowedAPKSigningKeys: 9faf8e1947e491a769a6da717afaa553c44de6fa9576dbceee19f099dae1deae
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags ^android-v[\d.]+$
+CurrentVersion: 26.11.0
+CurrentVersionCode: 260110000

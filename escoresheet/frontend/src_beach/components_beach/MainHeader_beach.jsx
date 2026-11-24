@@ -1,0 +1,1124 @@
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
+import i18n from '../i18n'
+import ConnectionStatus from './ConnectionStatus_beach'
+import { useCollapseTransition } from '../hooks_beach/useCollapseTransition_beach'
+import TabletStatusIndicator from './TabletStatusIndicator_beach'
+import { useScaledLayout } from '../hooks_beach/useScaledLayout_beach'
+import { Bell, BookOpen, ChevronDown, ChevronUp, ClipboardList, House, Maximize, Menu, Minimize, Power, SatelliteDish, X, ZoomIn } from 'lucide-react'
+import { isDesktopScoretable, requestDesktopQuit } from '../utils_beach/appLifecycle_beach'
+import { getCloudApiUrl, isRelayOriginPage, isVenueMode } from '../utils_beach/backendConfig_beach'
+import UserButton from './auth/UserButton_beach'
+import { cn } from '../ui/volleyui/cn.js'
+import { SwitchTrack } from '../ui/volleyui/Switch.jsx'
+import { FOCUS_RING_INSET } from '../ui/volleyui/Button.jsx'
+import {
+  FOCUS_RING, KIT_SCOPE, HEADER_BAR, HEADER_BTN, HEADER_BTN_ON, HEADER_SWITCH, POPOVER_PANEL, MENU_PANEL, MENU_TITLE,
+  MENU_ROW, MENU_SUBROW, MENU_ROW_ON, MENU_NEST, MENU_SEP, MENU_ICON, MENU_COUNT, STATUS_PILL, STATUS_TONES
+} from './chromeClasses_beach'
+
+// Below this width the bar's controls lose their words (isCompactBar): with
+// the alarm bell, the tablet status and Sign in the full bar needs about
+// 704 px (Chromium, 2026-10-14). A longer connection status ("Sign in to
+// sync", or in French) needs more: the bar measures itself for that
+// (fullBarFrom)
+const COMPACT_BAR_BELOW = 720
+
+// The two groups of the bar never get narrower than their controls. By
+// default a group may shrink to its min-content width, where "Sign in" or the
+// status pill would wrap; their buttons don't wrap, so they spilled out of the
+// group over the match chip, with the group itself still inside the bar and
+// the fit check (fullBarFrom) blind to it (2026-10-15, 760 px, long status).
+// Now a bar that is too full runs past its right edge, and the check sees it
+const GROUP_MIN_WIDTH = 'max-content'
+
+// One object for every render: the header re-checks its fit when queueStats
+// changes
+const NO_QUEUE_STATS = { pending: 0, error: 0 }
+
+const FlagBox = ({ children }) => (
+  <span
+    style={{
+      width: '20px',
+      height: '14px',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flex: '0 0 20px',
+    }}
+  >
+    {children}
+  </span>
+)
+
+// Small flag SVG components
+const FlagGB = () => (
+  <svg width="20" height="14" viewBox="0 0 60 42" style={{ borderRadius: '2px', boxShadow: '0 0 1px rgba(0,0,0,0.3)' }}>
+    <rect width="60" height="42" fill="#012169" />
+    <path d="M0,0 L60,42 M60,0 L0,42" stroke="#fff" strokeWidth="7" />
+    <path d="M0,0 L60,42 M60,0 L0,42" stroke="#C8102E" strokeWidth="4" clipPath="url(#gbClip)" />
+    <path d="M30,0 V42 M0,21 H60" stroke="#fff" strokeWidth="12" />
+    <path d="M30,0 V42 M0,21 H60" stroke="#C8102E" strokeWidth="7" />
+  </svg>
+)
+
+const FlagIT = () => (
+  <svg width="20" height="14" viewBox="0 0 60 42" style={{ borderRadius: '2px', boxShadow: '0 0 1px rgba(0,0,0,0.3)' }}>
+    <rect width="20" height="42" fill="#009246" />
+    <rect x="20" width="20" height="42" fill="#fff" />
+    <rect x="40" width="20" height="42" fill="#CE2B37" />
+  </svg>
+)
+
+const FlagDE = () => (
+  <svg width="20" height="14" viewBox="0 0 60 42" style={{ borderRadius: '2px', boxShadow: '0 0 1px rgba(0,0,0,0.3)' }}>
+    <rect width="60" height="14" fill="#000" />
+    <rect y="14" width="60" height="14" fill="#DD0000" />
+    <rect y="28" width="60" height="14" fill="#FFCE00" />
+  </svg>
+)
+
+const FlagFR = () => (
+  <svg width="20" height="14" viewBox="0 0 60 42" style={{ borderRadius: '2px', boxShadow: '0 0 1px rgba(0,0,0,0.3)' }}>
+    <rect width="20" height="42" fill="#002395" />
+    <rect x="20" width="20" height="42" fill="#fff" />
+    <rect x="40" width="20" height="42" fill="#ED2939" />
+  </svg>
+)
+
+const FlagCH = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 32 32"
+    style={{
+      borderRadius: '2px',
+      boxShadow: '0 0 1px rgba(0,0,0,0.3)',
+    }}
+  >
+    {/* Red background */}
+    <rect width="32" height="32" fill="#ff0000" />
+
+    {/* Vertical arm */}
+    <rect x="14" y="6" width="4" height="20" fill="#fff" />
+
+    {/* Horizontal arm */}
+    <rect x="6" y="14" width="20" height="4" fill="#fff" />
+  </svg>
+)
+
+
+// Language options with flag components
+const languages = [
+  { code: 'en', Flag: FlagGB, label: 'EN' },
+  { code: 'it', Flag: FlagIT, label: 'IT' },
+  { code: 'de', Flag: FlagDE, label: 'DE' },
+  { code: 'de-CH', Flag: FlagCH, label: 'DE' },
+  { code: 'fr', Flag: FlagFR, label: 'FR' }
+]
+
+// The match info popover is centred on its button. On a phone the button sits
+// between the header's two groups, not in the middle of the screen, so the
+// popover is moved back inside the screen (8 px margin)
+function keepPopoverOnScreen(el) {
+  if (!el) return
+  el.style.left = ''
+  const r = el.getBoundingClientRect()
+  const vw = document.documentElement.clientWidth || window.innerWidth
+  const margin = 8
+  let shift = 0
+  if (r.right > vw - margin) shift = vw - margin - r.right
+  if (r.left + shift < margin) shift = margin - r.left
+  if (shift) el.style.left = `calc(50% + ${Math.round(shift)}px)`
+}
+
+export default function MainHeader({
+  connectionStatuses,
+  connectionDebugInfo,
+  showMatchSetup,
+  matchId,
+  currentMatch,
+  matchInfoMenuOpen,
+  setMatchInfoMenuOpen,
+  matchInfoData,
+  matchStatus,
+  currentOfficialMatch,
+  currentTestMatch,
+  isFullscreen,
+  toggleFullscreen,
+  offlineMode,
+  setOfflineMode,
+  onOpenSetup,
+  onRetryErrors,
+  queueStats = NO_QUEUE_STATS,
+  dashboardServer = null, // { enabled, dashboardCount, refereePin, onOpenOptions }
+  collapsible = false, // Only allow collapsing on Scoreboard page
+  startCollapsed = false, // Collapse when this turns true (the scoring screen's phone layout)
+  onTriggerAlarm = null, // Trigger scorer attention alarm
+  alarmEnabled = false, // Only show alarm when sync/dashboard is active
+  onOpenGuide = null, // Open the interactive app guide
+}) {
+  const { t } = useTranslation()
+  const { scaleFactor, userScaleOverride, setUserScaleOverride } = useScaledLayout()
+  const [scaleMenuOpen, setScaleMenuOpen] = useState(false)
+  const scaleOptions = [0.5, 0.75, 1.0, 1.25, 1.5]
+  const [languageMenuOpen, setLanguageMenuOpen] = useState(false)
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 })
+  const [editingSize, setEditingSize] = useState({ width: '', height: '' })
+  const [isEditing, setIsEditing] = useState(false)
+  const [dashboardMenuOpen, setDashboardMenuOpen] = useState(false)
+  const [dashboardMenuPos, setDashboardMenuPos] = useState({ top: 0, right: 12 })
+  const dashboardButtonRef = useRef(null)
+  // WxH indicator hidden by default - can be toggled via settings if needed
+  const [showViewportSize] = useState(() => {
+    const saved = localStorage.getItem('showViewportSize')
+    return saved === 'true' // Default to hidden
+  })
+  // Folded from the first frame on the phone scoring layout (no fold animation, no jump)
+  const [isCollapsed, setIsCollapsed] = useState(() => !!startCollapsed)
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
+  const touchStartY = useRef(0)
+  const headerRef = useRef(null)
+  const rightGroupRef = useRef(null)
+  // Use version from package.json (injected by Vite at build time)
+  const currentVersion = __APP_VERSION__
+
+  // Check if compact mode (viewport width <= 960px)
+  const isCompactMode = viewportSize.width > 0 && viewportSize.width <= 960
+  // A phone's width (either way up) or an upright 7" tablet (600 px): the
+  // bar's controls lose their words and the match chip gives up its arrow
+  // and shrinks (emulator audit 2026-10-14: at 384 px Sign in and Exit ran
+  // off the screen; OpenVolley's header the same, PR openvolley#13; at
+  // 640 px the chip covered the alarm bell). Also wider, where the full bar
+  // was measured not to fit (fullBarFrom)
+  const [fullBarFrom, setFullBarFrom] = useState(COMPACT_BAR_BELOW)
+  const isCompactBar = viewportSize.width > 0 && viewportSize.width < fullBarFrom
+
+  // Effective collapsed state - only collapse when collapsible is true
+  const effectivelyCollapsed = collapsible && isCollapsed
+  // Animated only while it collapses or expands, not on an app scale change
+  const headerTransition = useCollapseTransition(effectivelyCollapsed)
+
+  // What the bar says changed (a shorter status, another language, a smaller
+  // scale): try the full bar again; the check below puts the compact one back
+  // before paint if it still does not fit (CodeRabbit, openbeach#7). Before
+  // the check, so a measurement in the same commit has the last word
+  useLayoutEffect(() => {
+    setFullBarFrom(COMPACT_BAR_BELOW)
+  }, [i18n.language, offlineMode, connectionStatuses, queueStats, scaleFactor])
+
+  // The full bar does not fit (a long connection status, a translation:
+  // "Se connecter pour synchroniser" with the referee tablet on put Sign in
+  // under the match chip at 720-760 px and ran the bar past the right edge,
+  // and covered Hide header at 800 px, 2026-10-15): the compact one from this
+  // width down, until the window is wider or the bar's content changes.
+  // Checked before paint, and again when a group grows later (Connecting ->
+  // Sign in to sync, a tablet turned on). OpenVolley the same (openvolley#20)
+  useLayoutEffect(() => {
+    const bar = headerRef.current
+    const right = rightGroupRef.current
+    if (isCompactBar || effectivelyCollapsed || !bar || !right || !viewportSize.width) return
+    const check = () => {
+      const barBox = bar.getBoundingClientRect()
+      if (!barBox.width) return
+      const padRight = parseFloat(getComputedStyle(bar).paddingRight) || 0
+      if (right.getBoundingClientRect().right > barBox.right - padRight + 1) {
+        setFullBarFrom(viewportSize.width + 1)
+      }
+    }
+    check()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(check)
+    for (const group of bar.children) observer.observe(group)
+    return () => observer.disconnect()
+  }, [isCompactBar, effectivelyCollapsed, viewportSize.width, scaleFactor])
+
+  // The phone scoring layout fills the screen: the header starts folded
+  // away (its thin bar opens it again)
+  useEffect(() => {
+    if (startCollapsed) setIsCollapsed(true)
+  }, [startCollapsed])
+
+  // Handle touch events for swipe to show/hide header (compact mode only for touch)
+  useEffect(() => {
+    // Touch swipe only works in compact mode when collapsible
+    if (!isCompactMode || !collapsible) {
+      return
+    }
+
+    const handleTouchStart = (e) => {
+      touchStartY.current = e.touches[0].clientY
+    }
+
+    const handleTouchEnd = (e) => {
+      const touchEndY = e.changedTouches[0].clientY
+      const deltaY = touchEndY - touchStartY.current
+
+      // If touch started near top of screen (within 60px) and swiped down
+      if (touchStartY.current < 60 && deltaY > 30) {
+        setIsCollapsed(false)
+      }
+      // If touch started anywhere and swiped up significantly
+      else if (deltaY < -50 && !isCollapsed) {
+        setIsCollapsed(true)
+      }
+    }
+
+    document.addEventListener('touchstart', handleTouchStart)
+    document.addEventListener('touchend', handleTouchEnd)
+
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart)
+      document.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [isCompactMode, isCollapsed, collapsible])
+
+  // Track viewport dimensions
+  useEffect(() => {
+    const updateViewportSize = () => {
+      const newSize = {
+        width: window.innerWidth,
+        height: window.innerHeight
+      }
+      setViewportSize(newSize)
+      // Update editing values if not currently editing
+      if (!isEditing) {
+        setEditingSize({
+          width: newSize.width.toString(),
+          height: newSize.height.toString()
+        })
+      }
+    }
+
+    // Set initial size
+    const initialSize = {
+      width: window.innerWidth,
+      height: window.innerHeight
+    }
+    setViewportSize(initialSize)
+    setEditingSize({
+      width: initialSize.width.toString(),
+      height: initialSize.height.toString()
+    })
+
+    // Update on resize
+    window.addEventListener('resize', updateViewportSize)
+    return () => window.removeEventListener('resize', updateViewportSize)
+  }, [isEditing])
+
+  // The actions menu closes on a press anywhere else (it stayed open, sharp
+  // above the match-end export, with "Quit OpenBeach…" pressable, video 08:26)
+  useEffect(() => {
+    if (!actionsMenuOpen) return undefined
+    const onPointerDown = (e) => {
+      if (e.target?.closest?.('[data-ob-actions-menu]')) return
+      setActionsMenuOpen(false)
+      setLanguageMenuOpen(false)
+      setScaleMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    return () => document.removeEventListener('pointerdown', onPointerDown, true)
+  }, [actionsMenuOpen])
+
+  // Close dashboard menu when clicking outside
+  useEffect(() => {
+    if (!dashboardMenuOpen) return
+    const handleClickOutside = (e) => {
+      if (dashboardButtonRef.current && !dashboardButtonRef.current.contains(e.target)) {
+        setDashboardMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [dashboardMenuOpen])
+
+  // Calculate dashboard menu position
+  const openDashboardMenu = () => {
+    if (dashboardButtonRef.current) {
+      const rect = dashboardButtonRef.current.getBoundingClientRect()
+      const menuWidth = 280
+      // Calculate right position, ensuring menu stays within viewport
+      let rightPos = window.innerWidth - rect.right
+      // If menu would overflow left side, align to left edge with padding
+      if (rect.right - menuWidth < 12) {
+        rightPos = window.innerWidth - menuWidth - 12
+      }
+      setDashboardMenuPos({
+        top: rect.bottom + 8,
+        right: Math.max(12, rightPos)
+      })
+    }
+    setDashboardMenuOpen(!dashboardMenuOpen)
+  }
+
+  // Handle viewport resize
+  const handleResizeViewport = () => {
+    const width = parseInt(editingSize.width)
+    const height = parseInt(editingSize.height)
+
+    if (!isNaN(width) && !isNaN(height) && width > 0 && height > 0) {
+      try {
+        // Try to resize the window
+        // Note: window.resizeTo() only works if:
+        // 1. The window was opened by window.open() (popup)
+        // 2. In Electron apps (which this appears to be)
+        // 3. In some browser extensions
+
+        // Set minimum sizes for safety
+        const minWidth = 300
+        const minHeight = 200
+        const safeWidth = Math.max(width, minWidth)
+        const safeHeight = Math.max(height, minHeight)
+
+        if (typeof window.resizeTo === 'function') {
+          window.resizeTo(safeWidth, safeHeight)
+          // Update state after a brief delay to allow resize to complete
+          setTimeout(() => {
+            setViewportSize({
+              width: window.innerWidth,
+              height: window.innerHeight
+            })
+          }, 100)
+        } else {
+          // If resizeTo is not available, just update the display
+          setViewportSize({ width: safeWidth, height: safeHeight })
+        }
+      } catch (e) {
+        console.warn('Could not resize window:', e)
+        // Still update the display even if resize fails
+        setViewportSize({ width, height })
+      }
+    } else {
+      // Invalid input, revert to current size
+      setEditingSize({
+        width: viewportSize.width.toString(),
+        height: viewportSize.height.toString()
+      })
+    }
+    setIsEditing(false)
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleResizeViewport()
+    } else if (e.key === 'Escape') {
+      setEditingSize({
+        width: viewportSize.width.toString(),
+        height: viewportSize.height.toString()
+      })
+      setIsEditing(false)
+    }
+  }
+
+  const renderMatchInfoMenu = (match, matchData) => {
+    if (!matchData) return null
+
+    return (
+      <div
+        data-match-info-menu
+        ref={keepPopoverOnScreen}
+        onClick={(e) => e.stopPropagation()}
+        className={cn('ov-kit absolute left-1/2 top-full mt-1.5 flex min-w-[280px] -translate-x-1/2 flex-col gap-2 text-center', POPOVER_PANEL)}
+        style={{ zIndex: 1000 }}
+      >
+        {/* Match Number */}
+        <div className={MENU_TITLE}>{t('header.notSynced')}</div>
+        <div className="text-sm font-bold tabular-nums text-stone-900">
+          {t('header.match')} {(matchData.match.gameNumber || matchData.match.game_n) ? (matchData.match.gameNumber || matchData.match.game_n) : t('header.notSet')}
+        </div>
+
+        {/* Match ID - for debugging/support */}
+        {matchId && (
+          <div className="font-mono text-[10px] text-stone-500">
+            ID: {matchId}
+          </div>
+        )}
+
+        {/* Teams */}
+        <div className="text-sm font-medium text-stone-700">
+          {(matchData.team1?.name && matchData.team2?.name)
+            ? `${matchData.team1.name} - ${matchData.team2.name}`
+            : t('header.notSet')}
+        </div>
+
+        {/* Date and Time */}
+        <div className="text-xs tabular-nums text-stone-500">
+          {matchData.match.scheduledAt ? (
+            (() => {
+              try {
+                const date = new Date(matchData.match.scheduledAt)
+                // Display as UTC (no timezone conversion) since we store time as-entered
+                // Explicitly format as dd.mm.yyyy HH:mm
+                const day = String(date.getUTCDate()).padStart(2, '0')
+                const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+                const year = date.getUTCFullYear()
+                const hours = String(date.getUTCHours()).padStart(2, '0')
+                const minutes = String(date.getUTCMinutes()).padStart(2, '0')
+                return `${day}.${month}.${year} ${hours}:${minutes}`
+              } catch {
+                return matchData.match.scheduledAt
+              }
+            })()
+          ) : t('header.notSet')}
+        </div>
+
+        {/* PIN or TEST */}
+        <div className={cn(
+          'rounded-lg border px-3 py-1.5 text-sm font-semibold',
+          matchData.match.test
+            ? 'border-amber-200 bg-amber-50 text-[11px] uppercase tracking-[0.08em] text-amber-800'
+            : 'border-stone-200 bg-stone-50 font-mono tracking-[0.3em] text-stone-900'
+        )}>
+          {matchData.match.test ? t('header.test') : (matchData.match.gamePin || 'N/A')}
+        </div>
+      </div>
+    )
+  }
+
+  const renderMatchInfoButton = (match) => {
+    // Hide button if no match exists or no valid match number (unless it's a test match)
+    if (!match || (!match.test && !match.gameNumber && !match.game_n)) return null
+
+    const isTest = match?.test
+    const matchNumber = match?.gameNumber || match?.game_n || 'N/A'
+    const fullText = isTest ? t('header.testMatch') : t('header.matchNumber', { number: matchNumber })
+    const buttonText = isCompactBar ? (isTest ? t('header.test') : `#${matchNumber}`) : fullText
+
+    // On a phone the chip gets the room the header leaves it (the alarm bell
+    // and the tablet status take some): no arrow, and a label that ends in
+    // "…" instead of spilling over its border (emulator 2026-10-14, 360 px
+    // with the referee tablet on)
+    return (
+      <div className={cn('relative flex h-8 w-auto items-center justify-center', isCompactBar ? 'min-w-0 gap-1' : 'gap-1.5')}>
+        <span className={KIT_SCOPE}>
+          <button
+            type="button"
+            data-match-info-menu
+            aria-expanded={matchInfoMenuOpen}
+            aria-label={isCompactBar ? fullText : undefined}
+            title={isCompactBar ? fullText : undefined}
+            onClick={(e) => {
+              e.stopPropagation()
+              // One header popup at a time: on a phone they overlap
+              if (!matchInfoMenuOpen) setActionsMenuOpen(false)
+              setMatchInfoMenuOpen(!matchInfoMenuOpen)
+            }}
+            className={cn(
+              'inline-flex h-7 items-center justify-center gap-1 rounded-full border text-xs font-semibold tabular-nums transition-colors cursor-pointer',
+              isCompactBar ? 'min-w-0 px-2' : 'min-w-[100px] px-3',
+              FOCUS_RING,
+              isTest
+                ? 'border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200/70'
+                : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-100'
+            )}
+          >
+            <span className={isCompactBar ? 'truncate' : undefined}>{buttonText}</span>
+            {!isCompactBar && (
+              <ChevronDown size={13} aria-hidden="true" className={cn('transition-transform', matchInfoMenuOpen && 'rotate-180')} />
+            )}
+          </button>
+        </span>
+
+        {/* Header collapse toggle button */}
+        {collapsible && (
+          <span className={KIT_SCOPE}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsCollapsed(!isCollapsed)
+              }}
+              className={cn(HEADER_BTN, 'h-7 w-7 shrink-0 px-0')}
+              aria-label={isCollapsed ? t('header.showHeader', 'Show header') : t('header.hideHeader', 'Hide header')}
+              title={isCollapsed ? t('header.showHeader', 'Show header') : t('header.hideHeader', 'Hide header')}
+            >
+              <ChevronUp size={15} aria-hidden="true" className={cn('transition-transform', isCollapsed && 'rotate-180')} />
+            </button>
+          </span>
+        )}
+
+        {/* Collapsible Match Info Menu - hide when header is collapsed */}
+        {matchInfoMenuOpen && matchInfoData && !effectivelyCollapsed && renderMatchInfoMenu(match, matchInfoData)}
+      </div>
+    )
+  }
+
+  // One look for every row of the header menus (compact and desktop).
+  const currentLanguage = languages.find(l => l.code === i18n.language)
+  const CurrentFlag = currentLanguage ? currentLanguage.Flag : FlagGB
+  const isCurrentScale = (scale) => userScaleOverride === scale || (userScaleOverride === null && scale === 1.0)
+
+  const languageOptions = (
+    <div className={MENU_NEST}>
+      {languages.map((lang) => (
+        <button
+          type="button"
+          key={lang.code}
+          aria-pressed={i18n.language === lang.code}
+          onClick={(e) => {
+            e.stopPropagation()
+            i18n.changeLanguage(lang.code)
+            setLanguageMenuOpen(false)
+          }}
+          className={cn(MENU_SUBROW, i18n.language === lang.code && MENU_ROW_ON)}
+        >
+          <FlagBox><lang.Flag /></FlagBox>
+          <span>{lang.label}</span>
+        </button>
+      ))}
+    </div>
+  )
+
+  const scaleOptionsList = (
+    <div className={MENU_NEST}>
+      {scaleOptions.map((scale) => (
+        <button
+          type="button"
+          key={scale}
+          aria-pressed={isCurrentScale(scale)}
+          onClick={(e) => {
+            e.stopPropagation()
+            setUserScaleOverride(scale === 1.0 ? null : scale)
+            setScaleMenuOpen(false)
+          }}
+          className={cn(MENU_SUBROW, 'justify-center tabular-nums', isCurrentScale(scale) && MENU_ROW_ON)}
+        >
+          <span>{Math.round(scale * 100)}%{scale === 1.0 ? ` (${t('header.default', 'Default')})` : ''}</span>
+        </button>
+      ))}
+    </div>
+  )
+
+  const fullscreenRow = (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        toggleFullscreen()
+        setActionsMenuOpen(false)
+      }}
+      className={MENU_ROW}
+    >
+      <span className={MENU_ICON}>{isFullscreen ? <Minimize size={15} /> : <Maximize size={15} />}</span>
+      <span>{isFullscreen ? t('header.exitFullscreen') : t('header.fullscreen')}</span>
+    </button>
+  )
+
+  // Fullscreen sits in the bar next to the menu (one tap, not a menu row);
+  // the compact layout keeps it in its own actions menu (fullscreenRow)
+  const fullscreenButton = (
+    <span className={KIT_SCOPE}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          toggleFullscreen()
+        }}
+        aria-pressed={!!isFullscreen}
+        className={cn(HEADER_BTN, 'w-9 px-0', isFullscreen && HEADER_BTN_ON)}
+        aria-label={isFullscreen ? t('header.exitFullscreen') : t('header.fullscreen')}
+        title={isFullscreen ? t('header.exitFullscreen') : t('header.fullscreen')}
+        data-testid="header-fullscreen"
+      >
+        {isFullscreen ? <Minimize size={16} aria-hidden="true" /> : <Maximize size={16} aria-hidden="true" />}
+      </button>
+    </span>
+  )
+
+  // The version history is gone, so the version is a plain line (no control).
+  const versionRow = (
+    <div className={cn(MENU_ROW, 'cursor-default text-stone-500 hover:bg-transparent')} data-testid="header-version">
+      <span className={MENU_ICON}><ClipboardList size={14} /></span>
+      <span className="tabular-nums">v{currentVersion}</span>
+    </div>
+  )
+
+  const languageRow = (
+    <button
+      type="button"
+      aria-expanded={languageMenuOpen}
+      onClick={(e) => {
+        e.stopPropagation()
+        setLanguageMenuOpen(!languageMenuOpen)
+      }}
+      className={cn(MENU_ROW, languageMenuOpen && 'bg-stone-100')}
+    >
+      <span className={MENU_ICON}><CurrentFlag /></span>
+      <span>{currentLanguage?.label || 'EN'}</span>
+      <ChevronDown size={14} aria-hidden="true" className={cn('ml-auto text-stone-400 transition-transform', languageMenuOpen && 'rotate-180')} />
+    </button>
+  )
+
+  const scaleRow = (
+    <button
+      type="button"
+      aria-expanded={scaleMenuOpen}
+      onClick={(e) => {
+        e.stopPropagation()
+        setScaleMenuOpen(!scaleMenuOpen)
+      }}
+      className={cn(MENU_ROW, scaleMenuOpen && 'bg-stone-100')}
+    >
+      <span className={MENU_ICON}><ZoomIn size={14} /></span>
+      <span>{t('header.scale', 'Scale')}</span>
+      <span className={MENU_COUNT}>{Math.round(scaleFactor * 100)}%</span>
+    </button>
+  )
+
+  // Home: back to the setup of the open match (shown only away from home).
+  const homeRow = matchId && onOpenSetup && (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        onOpenSetup()
+        setActionsMenuOpen(false)
+      }}
+      className={MENU_ROW}
+    >
+      <span className={MENU_ICON}><House size={15} /></span>
+      <span>{t('Home')}</span>
+    </button>
+  )
+
+  const guideRow = onOpenGuide && (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        onOpenGuide()
+        setActionsMenuOpen(false)
+      }}
+      className={MENU_ROW}
+    >
+      <span className={MENU_ICON}><BookOpen size={15} /></span>
+      <span>{t('interactiveGuide.title', 'App guide')}</span>
+    </button>
+  )
+
+  // Desktop app: the window's close button hides to the tray (the tablets
+  // stay connected), so quitting is a menu row that asks first
+  // (utils_beach/appLifecycle_beach.js, src-tauri/src/lifecycle.rs).
+  const quitRow = isDesktopScoretable() && (
+    <>
+      <div className={MENU_SEP} />
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          setActionsMenuOpen(false)
+          requestDesktopQuit()
+        }}
+        className={MENU_ROW}
+        data-testid="header-quit-app"
+      >
+        <span className={MENU_ICON}><Power size={15} /></span>
+        <span>{t('appLifecycle.trayQuit', 'Quit OpenBeach…')}</span>
+      </button>
+    </>
+  )
+
+  return (
+    <div className="no-print" style={{ position: 'relative', zIndex: 1000 }}>
+      <div
+        ref={headerRef}
+        data-diag="header"
+        className={effectivelyCollapsed ? 'bg-white' : HEADER_BAR}
+        style={{
+          display: 'flex',
+          height: effectivelyCollapsed ? '0px' : `${40 * scaleFactor}px`,
+          minHeight: effectivelyCollapsed ? '0px' : `${40 * scaleFactor}px`,
+          maxHeight: effectivelyCollapsed ? '0px' : `${40 * scaleFactor}px`,
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: effectivelyCollapsed ? '0' : `0 ${Math.round((isCompactBar ? 8 : 12) * scaleFactor)}px`,
+          flexShrink: 0,
+          gap: `${Math.round((isCompactBar ? 6 : 10) * scaleFactor)}px`,
+          overflow: effectivelyCollapsed ? 'hidden' : 'visible',
+          transition: headerTransition,
+          fontSize: `${Math.round(14 * scaleFactor)}px`
+        }}>
+        {/* Left: Online/Offline Toggle + Connection Status. Wider than a
+            phone, it and the right group share the room left and right of
+            the match chip equally, so the chip sits in the middle of the bar
+            and moves aside when a group needs more: centred over the bar, it
+            covered the alarm bell at 800 px (2026-10-14). Never narrower
+            than its controls (GROUP_MIN_WIDTH) */}
+        <div style={{ flex: isCompactBar ? '0 0 auto' : '1 1 0', minWidth: GROUP_MIN_WIDTH, display: 'flex', alignItems: 'center', gap: isCompactBar ? '4px' : '8px' }}>
+          {/* Online/Offline Toggle */}
+          <span className={KIT_SCOPE}>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={!offlineMode}
+              onClick={() => setOfflineMode(!offlineMode)}
+              title={offlineMode ? t('header.switchToOnline') : t('header.switchToOffline')}
+              className={cn(HEADER_SWITCH, isCompactBar && 'pl-1.5')}
+            >
+              <span className={isCompactBar ? 'sr-only' : undefined}>{offlineMode ? t('header.offline') : t('header.online')}</span>
+              {/* Switch track: emerald when online (no brand red on a state) */}
+              <SwitchTrack checked={!offlineMode} className={!offlineMode ? 'bg-emerald-500' : undefined} />
+            </button>
+          </span>
+
+          {/* Connection Status - only show in online mode */}
+          {!offlineMode && (
+            <ConnectionStatus
+              venueMode={isVenueMode()}
+              connectionStatuses={connectionStatuses}
+              connectionDebugInfo={connectionDebugInfo}
+              queueStats={queueStats}
+              onRetryErrors={onRetryErrors}
+              position="left"
+              size="normal"
+              compact={isCompactBar}
+            />
+          )}
+
+          {/* Tablet Status - show per-role connection health when a match is active */}
+          {currentMatch && (
+            <TabletStatusIndicator match={currentMatch} compact={isCompactBar} />
+          )}
+
+          {/* Alarm Bell Button - visible if alarm is enabled and match is active */}
+          {alarmEnabled && onTriggerAlarm && matchId && (
+            <span className={KIT_SCOPE}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onTriggerAlarm()
+                }}
+                aria-label={t('header.alarmBellNotify', 'Alarm bell: notify the referee')}
+                title={t('header.alarmBellNotify', 'Alarm bell: notify the referee')}
+                className={cn(HEADER_BTN, HEADER_BTN_ON, 'w-9 px-0')}
+              >
+                <Bell size={14} aria-hidden="true" />
+              </button>
+            </span>
+          )}
+
+          {/* Dashboard Server Indicator */}
+          {dashboardServer?.enabled && (
+            <div ref={dashboardButtonRef} style={{ position: 'relative' }}>
+              <span className={KIT_SCOPE}>
+                <button
+                  type="button"
+                  onClick={openDashboardMenu}
+                  aria-expanded={dashboardMenuOpen}
+                  title={`${dashboardServer.dashboardCount || 0} dashboard(s) connected${dashboardServer.refereePin ? ` | PIN: ${dashboardServer.refereePin}` : ''}`}
+                  className={cn(STATUS_PILL, FOCUS_RING, dashboardServer.dashboardCount > 0 ? STATUS_TONES.ok.pill : STATUS_TONES.neutral.pill)}
+                >
+                  <SatelliteDish size={13} aria-hidden="true" />
+                  <span className="tabular-nums">{dashboardServer.dashboardCount || 0}</span>
+                  {dashboardServer.refereePin && (
+                    <span className="rounded bg-stone-100 px-1.5 py-px font-mono text-[10px] tracking-[0.15em] text-stone-700">
+                      {dashboardServer.refereePin}
+                    </span>
+                  )}
+                  <ChevronDown size={12} aria-hidden="true" className={cn('opacity-70 transition-transform', dashboardMenuOpen && 'rotate-180')} />
+                </button>
+              </span>
+
+              {/* Dashboard Connection Info Dropdown */}
+              {dashboardMenuOpen && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn('ov-kit fixed w-[280px] max-w-[calc(100vw-24px)] space-y-3 text-sm', POPOVER_PANEL)}
+                  style={{
+                    top: `${dashboardMenuPos.top}px`,
+                    right: `${dashboardMenuPos.right}px`,
+                    zIndex: 1000
+                  }}
+                >
+                  <div className={cn('border-b border-stone-100 pb-2', MENU_TITLE)}>
+                    {t('header.dashboardConnectionInfo')}
+                  </div>
+
+                  {/* Server Status */}
+                  <div className="flex items-center gap-2">
+                    <span className={cn('inline-block h-2 w-2 rounded-full', dashboardServer.serverRunning ? 'bg-emerald-500' : 'bg-red-500')}></span>
+                    <span className="text-xs font-semibold text-stone-800">
+                      {dashboardServer.serverRunning ? t('header.serverRunning') : t('header.serverNotRunning')}
+                    </span>
+                  </div>
+
+                  {/* IP Address - Prominent Display */}
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-center">
+                    <div className="mb-1 text-[11px] text-stone-500">
+                      {t('header.connectDevicesToIp')}
+                    </div>
+                    <div className="font-mono text-base font-semibold text-emerald-800">
+                      {dashboardServer.serverIP || t('header.notAvailable')}
+                      {dashboardServer.serverPort && dashboardServer.serverPort !== 80 && dashboardServer.serverPort !== 443 && (
+                        <span className="text-stone-500">:{dashboardServer.serverPort}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Connection URLs */}
+                  {dashboardServer.serverIP && (
+                    <div className="rounded-lg border border-stone-200 bg-stone-50 p-2.5">
+                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+                        {t('header.dashboardUrls')}
+                      </div>
+                      <div className="flex flex-col gap-1.5 font-mono text-[11px] text-stone-700">
+                        {dashboardServer.connectionUrl && (
+                          <div className="break-all">
+                            <span className="mr-1 text-stone-500">{t('header.referee')}:</span>
+                            <span>{dashboardServer.connectionUrl}/referee</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Connected Dashboards Count */}
+                  <div className="rounded-lg border border-stone-200 bg-stone-50 p-2.5">
+                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+                      {t('header.connectedDevices')}
+                    </div>
+                    <div className="flex gap-4 text-xs text-stone-700">
+                      <div>
+                        <span className="text-stone-500">{t('header.total')}: </span>
+                        <span className="font-semibold tabular-nums">{dashboardServer.dashboardCount || 0}</span>
+                      </div>
+                      <div>
+                        <span className="text-stone-500">{t('header.referees')}: </span>
+                        <span className="font-semibold tabular-nums">{dashboardServer.refereeCount || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PIN */}
+                  {dashboardServer.refereePin && (
+                    <div className="rounded-lg border border-stone-200 bg-stone-50 p-2.5">
+                      <div className="mb-1 text-[11px] text-stone-500">{t('header.matchPin')}</div>
+                      <div className="font-mono text-lg font-semibold tracking-[0.3em] text-stone-900">
+                        {dashboardServer.refereePin}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* More Options Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDashboardMenuOpen(false)
+                      dashboardServer.onOpenOptions?.()
+                    }}
+                    className={cn('inline-flex h-10 w-full items-center justify-center rounded-lg border border-stone-300 bg-white px-4 text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors cursor-pointer', FOCUS_RING)}
+                  >
+                    {t('header.moreOptions')}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Center: Collapsible Match Info Menu, between the two equal groups */}
+        {/* Only show when match has a gamePin set OR is a test match */}
+        {!effectivelyCollapsed && (((showMatchSetup || matchId) && currentMatch && (currentMatch.gamePin || currentMatch.test)) || (!matchId && matchStatus && (currentOfficialMatch || currentTestMatch) && ((currentOfficialMatch || currentTestMatch)?.gamePin || (currentOfficialMatch || currentTestMatch)?.test))) ? (
+          <div style={{
+            // In the row, between the two groups: centred over the bar it
+            // covered the connection status on a phone and the alarm bell at
+            // 800 px. On a phone its label shrinks to fit.
+            position: 'relative',
+            flex: isCompactBar ? '0 1 auto' : '0 0 auto',
+            minWidth: 0,
+            zIndex: 101
+          }}>
+            {(showMatchSetup || matchId) && currentMatch ? (
+              renderMatchInfoButton(currentMatch)
+            ) : (
+              renderMatchInfoButton(currentOfficialMatch || currentTestMatch)
+            )}
+          </div>
+        ) : null}
+
+        {/* Right: the app menu */}
+        <div ref={rightGroupRef} style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          gap: isCompactBar ? '6px' : 'clamp(8px, 1.5vw, 12px)',
+          flex: isCompactBar ? '0 0 auto' : '1 1 0',
+          minWidth: GROUP_MIN_WIDTH,
+          alignSelf: 'stretch',
+          position: 'relative'
+        }}>
+          {/* The account: sign in / out on a shared court tablet. Only where
+              the cloud is there (not offline, not a venue relay's page) */}
+          {!offlineMode && !isRelayOriginPage() && getCloudApiUrl('/api/auth/sign-in') && (
+            <span className={KIT_SCOPE}>
+              <UserButton buttonClass={cn(HEADER_BTN, 'min-w-9')} compact={isCompactBar} />
+            </span>
+          )}
+
+          {/* Compact Mode: Collapsible Actions Menu */}
+          {isCompactMode ? (
+            <div style={{ position: 'relative' }} data-ob-actions-menu="">
+              <span className={KIT_SCOPE}>
+                <button
+                  type="button"
+                  aria-expanded={actionsMenuOpen}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (!actionsMenuOpen) setMatchInfoMenuOpen?.(false)
+                    setActionsMenuOpen(!actionsMenuOpen)
+                  }}
+                  className={cn(HEADER_BTN, isCompactBar && 'w-9 px-0', actionsMenuOpen && HEADER_BTN_ON)}
+                  aria-label={isCompactBar ? t('header.menu', 'Menu') : undefined}
+                  title={isCompactBar ? t('header.menu', 'Menu') : undefined}
+                >
+                  {isCompactBar ? (
+                    actionsMenuOpen ? <X size={16} aria-hidden="true" /> : <Menu size={16} aria-hidden="true" />
+                  ) : (
+                    <>
+                      <span>{isFullscreen ? t('header.exit') : t('header.fullscreen')}</span>
+                      <ChevronDown size={13} aria-hidden="true" className={cn('transition-transform', actionsMenuOpen && 'rotate-180')} />
+                    </>
+                  )}
+                </button>
+              </span>
+
+              {/* Expanded Actions Menu */}
+              {actionsMenuOpen && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn('ov-kit absolute right-0 top-full mt-1.5 flex min-w-[220px] max-h-[calc(100vh-56px)] flex-col overflow-y-auto', MENU_PANEL)}
+                  style={{ zIndex: 1000 }}
+                >
+                  {fullscreenRow}
+                  {versionRow}
+                  {languageRow}
+                  {languageMenuOpen && languageOptions}
+                  {scaleRow}
+                  {scaleMenuOpen && scaleOptionsList}
+                  {homeRow}
+                  {guideRow}
+                  {quitRow}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Desktop Mode: Unified hamburger menu */
+            <>
+              {/* Viewport Size Display - Editable (hidden by default) */}
+              {showViewportSize && (
+                <div className="ov-kit flex items-center gap-1 whitespace-nowrap text-xs tabular-nums text-stone-500">
+                  {isEditing ? (
+                    <>
+                      <input
+                        type="number"
+                        aria-label={t('header.viewportWidth', 'Width')}
+                        value={editingSize.width}
+                        onChange={(e) => setEditingSize({ ...editingSize, width: e.target.value })}
+                        onKeyDown={handleKeyDown}
+                        onBlur={handleResizeViewport}
+                        autoFocus
+                        className="h-7 w-[60px] rounded-md border border-stone-300 bg-white px-1 text-center text-xs text-stone-800 outline-none focus:ring-2 focus:ring-red-500"
+                      />
+                      <span>×</span>
+                      <input
+                        type="number"
+                        aria-label={t('header.viewportHeight', 'Height')}
+                        value={editingSize.height}
+                        onChange={(e) => setEditingSize({ ...editingSize, height: e.target.value })}
+                        onKeyDown={handleKeyDown}
+                        onBlur={handleResizeViewport}
+                        className="h-7 w-[60px] rounded-md border border-stone-300 bg-white px-1 text-center text-xs text-stone-800 outline-none focus:ring-2 focus:ring-red-500"
+                      />
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingSize({
+                          width: viewportSize.width.toString(),
+                          height: viewportSize.height.toString()
+                        })
+                        setIsEditing(true)
+                      }}
+                      className={cn('rounded px-1 py-0.5 text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors', FOCUS_RING)}
+                      title={t('header.viewportEdit', 'Click to edit and resize the viewport')}
+                    >
+                      {viewportSize.width} × {viewportSize.height}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {fullscreenButton}
+
+              {/* Unified Menu Button (hamburger) */}
+              <div style={{ position: 'relative' }} data-ob-actions-menu="">
+                <span className={KIT_SCOPE}>
+                  <button
+                    type="button"
+                    aria-expanded={actionsMenuOpen}
+                    aria-label={t('header.menu', 'Menu')}
+                    title={t('header.menu', 'Menu')}
+                    data-help-id="header-menu-button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setActionsMenuOpen(!actionsMenuOpen)
+                      setLanguageMenuOpen(false)
+                      setScaleMenuOpen(false)
+                    }}
+                    className={cn(HEADER_BTN, 'w-9 px-0', actionsMenuOpen && HEADER_BTN_ON)}
+                  >
+                    {actionsMenuOpen ? <X size={16} aria-hidden="true" /> : <Menu size={16} aria-hidden="true" />}
+                  </button>
+                </span>
+
+                {/* Unified Actions Menu */}
+                {actionsMenuOpen && (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className={cn('ov-kit absolute right-0 top-full mt-1.5 flex min-w-[240px] max-h-[calc(100vh-56px)] flex-col overflow-y-auto', MENU_PANEL)}
+                    style={{ zIndex: 1000 }}
+                  >
+                    {homeRow}
+                    {guideRow}
+                    {(homeRow || guideRow) && <div className={MENU_SEP} />}
+                    {languageRow}
+                    {languageMenuOpen && languageOptions}
+                    {scaleRow}
+                    {scaleMenuOpen && scaleOptionsList}
+                    {versionRow}
+                    {quitRow}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+      </div>
+      {/* Show thin expand bar when header is collapsed. It stays 16px high
+          (the phone layout counts on it), but over the phone scoring screen
+          its middle takes taps 48px down, over the screen's title (no button
+          there): the bar alone was too small a target on a phone (OpenVolley
+          52ad0acc, 012a5d68). Its width stays clear of the phone header's
+          Undo and Menu buttons (2 x 44px + gaps, 106px from the right edge):
+          100% - 224px keeps a 6px gap on a 320-360px phone. Elsewhere the
+          toolbar below has buttons there. */}
+      {effectivelyCollapsed && (
+        <span className={KIT_SCOPE}>
+          <button
+            type="button"
+            onClick={() => setIsCollapsed(false)}
+            aria-label={t('header.showHeader', 'Show header')}
+            title={t('header.showHeader', 'Show header')}
+            className={cn('relative flex h-4 w-full items-center justify-center overflow-visible border-0 border-b border-stone-200/70 bg-white p-0 text-stone-500 hover:bg-stone-100 transition-colors', FOCUS_RING_INSET)}
+          >
+            <ChevronDown size={14} aria-hidden="true" />
+            {startCollapsed && <span aria-hidden="true" data-testid="header-expand-target" className="absolute left-1/2 top-0 h-12 w-[min(40%,calc(100%_-_224px),200px)] -translate-x-1/2" />}
+          </button>
+        </span>
+      )}
+    </div>
+  )
+}

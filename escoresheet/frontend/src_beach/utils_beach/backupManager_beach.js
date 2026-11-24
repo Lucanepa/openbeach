@@ -1,0 +1,2094 @@
+/**
+ * Backup Manager - Handles automatic backup to file system
+ *
+ * Chrome/Edge: Uses File System Access API for direct folder writes
+ * Safari/Firefox: Falls back to periodic auto-downloads
+ */
+
+import { db } from '../db_beach/db_beach'
+import { wipeMatchEvents, withoutEventHistory } from '../db_beach/eventHistory_beach'
+import { apiFrom, apiStorage, apiMatchRestoreByPin } from '../lib_beach/apiClient_beach'
+import { isBackendAvailable, getApiUrl } from '../utils_beach/backendConfig_beach'
+import { sanitizeSimple } from './stringUtils'
+import { remarksForServer } from '../db_beach/remarksSync_beach'
+import { isTeam1LeftInSet, leftTeamInSet } from './courtSides_beach'
+import { labelsInDesignation, eventTeamA } from './coinToss_beach'
+import { cleanIntervalChoices } from './intervalChoice_beach'
+import { refereeConnectionDefault } from '../constants_beach/testSeeds_beach'
+import { jobMatchKey, setExtId, eventExtId, parseExtId } from './syncIds_beach'
+import { queueScorerClaim, isScorerMoved, isKnownClosedOnServer, MATCH_CLOSED } from './matchHandover_beach'
+import { CLOSING_STATUSES } from './matchReopen_beach'
+import { postMatchSignaturesFromServer } from './signatures_beach'
+import { listMatchBackups } from './logger_beach'
+import { officialsList } from './officials_beach'
+import { isEncryptedBackup, unlockedPin } from './backupCrypto/envelope_beach'
+import { securePin } from './pin_beach'
+
+// IndexedDB key for storing file system directory handle
+const BACKUP_DB_NAME = 'escoresheet_backup'
+const BACKUP_DIR_HANDLE_KEY = 'backup_directory_handle'
+
+// Sport type for beach volleyball
+const SPORT_TYPE = 'beach'
+
+// Valid Supabase matches table columns - used to filter restore payloads
+// to prevent sending invalid columns that don't exist in the schema
+const VALID_MATCH_COLUMNS = [
+  'external_id', 'game_n', 'game_pin', 'status', 'connections', 'connection_pins',
+  'scheduled_at', 'match_info', 'officials', 'players_team1',
+  'players_team2', 'team1_data', 'team2_data', 'coin_toss', 'results', 'signatures',
+  'approval', 'test', 'created_at', 'updated_at', 'manual_changes', 'current_set',
+  'set_results', 'final_score', 'sanctions', 'winner', 'sport_type',
+  // backend db/017: the scoresheet REMARKS box (text). Not public on the server.
+  'remarks'
+]
+
+// The backup's remarks for the restore job (backend db/017). A backup without
+// the field (an app before it) sends none, so the server keeps what it has.
+function restoreRemarks(match) {
+  return typeof match?.remarks === 'string' ? { remarks: remarksForServer(match.remarks) } : {}
+}
+
+/**
+ * Filter match payload to only include valid Supabase columns
+ * Prevents sync errors from old backup formats with invalid column names
+ */
+function filterMatchPayload(payload) {
+  return Object.fromEntries(
+    Object.entries(payload).filter(([key]) => VALID_MATCH_COLUMNS.includes(key))
+  )
+}
+
+/**
+ * Check if File System Access API is available
+ */
+export function isFileSystemAccessSupported() {
+  return 'showDirectoryPicker' in window
+}
+
+/**
+ * Store directory handle in IndexedDB for persistence
+ */
+export async function storeDirectoryHandle(handle) {
+  return new Promise((resolve, reject) => {
+    const dbRequest = indexedDB.open(BACKUP_DB_NAME, 1)
+
+    dbRequest.onerror = () => reject(dbRequest.error)
+    dbRequest.onupgradeneeded = (event) => {
+      const database = event.target.result
+      if (!database.objectStoreNames.contains('handles')) {
+        database.createObjectStore('handles')
+      }
+    }
+    dbRequest.onsuccess = () => {
+      const database = dbRequest.result
+      const tx = database.transaction('handles', 'readwrite')
+      const store = tx.objectStore('handles')
+      store.put(handle, BACKUP_DIR_HANDLE_KEY)
+      tx.oncomplete = () => {
+        database.close()
+        resolve()
+      }
+      tx.onerror = () => {
+        database.close()
+        reject(tx.error)
+      }
+    }
+  })
+}
+
+/**
+ * Retrieve stored directory handle from IndexedDB
+ */
+export async function getStoredDirectoryHandle() {
+  return new Promise((resolve, reject) => {
+    const dbRequest = indexedDB.open(BACKUP_DB_NAME, 1)
+
+    dbRequest.onerror = () => reject(dbRequest.error)
+    dbRequest.onupgradeneeded = (event) => {
+      const database = event.target.result
+      if (!database.objectStoreNames.contains('handles')) {
+        database.createObjectStore('handles')
+      }
+    }
+    dbRequest.onsuccess = () => {
+      const database = dbRequest.result
+      const tx = database.transaction('handles', 'readonly')
+      const store = tx.objectStore('handles')
+      const request = store.get(BACKUP_DIR_HANDLE_KEY)
+      request.onsuccess = () => {
+        database.close()
+        resolve(request.result || null)
+      }
+      request.onerror = () => {
+        database.close()
+        reject(request.error)
+      }
+    }
+  })
+}
+
+/**
+ * Clear stored directory handle from IndexedDB
+ */
+export async function clearStoredDirectoryHandle() {
+  return new Promise((resolve, reject) => {
+    const dbRequest = indexedDB.open(BACKUP_DB_NAME, 1)
+
+    dbRequest.onerror = () => reject(dbRequest.error)
+    dbRequest.onupgradeneeded = (event) => {
+      const database = event.target.result
+      if (!database.objectStoreNames.contains('handles')) {
+        database.createObjectStore('handles')
+      }
+    }
+    dbRequest.onsuccess = () => {
+      const database = dbRequest.result
+      const tx = database.transaction('handles', 'readwrite')
+      const store = tx.objectStore('handles')
+      store.delete(BACKUP_DIR_HANDLE_KEY)
+      tx.oncomplete = () => {
+        database.close()
+        resolve()
+      }
+      tx.onerror = () => {
+        database.close()
+        reject(tx.error)
+      }
+    }
+  })
+}
+
+/**
+ * Request permission for directory handle
+ */
+export async function verifyDirectoryPermission(handle) {
+  if (!handle) return false
+
+  try {
+    const permission = await handle.queryPermission({ mode: 'readwrite' })
+    if (permission === 'granted') return true
+
+    const requestResult = await handle.requestPermission({ mode: 'readwrite' })
+    return requestResult === 'granted'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Select backup directory using File System Access API
+ */
+export async function selectBackupDirectory() {
+  if (!isFileSystemAccessSupported()) {
+    throw new Error('File System Access API not supported in this browser')
+  }
+
+  const handle = await window.showDirectoryPicker({
+    mode: 'readwrite',
+    startIn: 'documents'
+  })
+
+  await storeDirectoryHandle(handle)
+  return handle
+}
+
+/**
+ * Export a single match with all related data
+ */
+export async function exportMatchData(matchId) {
+  const match = await db.matches.get(matchId)
+  if (!match) throw new Error('Match not found')
+
+  // Get related data
+  const [team1, team2] = await Promise.all([
+    match.team1Id ? db.teams.get(match.team1Id) : null,
+    match.team2Id ? db.teams.get(match.team2Id) : null
+  ])
+
+  const [team1Players, team2Players] = await Promise.all([
+    match.team1Id ? db.players.where('teamId').equals(match.team1Id).toArray() : [],
+    match.team2Id ? db.players.where('teamId').equals(match.team2Id).toArray() : []
+  ])
+
+  const sets = await db.sets.where('matchId').equals(matchId).toArray()
+  const events = await db.events.where('matchId').equals(matchId).toArray()
+
+  return {
+    version: 1, // Schema version for future compatibility
+    lastUpdated: new Date().toISOString(),
+    match,
+    team1,
+    team2,
+    team1Players,
+    team2Players,
+    sets,
+    events
+  }
+}
+
+/**
+ * Generate backup filename with UTC timestamp
+ * Format: backup_g[gameN]_set[setN]_scoreleft[left]_scoreright[right]_[yyyymmdd]_[hhmm].json
+ */
+export function generateBackupFilename(data) {
+  const gameN = data?.match?.gameN || data?.match?.game_n || 1
+
+  // Get latest set info
+  let setIndex = 1
+  let leftScore = 0
+  let rightScore = 0
+  if (data?.sets?.length > 0) {
+    const latestSet = data.sets.sort((a, b) => (b.index || 0) - (a.index || 0))[0]
+    if (latestSet) {
+      setIndex = latestSet.index || 1
+      leftScore = latestSet.team1Points || 0
+      rightScore = latestSet.team2Points || 0
+    }
+  }
+
+  // Generate UTC timestamp in yyyymmdd_hhmm format
+  const now = new Date()
+  const utcDate = now.toISOString().slice(0, 10).replace(/-/g, '') // yyyymmdd
+  const utcTime = now.toISOString().slice(11, 16).replace(':', '') // hhmm
+
+  return `backup_g${gameN}_set${setIndex}_scoreleft${leftScore}_scoreright${rightScore}_${utcDate}_${utcTime}.json`
+}
+
+/**
+ * Write match backup to file system (Chrome/Edge). The file is the full
+ * exportMatchData, PINs included, so it can move a match to another device;
+ * only the app's per-event backup files (nativeBackup) leave the PINs out.
+ */
+export async function writeMatchBackup(matchId, directoryHandle) {
+  const data = await exportMatchData(matchId)
+  const filename = generateBackupFilename(data)
+
+  try {
+    const fileHandle = await directoryHandle.getFileHandle(filename, { create: true })
+    const writable = await fileHandle.createWritable()
+    await writable.write(JSON.stringify(data, null, 2))
+    await writable.close()
+    return { success: true, filename }
+  } catch (error) {
+    console.error('Error writing backup:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Download match backup as file (Safari/Firefox fallback). The full
+ * exportMatchData, PINs included, like the folder backup.
+ */
+export async function downloadMatchBackup(matchId) {
+  const data = await exportMatchData(matchId)
+  const filename = generateBackupFilename(data)
+
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+
+  return filename
+}
+
+// Local key of a match (seed_key; older rows used seedKey / externalId)
+const localMatchKey = (m) => m?.seed_key || m?.seedKey || m?.externalId || m?.external_id || null
+
+// The match-row PINs a restore keeps or makes: the game PIN and the
+// connection PINs (connectionPins_beach: referee, benches, uploads)
+const LOCAL_CONNECTION_PIN_FIELDS = ['refereePin', 'team1Pin', 'team2Pin', 'team1UploadPin', 'team2UploadPin']
+const LOCAL_PIN_FIELDS = ['gamePin', ...LOCAL_CONNECTION_PIN_FIELDS]
+const hasValue = (v) => v !== undefined && v !== null && String(v).trim() !== ''
+
+// A 6-digit PIN, distinct from the given ones (pin_beach: unbiased digits of
+// crypto.getRandomValues, no Math.random fallback)
+function newPin(existing) {
+  return securePin({ exclude: existing })
+}
+
+/**
+ * The PINs of a match restored from an app backup file (nativeBackup), which
+ * carries none (secretsRemoved, nativeBackup/redact_beach): those of the local
+ * copy it replaces, then the PIN that opened the file when it was encrypted
+ * (the match's own, not a new one), else new ones (a new game PIN only for an
+ * official match). {} for other backups (browser download / folder files,
+ * cloud backups), which keep exactly their own.
+ * @param {object} jsonData the backup
+ * @param {object|null} previous the local copy being replaced
+ */
+export function pinsForRestore(jsonData, previous) {
+  if (!jsonData?.secretsRemoved) return {}
+  const match = jsonData.match || {}
+  const pins = {}
+  for (const f of LOCAL_PIN_FIELDS) {
+    if (!hasValue(match[f]) && hasValue(previous?.[f])) pins[f] = String(previous[f]).trim()
+  }
+  const typed = unlockedPin(jsonData)
+  if (typed && !hasValue(match[typed.field]) && !hasValue(pins[typed.field])) pins[typed.field] = String(typed.value).trim()
+  const merged = { ...match, ...pins }
+  const existing = LOCAL_PIN_FIELDS.map(f => merged[f]).filter(hasValue).map(v => String(v).trim())
+  for (const f of LOCAL_CONNECTION_PIN_FIELDS) {
+    if (hasValue(merged[f])) continue
+    pins[f] = newPin(existing)
+    existing.push(pins[f])
+  }
+  if (!match.test && !hasValue(merged.gamePin) && !hasValue(match.game_pin)) {
+    pins.gamePin = newPin(existing)
+  }
+  return pins
+}
+
+/**
+ * The referee connection of a restored test match whose backup has none (a
+ * test match made before OB-11b): on, as a new test match. A backup that has
+ * it keeps the scorer's own choice; an official match is left as it is.
+ * @param {object} match the backup's match
+ * @returns {object} what to add to it
+ */
+/**
+ * The cloud block a restored match keeps. A backup taken after another device
+ * took the match over carries its OV_SCORER_MOVED block, but restoring it is
+ * this device's take-over (the restore job names the device, db/019): the
+ * block goes, or ScorerMovedModal_beach would stay over the restored match
+ * whatever the server answers. A block saying the match was closed there
+ * stays (the server refuses the restore as closed anyway).
+ */
+export function restoredBlock(match) {
+  return isScorerMoved(match) && match.cloudBlock?.closed !== true ? { cloudBlock: null } : {}
+}
+
+export function connectionsForRestore(match) {
+  if (match?.test !== true || match.refereeConnectionEnabled !== undefined) return {}
+  return { refereeConnectionEnabled: refereeConnectionDefault(match) }
+}
+
+/**
+ * The match backup inside a whole-database export: the scoreboard's set-end
+ * download (a browser's only automatic backup offline) and its other
+ * exports write every table of the device as { exportDate, matchId,
+ * matches, teams, players, sets, events, ... }, which the restore refused.
+ * The match of its `matchId` with its teams, players, sets and events, in
+ * exportMatchData's shape; null for any other file. (OpenVolley
+ * matchBackupFromDatabaseExport.)
+ * @param {object} jsonData a parsed backup file
+ */
+export function matchBackupFromDatabaseExport(jsonData) {
+  if (!jsonData || jsonData.match || !Array.isArray(jsonData.matches)) return null
+  const match = jsonData.matches.find(m => m && m.id != null && String(m.id) === String(jsonData.matchId))
+  if (!match) return null
+  const rows = (list) => (Array.isArray(list) ? list.filter(Boolean) : [])
+  const teamOf = (id) => (id != null ? rows(jsonData.teams).find(t => t.id === id) || null : null)
+  const playersOf = (id) => (id != null ? rows(jsonData.players).filter(p => p.teamId === id) : [])
+  return {
+    version: 1,
+    lastUpdated: jsonData.exportDate || null,
+    match,
+    team1: teamOf(match.team1Id),
+    team2: teamOf(match.team2Id),
+    team1Players: playersOf(match.team1Id),
+    team2Players: playersOf(match.team2Id),
+    sets: rows(jsonData.sets).filter(r => r.matchId === match.id),
+    events: rows(jsonData.events).filter(r => r.matchId === match.id)
+  }
+}
+
+/**
+ * The match backup inside a file Match End writes: the MatchData_*.json in
+ * the ZIP that Approve downloads, as the app wrote it before 2026-10-30
+ * ({ match: { ...the match row, team1, team2 }, team1Players, team2Players,
+ * sets, events, exportedAt }), and the scoresheet JSON the approval stores
+ * in the cloud (scoresheetJsonBlob: the teams beside the match, uploadedAt).
+ * Neither has `version`: the restore refused the one file a scorer keeps of
+ * an approved match. In exportMatchData's shape (the teams taken out of the
+ * match row); null for any other file. (OpenVolley
+ * matchBackupFromMatchEndExport.)
+ * @param {object} jsonData a parsed backup file
+ */
+export function matchBackupFromMatchEndExport(jsonData) {
+  const isRecord = (v) => !!v && typeof v === 'object' && !Array.isArray(v)
+  if (!isRecord(jsonData) || jsonData.version || !isRecord(jsonData.match)) return null
+  if (!Array.isArray(jsonData.sets) && !Array.isArray(jsonData.events)) return null
+  const { team1, team2, ...match } = jsonData.match
+  const rows = (list) => (Array.isArray(list) ? list.filter(Boolean) : [])
+  return {
+    version: 1,
+    lastUpdated: jsonData.exportedAt || jsonData.uploadedAt || null,
+    match,
+    team1: isRecord(jsonData.team1) ? jsonData.team1 : (isRecord(team1) ? team1 : null),
+    team2: isRecord(jsonData.team2) ? jsonData.team2 : (isRecord(team2) ? team2 : null),
+    team1Players: rows(jsonData.team1Players),
+    team2Players: rows(jsonData.team2Players),
+    sets: rows(jsonData.sets),
+    events: rows(jsonData.events)
+  }
+}
+
+/**
+ * A match file in the shape the restores read (exportMatchData's): a backup
+ * file as it is, a whole-database export or a Match End file converted.
+ * Every picked file and both restores go through it. An encrypted app
+ * backup comes back as it is: the scorer opens it with a PIN first
+ * (hooks_beach/useBackupUnlock_beach), then it is a backup file like the
+ * others.
+ * @param {object} jsonData a parsed backup file
+ */
+export function matchBackupFromFile(jsonData) {
+  if (isEncryptedBackup(jsonData)) return jsonData
+  return matchBackupFromDatabaseExport(jsonData) || matchBackupFromMatchEndExport(jsonData) || jsonData
+}
+
+// An encrypted backup handed to a restore before it was opened with a PIN
+export const BACKUP_LOCKED_ERROR = 'OV_BACKUP_LOCKED'
+
+/**
+ * The MatchData_*.json of the match-end ZIP (MatchEnd_beach, Approve): the
+ * backup file format (exportMatchData), so Restore match takes it back as it
+ * is, with the time it was written as exportedAt too.
+ * @param {{ match: object, team1?: object, team2?: object, team1Players?: object[], team2Players?: object[], sets?: object[], events?: object[] }} data
+ * @param {Date} [now]
+ */
+export function matchEndExportData({ match, team1, team2, team1Players, team2Players, sets, events }, now = new Date()) {
+  const at = now.toISOString()
+  return {
+    version: 1,
+    lastUpdated: at,
+    match,
+    team1: team1 || null,
+    team2: team2 || null,
+    team1Players: team1Players || [],
+    team2Players: team2Players || [],
+    sets: sets || [],
+    events: events || [],
+    exportedAt: at
+  }
+}
+
+// How long a restore waits for the server's answer before it goes on without
+// it: the restore's Confirm must never wait long on a slow backend.
+const SERVER_CLOSED_TIMEOUT_MS = 4000
+const TIMED_OUT = Symbol('timedOut')
+
+// Public columns behind a public filter, so this also works signed out and
+// sees every match, not only this account's.
+const readServerStatus = (key) =>
+  apiFrom('matches').select('external_id, status, test').eq('external_id', key).maybeSingle()
+
+/**
+ * Is this match closed on the server? Closed is the server guard's rule
+ * (db/007): a non-test match at approved/final (closed_at is set on the first
+ * such write and is not a public column; an admin reopen writes 'ended').
+ * true / false, or null when unknown: no key, offline, the read failed or did
+ * not answer within timeoutMs. A match the server does not have is not closed.
+ * (OpenVolley backupManager serverClosedState.)
+ * @param {string} externalId
+ * @param {{read?: (key: string) => PromiseLike<{data: object|null, error: object|null}>, timeoutMs?: number}} [options]
+ * @returns {Promise<boolean|null>}
+ */
+export async function serverClosedState(externalId, { read = readServerStatus, timeoutMs = SERVER_CLOSED_TIMEOUT_MS } = {}) {
+  if (!externalId) return null
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return null
+  let timer
+  try {
+    const timeout = new Promise(resolve => { timer = setTimeout(() => resolve(TIMED_OUT), timeoutMs) })
+    const result = await Promise.race([read(externalId), timeout])
+    if (result === TIMED_OUT || !result || result.error) return null
+    const row = result.data
+    if (!row) return false
+    return row.test !== true && CLOSING_STATUSES.includes(row.status)
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** The error a restore of a match closed on the server is refused with. */
+export function closedOnServerError(externalId, gameN) {
+  const err = new Error('This match is closed on the server')
+  err.code = MATCH_CLOSED
+  err.externalId = externalId
+  err.gameN = gameN ?? null
+  return err
+}
+
+// A backup of a match the server has closed restores a live copy whose
+// restore job the server refuses for good (409 OV_MATCH_CLOSED: OpenVolley
+// 2026-10-20, match 406970). Such a restore is refused before anything is
+// replaced (a backup of the closed match itself is restored on the device
+// only, isClosedBackup, and never asked about). The server's answer decides; an explicit "open" (an admin
+// reopened it) wins over stale local evidence. Only when the server cannot be
+// asked does local evidence decide: the backup row or a local copy known
+// closed there. (OpenVolley 4032fc8b.)
+async function refuseIfClosedOnServer(externalId, backupMatch, localCopies, checkServer) {
+  const server = await checkServer(externalId)
+  const closed = server === true ||
+    (server == null && (isKnownClosedOnServer(backupMatch) || localCopies.some(isKnownClosedOnServer)))
+  if (closed) {
+    console.warn('[Restore] Refused: match is closed on the server:', externalId)
+    throw closedOnServerError(externalId, backupMatch?.gameN ?? backupMatch?.game_n ?? localCopies[0]?.gameN)
+  }
+}
+
+// A restore the guard let through drops this device's "closed on the server"
+// evidence (the OV_MATCH_CLOSED block, the server's closed_at) from the rows
+// it writes. Rows carrying it pass the guard only when the server answered
+// open (an admin reopened the match), but every backup taken after the first
+// refusal keeps it (exportMatchData writes the whole row): restored with it,
+// the copy would open as closed on the server instead of the scoring screen.
+// If the match is still closed, the restore job's own refusal records it again.
+function withoutClosedEvidence(...rows) {
+  const changes = {}
+  if (rows.some(r => r?.cloudBlock?.code === MATCH_CLOSED)) changes.cloudBlock = null
+  if (rows.some(r => r?.closed_at)) changes.closed_at = null
+  return changes
+}
+
+// A backup of an approved or final match: once the match is closed on the
+// server, the server refuses every write of it (db/007, 409
+// OV_MATCH_CLOSED), a restore job on every retry. Such a file is restored on
+// the device only: it holds the closed match itself, which opens on Match
+// End and is never written to the server again, so the closed guard
+// (refuseIfClosedOnServer) does not ask about it. (An approval here keeps
+// the status 'ended' and sets approved; approved / final come from the
+// server.)
+const isClosedBackup = (match) => match?.approved === true || CLOSING_STATUSES.includes(match?.status)
+
+// Ids given out above the highest one a backup carries: the device that
+// wrote it may have used (and undone) more after it wrote the file
+const RESTORE_ID_MARGIN = 1000
+
+/**
+ * Make this device give out set and event ids above every id the backup of
+ * match `seedKey` carries (its rows' local ids, the cloud ids of rows
+ * imported from the cloud, an `idFloor` { set, event } like restore-by-pin's)
+ * plus RESTORE_ID_MARGIN. A restore gives the rows new local ids and its
+ * restore job keys the cloud rows by them; the server re-inserts the events
+ * and one whose external_id has a latest 'void' revision (event_revisions
+ * survives a restore) is born voided (backend db/015). A fresh device
+ * restoring another device's file gave out ids from 1: the restored
+ * ':e:20' was voided because the other device had undone its own ':e:20'.
+ * Inside the restore's transaction (sets, events), after its match row.
+ */
+async function raiseIdsAboveBackup(jsonData, seedKey, matchId) {
+  const floor = jsonData.idFloor || {}
+  const top = (rows, kind, own) => (rows || []).reduce((max, r) => Math.max(
+    max,
+    Number.isSafeInteger(r?.id) ? r.id : 0,
+    cloudLocalId(seedKey, kind, r?.externalId ?? r?.external_id) || 0
+  ), Number.isSafeInteger(Number(own)) ? Number(own) : 0)
+  // the generators' rows are added and removed again: no history
+  await withoutEventHistory(matchId, async () => {
+    await raiseIdGenerator(db.sets, top(jsonData.sets, 'set', floor.set) + RESTORE_ID_MARGIN, { matchId, index: 0 })
+    await raiseIdGenerator(db.events, top(jsonData.events, 'event', floor.event) + RESTORE_ID_MARGIN, { matchId, type: 'rally_start', setIndex: 0, seq: 0 })
+  })
+}
+
+/**
+ * Restore match from JSON backup data
+ * REPLACE: removes this match's local copy (other local matches are kept),
+ * restores it from the backup and queues the Supabase restore.
+ * Refused (err.code 'OV_MATCH_CLOSED', nothing changed) for a backup of a
+ * match still open in it that the server has closed; a test backup, and the
+ * backup of an approved or final match, never ask.
+ * Refused (err.code BACKUP_LOCKED_ERROR) for an encrypted app backup file
+ * not opened with a PIN yet (audit SEC-22).
+ * @param {object} jsonData the backup
+ * @param {{checkServer?: (externalId: string) => Promise<boolean|null>}} [options]
+ */
+export async function restoreMatchFromJson(jsonData, { checkServer = serverClosedState } = {}) {
+  if (isEncryptedBackup(jsonData)) {
+    throw Object.assign(new Error('This backup file is encrypted: open it with the game PIN or the referee PIN first'), { code: BACKUP_LOCKED_ERROR })
+  }
+  // A whole-database export holds the match it was written for, a Match End
+  // file the match in its own shape
+  jsonData = matchBackupFromFile(jsonData)
+  // Validate schema
+  if (!jsonData?.version || !jsonData.match) {
+    throw new Error('Invalid backup file format')
+  }
+
+  const { team1, team2, team1Players, team2Players, sets, events } = jsonData
+  let match = jsonData.match
+
+  // Get external_id for Supabase sync (seed_key in local, external_id in
+  // backup; older rows seedKey / externalId): the key the copy it replaces is
+  // found by (localMatchKey). Without externalId, a backup keyed by it alone
+  // replaced nothing and was added again on every restore.
+  const externalId = localMatchKey(match)
+  if (!externalId) {
+    console.warn('[Restore] No external_id found - Supabase sync will be skipped')
+  }
+
+  // Before anything is deleted, added or queued (test matches never sync;
+  // the backup of a closed match is restored on the device only, without a
+  // restore job: isClosedBackup)
+  const guarded = !!externalId && !match.test && !isClosedBackup(match)
+  if (guarded) {
+    const localCopies = await db.matches.filter(m => localMatchKey(m) === externalId).toArray()
+    await refuseIfClosedOnServer(externalId, match, localCopies, checkServer)
+  }
+
+  let restoredMatchId = null
+
+  // Start transaction - REPLACE this match only
+  await db.transaction('rw', db.matches, db.teams, db.players, db.sets, db.events, db.event_history, db.sync_queue, async () => {
+    // STEP A: remove THIS match's local copy (by seed_key) with its sets,
+    // events, event history, teams and players. Other local matches (and a
+    // team row one of them still uses), referees and scorers are kept: the
+    // restore cleared every match, set and event on the device, so restoring
+    // one match lost the others (as OpenVolley b3227e75, 92a288da).
+    const previous = externalId ? await db.matches.filter(m => localMatchKey(m) === externalId).toArray() : []
+    // An app backup file has no PINs: keep those of the local copy it
+    // replaces (read before it goes), or make new ones
+    match = { ...match, ...pinsForRestore(jsonData, previous[0] || null), ...connectionsForRestore(match) }
+    const replacedIds = new Set(previous.map(old => old.id))
+    for (const old of previous) {
+      // replaced, not undone: the restored events are not voided
+      // (db_beach/eventHistory_beach). The copy's history goes with it, as
+      // when a match is deleted: no match has its local id any more.
+      await wipeMatchEvents(db, old.id, { dropHistory: true })
+      await db.sets.where('matchId').equals(old.id).delete()
+      await db.matches.delete(old.id)
+      for (const teamId of [old.team1Id, old.team2Id]) {
+        if (teamId == null) continue
+        const usedElsewhere = await db.matches.filter(m => !replacedIds.has(m.id) && (m.team1Id === teamId || m.team2Id === teamId)).count()
+        if (usedElsewhere) continue
+        await db.players.where('teamId').equals(teamId).delete()
+        await db.teams.delete(teamId)
+      }
+    }
+    if (previous.length) console.debug(`[Restore] Replaced ${previous.length} local copy/copies of match ${externalId}`)
+    // The queue keeps the unsent writes of other matches: a match closed
+    // offline before (Close match deleted its local copy) has nothing else
+    // left on the device. This match's jobs go (the restore job below
+    // replaces them), and so does anything that cannot be attributed to a
+    // match (stress test 2026-10-25: clearing the table lost a match's end).
+    const queuedJobs = await db.sync_queue.toArray()
+    const keepJob = (j) => j.resource === 'activity' || (!!jobMatchKey(j) && jobMatchKey(j) !== externalId)
+    await db.sync_queue.bulkDelete(queuedJobs.filter(j => !keepJob(j)).map(j => j.id))
+
+    // STEP B: the restored match's own team rows, always new. A team found
+    // by name could be another local match's (the same pair plays several
+    // matches of a tournament): the restore overwrote it and replaced its
+    // players, and both matches shared one row.
+    let team1Id = null
+    let team2Id = null
+
+    if (team1) {
+      team1Id = await db.teams.add({
+        ...team1,
+        id: undefined,
+        createdAt: new Date().toISOString()
+      })
+    }
+
+    if (team2) {
+      team2Id = await db.teams.add({
+        ...team2,
+        id: undefined,
+        createdAt: new Date().toISOString()
+      })
+    }
+
+    // New auto-increment id: other local matches keep theirs
+    const matchId = await db.matches.add({
+      ...match,
+      ...restoredBlock(match),
+      ...(guarded ? withoutClosedEvidence(match) : {}),
+      id: undefined,
+      team1Id,
+      team2Id,
+      seed_key: externalId, // Ensure seed_key is set for sync
+      restoredAt: new Date().toISOString()
+    })
+
+    restoredMatchId = matchId
+
+    // Create players (the teams are new: no players to replace)
+    if (team1Players?.length && team1Id) {
+      for (const player of team1Players) {
+        await db.players.add({
+          ...player,
+          id: undefined,
+          teamId: team1Id
+        })
+      }
+    }
+
+    if (team2Players?.length && team2Id) {
+      for (const player of team2Players) {
+        await db.players.add({
+          ...player,
+          id: undefined,
+          teamId: team2Id
+        })
+      }
+    }
+
+    // Create sets and events with new auto-increment ids (fixed ids would
+    // collide with other local matches' rows); the cloud external_id is
+    // built from them (setsPayload / eventsPayload below). Above every id
+    // the backup carries: never one the server has voided.
+    if (externalId) await raiseIdsAboveBackup(jsonData, externalId, matchId)
+    const newSetIds = []
+    for (const set of sets || []) {
+      newSetIds.push(await db.sets.add({ ...set, id: undefined, matchId }))
+    }
+    const newEventIds = []
+    for (const event of events || []) {
+      newEventIds.push(await db.events.add({ ...event, id: undefined, matchId }))
+    }
+
+    // STEP C: Queue Supabase 'restore' sync job (DELETE first, then UPSERT);
+    // none for an approved or final match (isClosedBackup)
+    if (externalId && isClosedBackup(match)) {
+      console.warn(`[Restore] ${externalId} is approved or final: restored on this device only, no restore job`)
+    } else if (externalId) {
+
+      // Build match payload for Supabase (convert local field names to Supabase column names)
+      const matchPayload = {
+        external_id: externalId,
+        sport_type: SPORT_TYPE,
+        game_pin: match.gamePin || match.game_pin,
+        game_n: match.gameN || match.game_n,
+        status: match.status || 'live',
+        team1_data: team1 ? {
+          name: team1.name,
+          short_name: team1.shortName || team1.short_name,
+          color: team1.color
+        } : null,
+        team2_data: team2 ? {
+          name: team2.name,
+          short_name: team2.shortName || team2.short_name,
+          color: team2.color
+        } : null,
+        players_team1: team1Players || [],
+        players_team2: team2Players || [],
+        ...restoreRemarks(match),
+        // Include match_info fields (stored as JSONB)
+        match_info: {
+          hall: match.hall,
+          city: match.city,
+          league: match.league,
+          championship_type: match.championshipType || match.championship_type,
+          ...(match.matchInfo || match.match_info || {})
+        },
+        coin_toss: coinTossForRestore(match)
+      }
+
+      // Build sets payload (convert local to Supabase format)
+      // external_id from the NEW local id (above): this device's later writes
+      // of the set (the set end, Manual changes) send setExtId(seed, localId),
+      // and an undo's revision eventExtId(seed, localId). The backup's own
+      // ids (`<seed>_set_<index>`, or an imported row's old externalId) left
+      // those writes matching no cloud row.
+      const setsPayload = (sets || []).map((s, i) => ({
+        external_id: setExtId(externalId, newSetIds[i]),
+        index: s.index,
+        team1_points: s.team1Points ?? s.team1_points ?? 0,
+        team2_points: s.team2Points ?? s.team2_points ?? 0,
+        finished: s.finished || false,
+        start_time: s.startTime || s.start_time,
+        end_time: s.endTime || s.end_time
+      }))
+
+      // Build events payload (convert local to Supabase format)
+      const eventsPayload = (events || []).map((e, i) => ({
+        external_id: eventExtId(externalId, newEventIds[i]),
+        set_index: e.setIndex ?? e.set_index,
+        type: e.type,
+        payload: e.payload,
+        ts: e.ts,
+        seq: e.seq
+      }))
+
+      // Build live state payload from latest set data
+      const latestSet = sets?.length > 0
+        ? [...sets].sort((a, b) => (b.index || 0) - (a.index || 0))[0]
+        : null
+      const finishedSets = (sets || []).filter(s => s.finished)
+      const team1SetsWon = finishedSets.filter(s => (s.team1Points ?? s.team1_points ?? 0) > (s.team2Points ?? s.team2_points ?? 0)).length
+      const team2SetsWon = finishedSets.filter(s => (s.team2Points ?? s.team2_points ?? 0) > (s.team1Points ?? s.team1_points ?? 0)).length
+
+      const liveStatePayload = {
+        current_set: latestSet?.index || 1,
+        points_a: latestSet?.team1Points ?? latestSet?.team1_points ?? 0,
+        points_b: latestSet?.team2Points ?? latestSet?.team2_points ?? 0,
+        sets_won_a: team1SetsWon,
+        sets_won_b: team2SetsWon,
+        status: match.status || 'live'
+      }
+
+      // Queue the restore job (filter payload to valid columns only)
+      await db.sync_queue.add({
+        resource: 'match',
+        action: 'restore',
+        payload: {
+          match: filterMatchPayload(matchPayload),
+          sets: setsPayload,
+          events: eventsPayload,
+          liveState: liveStatePayload
+        },
+        ts: new Date().toISOString(),
+        status: 'queued'
+      })
+
+      console.debug('[BackupManager] Queued restore sync job:', {
+        matchId: externalId,
+        setsCount: setsPayload.length,
+        eventsCount: eventsPayload.length
+      })
+    }
+  })
+
+  return restoredMatchId
+}
+
+/**
+ * The cloud coin toss a restore sends for a backup's match row: team A / B,
+ * the first server and serve_a. serve_a was left out: a later restore by
+ * game number + PIN read it undefined and the coin toss screen showed team A
+ * serving, whoever served. It follows the first server (the team the
+ * scoreboard plays first) when both it and team A are known, else the
+ * backup's own A flag; a match without a coin toss gets none. A cloud-format
+ * row's own coin_toss JSON goes over these fields, as before.
+ * @param {object} match  the backup's match row (local or cloud field names)
+ */
+export function coinTossForRestore(match = {}) {
+  const teamA = match.coinTossTeamA || match.coin_toss_team_a
+  const firstServe = match.firstServe || match.first_serve
+  const flag = match.coinTossServeA ?? match.coin_toss_serve_a
+  const serveA = teamA && firstServe ? firstServe === teamA : (typeof flag === 'boolean' ? flag : undefined)
+  const winner = match.coinTossWinner
+  const choices = cleanIntervalChoices(match.intervalChoices)
+  return {
+    confirmed: match.coinTossConfirmed || match.coin_toss_confirmed,
+    team_a: teamA,
+    team_b: match.coinTossTeamB || match.coin_toss_team_b,
+    first_serve: firstServe,
+    ...(serveA === undefined ? {} : { serve_a: serveA }),
+    // the toss winner names the interval's chooser; the chooser's picks
+    // (intervalChoice_beach) are kept with the coin toss
+    ...(winner === 'team1' || winner === 'team2' ? { winner } : {}),
+    ...(Object.keys(choices).length ? { interval_choices: choices } : {}),
+    ...(match.coinToss || match.coin_toss || {})
+  }
+}
+
+/**
+ * The coin toss's winner and the interval's chooser picks for a restored
+ * match: `coinTossWinner` from the cloud coin toss (`winner`), else the
+ * coin_toss event's payload; `intervalChoices` from `interval_choices`.
+ */
+export function restoredTossChoices(coinToss = {}, events = []) {
+  const isTeam = (v) => v === 'team1' || v === 'team2'
+  const tossEvent = (events || []).find(e => e?.type === 'coin_toss' && isTeam(e.payload?.coinTossWinner))
+  const winner = isTeam(coinToss?.winner) ? coinToss.winner : tossEvent?.payload?.coinTossWinner
+  const choices = cleanIntervalChoices(coinToss?.interval_choices)
+  return {
+    ...(isTeam(winner) ? { coinTossWinner: winner } : {}),
+    ...(Object.keys(choices).length ? { intervalChoices: choices } : {})
+  }
+}
+
+/**
+ * Restore match in place - overwrite existing match with backup data
+ * Used for cloud backup restore during active match
+ * IMPORTANT: Queues sync job to update match_live_state in Supabase
+ * Refused like restoreMatchFromJson for a match closed on the server.
+ */
+export async function restoreMatchInPlace(matchId, jsonData, { checkServer = serverClosedState } = {}) {
+  if (isEncryptedBackup(jsonData)) {
+    throw Object.assign(new Error('This backup file is encrypted: open it with the game PIN or the referee PIN first'), { code: BACKUP_LOCKED_ERROR })
+  }
+  jsonData = matchBackupFromFile(jsonData)
+  if (!jsonData?.version || !jsonData.match) {
+    throw new Error('Invalid backup file format')
+  }
+
+  const { match, team1, team2, team1Players, team2Players, sets, events } = jsonData
+
+  // Get external_id for Supabase sync (the match's key, as restoreMatchFromJson)
+  const externalId = localMatchKey(match)
+  if (!externalId) {
+    console.warn('[RestoreInPlace] No external_id found - Supabase sync will be skipped')
+  }
+
+  // Refuse to overwrite the open match with another match's backup: the cloud
+  // backup folders are keyed by game number only, so a listing can hold
+  // backups of other matches that share it (as OpenVolley)
+  const currentMatch = await db.matches.get(matchId)
+  const currentKey = localMatchKey(currentMatch)
+  if (currentKey && externalId && currentKey !== externalId) {
+    throw new Error('This backup belongs to a different match')
+  }
+
+  // Before the open match is overwritten (test matches never sync; the
+  // backup of a closed match is restored on the device only, isClosedBackup)
+  const guarded = !!externalId && !match.test && !isClosedBackup(match)
+  if (guarded) {
+    await refuseIfClosedOnServer(externalId, match, currentMatch ? [currentMatch] : [], checkServer)
+  }
+
+  await db.transaction('rw', db.matches, db.sets, db.events, db.sync_queue, async () => {
+    // Update match data (keep same ID). The backup is merged over the current
+    // row, so the current row's closed evidence is dropped as well.
+    await db.matches.update(matchId, {
+      ...match,
+      ...connectionsForRestore(match),
+      ...restoredBlock(match),
+      ...(guarded ? withoutClosedEvidence(match, currentMatch) : {}),
+      id: matchId,
+      // The backup's team ids are local ids of the device and the copy that
+      // wrote it: restoreMatchFromJson gives a restored match new team rows
+      // and removes the replaced copy's, so an older backup named deleted
+      // rows (no teams, no players). The open match keeps its own (as
+      // OpenVolley 92a288da).
+      ...(currentMatch ? { team1Id: currentMatch.team1Id, team2Id: currentMatch.team2Id } : {}),
+      seed_key: externalId, // Ensure seed_key is set for sync
+      restoredAt: new Date().toISOString()
+    })
+
+    // Delete existing sets and events for this match
+    await db.sets.where('matchId').equals(matchId).delete()
+    // replaced, not undone: the restored events are not voided (db_beach/eventHistory_beach)
+    await wipeMatchEvents(db, matchId)
+
+    // Recreate sets and events (new ids: the cloud external_id is built from
+    // them), above every id the backup carries (raiseIdsAboveBackup)
+    if (externalId) await raiseIdsAboveBackup(jsonData, externalId, matchId)
+    const newSetIds = []
+    for (const set of sets || []) {
+      newSetIds.push(await db.sets.add({ ...set, id: undefined, matchId }))
+    }
+    const newEventIds = []
+    for (const event of events || []) {
+      newEventIds.push(await db.events.add({ ...event, id: undefined, matchId }))
+    }
+
+    // Queue Supabase 'restore' sync job (same as restoreMatchFromJson; none
+    // for an approved or final match, isClosedBackup)
+    if (externalId && isClosedBackup(match)) {
+      console.warn(`[RestoreInPlace] ${externalId} is approved or final: restored on this device only, no restore job`)
+    } else if (externalId) {
+
+      // PINs from the local match after the update above (backup fields over
+      // the current ones, so the game PIN an app backup file lacks is still sent)
+      const restoredLocal = await db.matches.get(matchId)
+
+      // Build match payload for Supabase
+      const matchPayload = {
+        external_id: externalId,
+        sport_type: SPORT_TYPE,
+        game_pin: match.gamePin || match.game_pin || restoredLocal?.gamePin,
+        game_n: match.gameN || match.game_n,
+        status: match.status || 'live',
+        team1_data: team1 ? {
+          name: team1.name,
+          short_name: team1.shortName || team1.short_name,
+          color: team1.color
+        } : (match.team1_data || match.team1_team || null),
+        team2_data: team2 ? {
+          name: team2.name,
+          short_name: team2.shortName || team2.short_name,
+          color: team2.color
+        } : (match.team2_data || match.team2_team || null),
+        players_team1: team1Players || match.players_team1 || [],
+        players_team2: team2Players || match.players_team2 || [],
+        ...restoreRemarks(match),
+        // Include match_info fields (stored as JSONB)
+        match_info: {
+          hall: match.hall,
+          city: match.city,
+          league: match.league,
+          championship_type: match.championshipType || match.championship_type,
+          ...(match.matchInfo || match.match_info || {})
+        },
+        coin_toss: coinTossForRestore(match)
+      }
+
+      // Build sets payload (external_id from the new local id, as restoreMatchFromJson)
+      const setsPayload = (sets || []).map((s, i) => ({
+        external_id: setExtId(externalId, newSetIds[i]),
+        index: s.index,
+        team1_points: s.team1Points ?? s.team1_points ?? 0,
+        team2_points: s.team2Points ?? s.team2_points ?? 0,
+        finished: s.finished || false,
+        start_time: s.startTime || s.start_time,
+        end_time: s.endTime || s.end_time
+      }))
+
+      // Build events payload
+      const eventsPayload = (events || []).map((e, i) => ({
+        external_id: eventExtId(externalId, newEventIds[i]),
+        set_index: e.setIndex ?? e.set_index,
+        type: e.type,
+        payload: e.payload,
+        ts: e.ts,
+        seq: e.seq
+      }))
+
+      // Build live state payload from latest set data
+      const latestSet = sets?.length > 0
+        ? [...sets].sort((a, b) => (b.index || 0) - (a.index || 0))[0]
+        : null
+      const finishedSets = (sets || []).filter(s => s.finished)
+      const team1SetsWon = finishedSets.filter(s => (s.team1Points ?? s.team1_points ?? 0) > (s.team2Points ?? s.team2_points ?? 0)).length
+      const team2SetsWon = finishedSets.filter(s => (s.team2Points ?? s.team2_points ?? 0) > (s.team1Points ?? s.team1_points ?? 0)).length
+
+      const liveStatePayload = {
+        current_set: latestSet?.index || 1,
+        points_a: latestSet?.team1Points ?? latestSet?.team1_points ?? 0,
+        points_b: latestSet?.team2Points ?? latestSet?.team2_points ?? 0,
+        sets_won_a: team1SetsWon,
+        sets_won_b: team2SetsWon,
+        status: match.status || 'live'
+      }
+
+      // Queue the restore job (filter payload to valid columns only)
+      await db.sync_queue.add({
+        resource: 'match',
+        action: 'restore',
+        payload: {
+          match: filterMatchPayload(matchPayload),
+          sets: setsPayload,
+          events: eventsPayload,
+          liveState: liveStatePayload
+        },
+        ts: new Date().toISOString(),
+        status: 'queued'
+      })
+
+      console.debug('[BackupManager] Queued restore in place sync job:', {
+        matchId: externalId,
+        setsCount: setsPayload.length,
+        eventsCount: eventsPayload.length,
+        liveState: liveStatePayload
+      })
+    }
+  })
+
+  return matchId
+}
+
+const isAB = (v) => v === 'A' || v === 'B'
+const timeOf = (v) => {
+  const t = Date.parse(v)
+  return Number.isNaN(t) ? null : t
+}
+
+/**
+ * The live row's own Team A ('team1' / 'team2'), from its team names against
+ * the match's: "Swap A/B" queues the coin toss (sync queue) and writes the
+ * live state at once, so until the queue has run the cloud coin toss names
+ * the other team. null when the names do not tell (missing, or the same on
+ * both teams), then the coin toss's Team A is the live row's.
+ * @param {object|null} liveState
+ * @param {object} matchData  the cloud match row (team1_data / team2_data)
+ * @returns {'team1'|'team2'|null}
+ */
+export function liveRowTeamAKey(liveState, matchData) {
+  const name1 = (matchData?.team1_data || matchData?.team1_team)?.name
+  const name2 = (matchData?.team2_data || matchData?.team2_team)?.name
+  const a = liveState?.team_a_name
+  const b = liveState?.team_b_name
+  if (!name1 || !name2 || name1 === name2 || !a || !b) return null
+  if (a === name1 && b === name2) return 'team1'
+  if (a === name2 && b === name1) return 'team2'
+  return null
+}
+
+/**
+ * Is the live row older than the latest synced event (its last push failed
+ * and the queue synced events after it)? false when a time is unknown.
+ * @param {object|null} liveState
+ * @param {Array} events  server event rows (created_at / ts)
+ */
+function liveOlderThanEvents(liveState, events) {
+  const liveAt = timeOf(liveState?.last_event_ts || liveState?.updated_at)
+  if (liveAt == null) return false
+  return (events || []).some(e => {
+    const at = timeOf(e?.created_at || e?.ts)
+    return at != null && at > liveAt
+  })
+}
+
+/**
+ * The court sides the scorer last saved, for a restore by PIN: the latest
+ * synced event's state snapshot (setLeftTeamOverrides / set3LeftTeam, 'A' /
+ * 'B', as courtSides_beach reads them), else the live state's side_a for its
+ * set. {} when neither says.
+ *
+ * Over the snapshot, the live state's side only when it is a manual "Switch
+ * sides" (Manual changes: no event, only the live state it pushes knows it)
+ * not older than the snapshot's event. Not the live side otherwise: a TTO's
+ * change of courts is pushed to the live state, but its cloud event keeps
+ * courtSwitched: false (set locally only), so the restored match asks for the
+ * TTO again and its end makes the change (with the live side it was made
+ * twice); every other change of courts has its event and snapshot.
+ *
+ * The snapshot's sides are A/B labels of the Team A it was taken with (its
+ * teamAKey): written in the restored match's (`teamAKey`), so a "Swap team
+ * A ↔ B" after it keeps each team on its side (coinToss_beach
+ * labelsInDesignation), as on the scorer's court.
+ * @param {Array} events  server event rows (seq, state_snapshot)
+ * @param {object|null} liveState
+ * @param {{ liveAIsOtherTeam?: boolean, teamAKey?: 'team1'|'team2'|null }} [opts]
+ *   the live row's Team A is the other team than the match's
+ *   (liveRowTeamAKey): its side_a is B's; the restored match's Team A
+ * @returns {{ setLeftTeamOverrides?: object, set3LeftTeam?: 'A'|'B' }}
+ */
+export function savedCourtSides(events, liveState, { liveAIsOtherTeam = false, teamAKey = null } = {}) {
+  const set = Number(liveState?.current_set)
+  const liveLeft = set >= 1 && (liveState.side_a === 'left' || liveState.side_a === 'right')
+    ? (liveState.side_a === 'left') !== liveAIsOtherTeam ? 'A' : 'B'
+    : null
+
+  const snapEvent = [...(events || [])]
+    .sort((a, b) => (b.seq || 0) - (a.seq || 0))
+    .find(e => {
+      const s = e.state_snapshot
+      return s && typeof s === 'object' && (s.setLeftTeamOverrides || isAB(s.set3LeftTeam))
+    })
+  if (snapEvent) {
+    const snap = snapEvent.state_snapshot
+    const saved = {
+      setLeftTeamOverrides: Object.fromEntries(Object.entries(snap.setLeftTeamOverrides || {}).filter(([, v]) => isAB(v))),
+      set3LeftTeam: isAB(snap.set3LeftTeam) ? snap.set3LeftTeam : undefined
+    }
+    const isTeam = (v) => v === 'team1' || v === 'team2'
+    const now = labelsInDesignation(saved, eventTeamA(snapEvent), isTeam(teamAKey) ? teamAKey : null)
+    const overrides = now.setLeftTeamOverrides
+    let set3LeftTeam = now.set3LeftTeam
+    const liveAt = timeOf(liveState?.last_event_ts || liveState?.updated_at)
+    const snapAt = timeOf(snapEvent.created_at || snapEvent.ts)
+    if (liveLeft && liveState.last_event_type === 'manual_side_change' &&
+        !(liveAt != null && snapAt != null && liveAt < snapAt) &&
+        leftTeamInSet(set, { setLeftTeamOverrides: overrides, set3LeftTeam }) !== liveLeft) {
+      // As the switch wrote it (switchSidesUpdate, beforeSetStart): set 3
+      // without an override as its start side, so its toss still moves it
+      if (set === 3 && !isAB(overrides[3])) set3LeftTeam = liveLeft
+      else overrides[set] = liveLeft
+    }
+    return {
+      ...(Object.keys(overrides).length ? { setLeftTeamOverrides: overrides } : {}),
+      ...(set3LeftTeam ? { set3LeftTeam } : {})
+    }
+  }
+  if (liveLeft) {
+    // Set 3 as its start side (set3LeftTeam), not an override: an override
+    // [3] outranks set3LeftTeam, so a restore in the interval before set 3
+    // would pin the court and the set 3 toss (it writes set3LeftTeam) would
+    // no longer move it. A later change of courts writes the override.
+    if (set === 3) return { set3LeftTeam: liveLeft }
+    return { setLeftTeamOverrides: { [set]: liveLeft } }
+  }
+  return {}
+}
+
+/**
+ * Set 3's coin toss for a restore by PIN. Its event (set3_coin_toss_winner,
+ * on the server since 621827e; an undone one is left out) hides the toss
+ * buttons once restored, so the restored match needs what the toss decided:
+ * - the winner (`set3CoinTossWinner`, a team: no label);
+ * - set 3's first server (`set3FirstServe`, 'A' / 'B'), from the latest
+ *   snapshot taken with the toss made (the toss's, or a later event's): its
+ *   label in that snapshot's designation, put in the restored match's (a
+ *   "Swap team A ↔ B" since keeps the same team serving, as swapTeamDesignation);
+ * - in the break before set 3, the interval's choices made after the toss
+ *   ("Switch sides", "Switch serve"): they log no event, only the live row
+ *   they push has them, so a live row of that break not older than the
+ *   latest event gives set 3's side (`set3LeftTeam`) and first server.
+ * Without them set 3 was served as if no toss had been made and the toss
+ * buttons were gone. {} when the server has no toss.
+ * @param {Array} events  server event rows (seq, type, payload, state_snapshot)
+ * @param {object|null} liveState
+ * @param {{ teamAKey?: 'team1'|'team2', liveAIsOtherTeam?: boolean }} [opts]
+ *   the restored match's Team A; the live row's Team A is the other team
+ * @returns {{ set3CoinTossWinner?: string, set3FirstServe?: 'A'|'B', set3LeftTeam?: 'A'|'B' }}
+ */
+export function savedSet3Toss(events, liveState, { teamAKey = null, liveAIsOtherTeam = false } = {}) {
+  const isTeam = (v) => v === 'team1' || v === 'team2'
+  const latestFirst = [...(events || [])].sort((a, b) => (b.seq || 0) - (a.seq || 0))
+  const toss = latestFirst.find(e => e?.type === 'set3_coin_toss_winner' && isTeam(e.payload?.winner))
+  if (!toss) return {}
+  const out = { set3CoinTossWinner: toss.payload.winner }
+
+  const snapEvent = latestFirst.find(e => (e.seq || 0) >= (toss.seq || 0) &&
+    e.state_snapshot && typeof e.state_snapshot === 'object' && isAB(e.state_snapshot.set3FirstServe))
+  if (snapEvent) {
+    const snap = snapEvent.state_snapshot
+    const from = isTeam(snap.teamAKey) ? snap.teamAKey : (isTeam(toss.payload.teamA) ? toss.payload.teamA : null)
+    Object.assign(out, labelsInDesignation({ set3FirstServe: snap.set3FirstServe }, from, isTeam(teamAKey) ? teamAKey : null))
+  }
+
+  const side = (v) => v === 'left' || v === 'right'
+  if (liveState?.set_interval_active === true && Number(liveState.current_set) === 3 &&
+      side(liveState.side_a) && side(liveState.serving_team) && !liveOlderThanEvents(liveState, events)) {
+    // the live row's side_a / serving_team are for its own Team A
+    const aLeft = (liveState.side_a === 'left') !== liveAIsOtherTeam
+    const aServes = (liveState.serving_team === liveState.side_a) !== liveAIsOtherTeam
+    out.set3LeftTeam = aLeft ? 'A' : 'B'
+    out.set3FirstServe = aServes ? 'A' : 'B'
+  }
+  return out
+}
+
+/**
+ * Set 2's serve and the service orders for a restore by PIN, and the choices
+ * of the interval before set 2 (FIVB beach 7.1.2.3: the team that lost the
+ * first toss chooses serve / receive or the side; 7.6.1: each team gives its
+ * service order again):
+ * - `set2FirstServe` (a team) and `team1FirstServe` / `team2FirstServe` (a
+ *   player number) from the latest snapshot that has them;
+ * - in the break before set 2, the interval's choices ("Side", "Serve or
+ *   receive", "Change" of a serve order) log no event, only the live row they
+ *   push has them: a live row of that break not older than the latest event
+ *   gives set 2's side (`setLeftTeamOverrides[2]`), its first server and the
+ *   serving team's first server (server_number). The receiving team's order
+ *   is not on the live row: as last saved.
+ * Without them the restored match put set 2 back where set 1 finished,
+ * served it by the default and lost every service order.
+ * @param {Array} events  server event rows (seq, state_snapshot)
+ * @param {object|null} liveState
+ * @param {{ teamAKey?: 'team1'|'team2', liveAIsOtherTeam?: boolean }} [opts]
+ * @returns {{ set2FirstServe?: string, team1FirstServe?: number, team2FirstServe?: number, setLeftTeamOverrides?: { 2: 'A'|'B' } }}
+ */
+export function savedSet2Choice(events, liveState, { teamAKey = null, liveAIsOtherTeam = false } = {}) {
+  const isTeam = (v) => v === 'team1' || v === 'team2'
+  const isNumber = (v) => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v))
+  const out = {}
+  const latestFirst = [...(events || [])].sort((a, b) => (b.seq || 0) - (a.seq || 0))
+  const snapOf = (e) => (e?.state_snapshot && typeof e.state_snapshot === 'object' ? e.state_snapshot : null)
+  const latest = (has) => latestFirst.map(snapOf).find(s => s && has(s))
+  const set2 = latest(s => isTeam(s.set2FirstServe))
+  if (set2) out.set2FirstServe = set2.set2FirstServe
+  for (const field of ['team1FirstServe', 'team2FirstServe']) {
+    const snap = latest(s => isNumber(s[field]))
+    if (snap) out[field] = Number(snap[field])
+  }
+
+  const side = (v) => v === 'left' || v === 'right'
+  if (liveState?.set_interval_active === true && Number(liveState.current_set) === 2 &&
+      side(liveState.side_a) && side(liveState.serving_team) && !liveOlderThanEvents(liveState, events)) {
+    // the live row's side_a / serving_team are for its own Team A
+    const aLeft = (liveState.side_a === 'left') !== liveAIsOtherTeam
+    const aServes = (liveState.serving_team === liveState.side_a) !== liveAIsOtherTeam
+    const teamA = isTeam(teamAKey) ? teamAKey : 'team1'
+    const serving = aServes ? teamA : (teamA === 'team1' ? 'team2' : 'team1')
+    out.setLeftTeamOverrides = { 2: aLeft ? 'A' : 'B' }
+    out.set2FirstServe = serving
+    if (isNumber(liveState.server_number)) out[`${serving}FirstServe`] = Number(liveState.server_number)
+  }
+  return out
+}
+
+/**
+ * Which team a synced event row put on the left, from the row itself: the
+ * serving team's court-side lineup carries isServing. null when it cannot
+ * tell (no serve_team, or no lineup or both lineups marked).
+ */
+function rowLeftIsTeam1(row) {
+  const serving = row?.serve_team
+  if (serving !== 'team1' && serving !== 'team2') return null
+  const marked = (lineup) => !!lineup && typeof lineup === 'object' &&
+    Object.values(lineup).some(p => p && typeof p === 'object' && p.isServing)
+  const left = marked(row.lineup_left)
+  const right = marked(row.lineup_right)
+  if (left === right) return null
+  return left ? serving === 'team1' : serving !== 'team1'
+}
+
+/**
+ * Fetch a match from the backend by Game N and Game PIN
+ * (POST /api/match/restore-by-pin: exact match, attempt-limited, the PIN is
+ * compared server-side; game_pin can no longer be filtered on). With a session
+ * the backend also makes this account an editor of the match (take-over).
+ * Uses JSONB columns for team/player data (teams/players tables were dropped).
+ * @param {string} gamePin
+ * @param {number|string} gameN
+ * @param {{ restoreByPin?: Function }} [deps] - injectable for tests
+ */
+export async function fetchMatchByPin(gamePin, gameN, { restoreByPin = apiMatchRestoreByPin } = {}) {
+  if (!isBackendAvailable()) {
+    throw new Error('Backend not configured')
+  }
+  const n = parseInt(gameN, 10)
+  if (!Number.isFinite(n)) throw new Error('Enter the game number')
+
+  const { data, error, status } = await restoreByPin(n, String(gamePin ?? '').trim())
+  if (error) {
+    if (status === 429 || error.code === 'OV_TOO_MANY_ATTEMPTS') throw new Error('Too many wrong PINs. Wait a few minutes and try again.')
+    if (status === 404 || error.code === 'OV_NOT_FOUND') throw new Error('Match not found with this ID and PIN')
+    throw new Error(error.message || 'Match lookup failed')
+  }
+  let matchData = data?.match
+  // The lookup does not know the sport: an indoor match with this number and
+  // PIN is not one openbeach can restore
+  if (!matchData || matchData.sport_type !== SPORT_TYPE) throw new Error('Match not found with this ID and PIN')
+
+  const setsResult = { data: Array.isArray(data.sets) ? data.sets : [] }
+  let events = Array.isArray(data.events) ? [...data.events] : []
+  const liveState = data.liveState || null
+
+  console.debug('[BackupManager] Fetched match data from Supabase:', {
+    matchId: matchData.id,
+    matchStatus: matchData.status,
+    setsCount: setsResult.data?.length || 0,
+    eventsCount: events.length,
+    hasLiveState: !!liveState,
+    liveStatePoints: liveState ? `${liveState.points_a}-${liveState.points_b}` : 'N/A',
+    liveStateSet: liveState?.current_set,
+    hasLineupA: !!liveState?.lineup_a,
+    hasLineupB: !!liveState?.lineup_b
+  })
+
+  // Helper: Extract player numbers from rich format lineup
+  const extractLineupNumbers = (lineup) => {
+    if (!lineup) return null
+    const result = {}
+    for (const pos of ['I', 'II', 'III', 'IV', 'V', 'VI']) {
+      if (lineup[pos]) {
+        // Rich format has { number, isServing, ... }, legacy format is just a number
+        result[pos] = typeof lineup[pos] === 'object' && lineup[pos].number !== undefined
+          ? lineup[pos].number
+          : lineup[pos]
+      }
+    }
+    return Object.keys(result).length > 0 ? result : null
+  }
+
+  // Check if events already have lineup type events
+  const hasLineupTypeEvents = events.some(e => e.type === 'lineup')
+
+  // Team A from the coin toss (the matches table has the coin_toss JSON, no
+  // coin_toss_team_a column: reading only that put Team A on team2 always)
+  let teamAKey = matchData.coin_toss?.team_a || matchData.coin_toss_team_a || 'team1'
+  const cloudTeamAKey = teamAKey
+  // The live row's own Team A (its team names): "Swap A/B" queues the coin
+  // toss and writes the live state at once, so with the swap still in the
+  // sync queue the cloud coin toss names the other team. A live row not
+  // older than the latest event is the scorer's latest: its Team A is the
+  // restored match's (the swap as swapTeamDesignation in coinToss_beach made
+  // it: the first server kept, the A / B serve flag follows). Its side_a and
+  // lineup_a are always read for its own Team A.
+  const liveTeamAKey = liveRowTeamAKey(liveState, matchData) || teamAKey
+  const cloudTeamA = matchData.coin_toss?.team_a
+  if ((cloudTeamA === 'team1' || cloudTeamA === 'team2') && liveTeamAKey !== cloudTeamA &&
+      !liveOlderThanEvents(liveState, events)) {
+    const toss = matchData.coin_toss
+    const firstServe = toss.first_serve === 'team1' || toss.first_serve === 'team2'
+      ? toss.first_serve
+      : (typeof toss.serve_a === 'boolean' ? (toss.serve_a ? cloudTeamA : liveTeamAKey) : null)
+    teamAKey = liveTeamAKey
+    matchData = {
+      ...matchData,
+      coin_toss: {
+        ...toss,
+        team_a: liveTeamAKey,
+        team_b: cloudTeamA,
+        ...(firstServe ? { serve_a: firstServe === liveTeamAKey, first_serve: firstServe } : {})
+      }
+    }
+  }
+  const liveAIsTeam1 = liveTeamAKey === 'team1'
+  // The match's court sides as the scorer last saved them (the restored
+  // match keeps them, and they place a row's court-side lineups below)
+  const courtSides = savedCourtSides(events, liveState, { liveAIsOtherTeam: liveTeamAKey !== teamAKey, teamAKey })
+  // Set 3's toss (its winner, side and first server): restored, its event
+  // hides the toss buttons
+  const set3Toss = savedSet3Toss(events, liveState, { teamAKey, liveAIsOtherTeam: liveTeamAKey !== teamAKey })
+  // Set 2's serve, the service orders and the choices of the break before
+  // set 2 (savedSet2Choice): its side joins the court sides
+  const set2Choice = savedSet2Choice(events, liveState, { teamAKey, liveAIsOtherTeam: liveTeamAKey !== teamAKey })
+  if (set2Choice.setLeftTeamOverrides) {
+    courtSides.setLeftTeamOverrides = { ...(courtSides.setLeftTeamOverrides || {}), ...set2Choice.setLeftTeamOverrides }
+  }
+
+  // If no lineup type events, create them from event lineup_left/lineup_right columns
+  // or from match_live_state
+  if (!hasLineupTypeEvents) {
+    // First try: get lineup from the latest event that has lineup_left/lineup_right
+    const eventWithLineup = [...events]
+      .sort((a, b) => (b.seq || 0) - (a.seq || 0))
+      .find(e => e.lineup_left || e.lineup_right)
+
+    if (eventWithLineup) {
+      const setIndex = eventWithLineup.set_index || 1
+      // The event's state snapshot has the lineups by team (A / B), so no
+      // side is guessed; only a snapshot of the event's own set (one taken in
+      // another set has that set's lineups). Otherwise lineup_left /
+      // lineup_right, which are by court side: the side the row itself marks
+      // (the serving team's lineup carries isServing), else the scorer's rule
+      // (courtSides_beach) with the match's saved sides. It guessed by the
+      // set number (odd sets A left), not beach's rule: the courts change
+      // every 7 points (5 in set 3) and at the TTO, not between sets.
+      const snap = eventWithLineup.state_snapshot
+      const bySnapshot = !!(snap && (snap.lineupA || snap.lineupB) &&
+        (snap.currentSetIndex == null || Number(snap.currentSetIndex) === Number(setIndex)))
+      // The row's own Team A: its snapshot's, else the cloud coin toss's (a
+      // row synced before a "Swap A/B" still in the sync queue, not the live
+      // row's Team A the restored match takes): its lineupA / lineupB. The
+      // court sides are the restored match's, in its Team A (the swap keeps
+      // each team on its side: savedCourtSides)
+      const rowTeamAKey = snap?.teamAKey === 'team1' || snap?.teamAKey === 'team2' ? snap.teamAKey : cloudTeamAKey
+      const snapAIsTeam1 = rowTeamAKey === 'team1'
+      const markedLeft = rowLeftIsTeam1(eventWithLineup)
+      const leftIsTeam1 = markedLeft !== null
+        ? markedLeft
+        : isTeam1LeftInSet(setIndex, { coinTossTeamA: teamAKey, ...courtSides })
+
+      const team1RawLineup = bySnapshot
+        ? (snapAIsTeam1 ? snap.lineupA : snap.lineupB)
+        : (leftIsTeam1 ? eventWithLineup.lineup_left : eventWithLineup.lineup_right)
+      const team2RawLineup = bySnapshot
+        ? (snapAIsTeam1 ? snap.lineupB : snap.lineupA)
+        : (leftIsTeam1 ? eventWithLineup.lineup_right : eventWithLineup.lineup_left)
+      const team1Lineup = extractLineupNumbers(team1RawLineup)
+      const team2Lineup = extractLineupNumbers(team2RawLineup)
+
+      console.debug('[BackupManager] Extracted lineups from event:', {
+        eventSeq: eventWithLineup.seq,
+        setIndex,
+        bySnapshot,
+        leftIsTeam1,
+        team1Lineup,
+        team2Lineup,
+        rawLineupLeft: eventWithLineup.lineup_left,
+        rawLineupRight: eventWithLineup.lineup_right
+      })
+
+      if (team1Lineup) {
+        const payload = { team: 'team1', lineup: team1Lineup, isInitial: true }
+        events.push({
+          type: 'lineup',
+          set_index: setIndex,
+          seq: 0.5,
+          payload,
+          ts: eventWithLineup.ts || new Date().toISOString()
+        })
+      }
+      if (team2Lineup) {
+        const payload = { team: 'team2', lineup: team2Lineup, isInitial: true }
+        events.push({
+          type: 'lineup',
+          set_index: setIndex,
+          seq: 0.6,
+          payload,
+          ts: eventWithLineup.ts || new Date().toISOString()
+        })
+      }
+    } else if (liveState) {
+      // Fallback: get lineup from match_live_state
+      const currentSet = liveState.current_set || 1
+      const lineupANumbers = extractLineupNumbers(liveState.lineup_a)
+      const lineupBNumbers = extractLineupNumbers(liveState.lineup_b)
+
+      if (lineupANumbers) {
+        const payload = {
+          team: liveAIsTeam1 ? 'team1' : 'team2',
+          lineup: lineupANumbers,
+          isInitial: true
+        }
+        events.push({
+          type: 'lineup',
+          set_index: currentSet,
+          seq: 0.5,
+          payload,
+          ts: liveState.updated_at || new Date().toISOString()
+        })
+      }
+
+      if (lineupBNumbers) {
+        const payload = {
+          team: liveAIsTeam1 ? 'team2' : 'team1',
+          lineup: lineupBNumbers,
+          isInitial: true
+        }
+        events.push({
+          type: 'lineup',
+          set_index: currentSet,
+          seq: 0.6,
+          payload,
+          ts: liveState.updated_at || new Date().toISOString()
+        })
+      }
+    }
+  }
+
+  return {
+    match: matchData,
+    // JSONB data is already in matchData: team1_data, team2_data, players_team1, players_team2, officials
+    sets: setsResult.data || [],
+    events,
+    liveState, // Include live state for additional data
+    // The court sides the scorer last saved (setLeftTeamOverrides /
+    // set3LeftTeam): the imported match keeps them
+    courtSides,
+    // Set 3's toss (savedSet3Toss): the imported match keeps it
+    set3Toss,
+    // Set 2's serve and the service orders (savedSet2Choice)
+    set2Choice,
+    // The backend never returns game_pin: keep the one that proved access, so
+    // the imported match can still claim its cloud copy
+    gamePin: String(gamePin ?? '').trim(),
+    // The highest set / event ids the match has used on the server (voided
+    // events included; backend restore-by-pin): the ids the importing device
+    // gives out stay above
+    idFloor: data.idFloor || null
+  }
+}
+
+/**
+ * Import match data from Supabase to local Dexie
+ * Uses JSONB columns for team/player data (teams/players tables were dropped)
+ */
+export async function importMatchFromSupabase(cloudData) {
+  const { match, sets, events } = cloudData
+  const courtSides = cloudData.courtSides || {}
+  const set3Toss = cloudData.set3Toss || {}
+  const set2Choice = cloudData.set2Choice || {}
+
+  let importedMatchId = null
+
+  await db.transaction('rw', db.matches, db.teams, db.players, db.sets, db.events, db.sync_queue, async () => {
+    // The cloud copy REPLACES this device's own copy of the match (a join
+    // with the game PIN on a device that had it, "Take back scoring here"):
+    // two local copies of one match key would both sync, and the older one's
+    // unsent writes would overwrite the score the other device left. Its sets
+    // and events go (replaced, not undone: nothing is voided on the server),
+    // its unsent jobs are superseded; other local matches are kept.
+    // What only this device knows of the match is read first (keptLocalState)
+    const kept = await keptLocalState(match.external_id, events)
+    await replaceLocalCopies(match.external_id)
+
+    // Extract team data from JSONB columns
+    const team1Data = match.team1_data || match.team1_team || {}
+    const team2Data = match.team2_data || match.team2_team || {}
+    const playersTeam1 = match.players_team1 || []
+    const playersTeam2 = match.players_team2 || []
+
+    // Create local teams (always create new teams for imported matches to avoid duplicates)
+    let team1Id = null
+    let team2Id = null
+
+    if (team1Data.name) {
+      team1Id = await db.teams.add({
+        name: team1Data.name,
+        shortName: team1Data.short_name,
+        color: team1Data.color,
+        createdAt: new Date().toISOString()
+      })
+    }
+
+    if (team2Data.name) {
+      team2Id = await db.teams.add({
+        name: team2Data.name,
+        shortName: team2Data.short_name,
+        color: team2Data.color,
+        createdAt: new Date().toISOString()
+      })
+    }
+
+    // Extract JSONB data with fallback to legacy columns
+    const matchInfo = match.match_info || {}
+    const coinToss = match.coin_toss || {}
+    const signatures = match.signatures || {}
+    const results = match.results || {}
+    const approval = match.approval || {}
+    const connections = match.connections || {}
+    const connectionPins = match.connection_pins || {}
+
+    // Create match with all JSONB data (prefer JSONB, fallback to legacy)
+    const localMatchId = await db.matches.add({
+      team1Id,
+      team2Id,
+      status: match.status,
+      scheduledAt: match.scheduled_at,
+      // Match info: prefer JSONB, fallback to legacy
+      hall: matchInfo.hall || match.hall,
+      city: matchInfo.city || match.city,
+      league: matchInfo.league || match.league,
+      championshipType: matchInfo.championship_type || match.championship_type,
+      refereePin: match.referee_pin,
+      gamePin: cloudData.gamePin || match.game_pin,
+      gameN: match.game_n,
+      gameNumber: match.game_n ? String(match.game_n) : null, // Also set gameNumber
+      test: match.test || false,
+      seed_key: match.external_id,
+      // The names at match level, as every other way a match is made writes
+      // them: the live state reads them there (stateSnapshot_beach), and
+      // after "Take back scoring here" or a restore by PIN every push had
+      // empty team names, so the remote scoreboard and the livescore showed
+      // "Team A" / "Team B" for the rest of the match
+      team1Name: team1Data.name || null,
+      team2Name: team2Data.name || null,
+      // Short names at match level (for easy access)
+      team1ShortName: team1Data.short_name || null,
+      team2ShortName: team2Data.short_name || null,
+      // JSONB data stored locally
+      // a list, also from a cloud row that merged an object into it (officials_beach)
+      officials: officialsList(match.officials),
+      // Signatures: prefer JSONB, fallback to legacy
+      team1CaptainSignature: signatures.team1_captain || match.team1_captain_signature,
+      team2CaptainSignature: signatures.team2_captain || match.team2_captain_signature,
+      // The closing ones (captains, assistant scorer, scorer, referees) in
+      // the fields Match end and the sheet read (they were stored as
+      // team1CaptainPostGameSignature / refereeSignature, which nothing
+      // reads: Match end asked everyone to sign again, and the next
+      // signature sent null for the others, erasing them on the server)
+      ...postMatchSignaturesFromServer(signatures),
+      // Coin toss: prefer JSONB, fallback to legacy
+      coinTossConfirmed: coinToss.confirmed !== undefined ? coinToss.confirmed : match.coin_toss_confirmed,
+      coinTossTeamA: coinToss.team_a || match.coin_toss_team_a,
+      coinTossTeamB: coinToss.team_b || match.coin_toss_team_b,
+      coinTossServeA: coinToss.serve_a !== undefined ? coinToss.serve_a : match.coin_toss_serve_a,
+      firstServe: coinToss.first_serve || match.first_serve,
+      // The toss winner (it names the chooser of the interval before set 2)
+      // and the chooser's picks (intervalChoice_beach): without them a
+      // restore in the break showed the plain switches, or no pick
+      ...restoredTossChoices(coinToss, events),
+      // Court sides (courtSides_beach): without them the court showed A on the left
+      ...(courtSides.setLeftTeamOverrides ? { setLeftTeamOverrides: { ...courtSides.setLeftTeamOverrides } } : {}),
+      ...(courtSides.set3LeftTeam ? { set3LeftTeam: courtSides.set3LeftTeam } : {}),
+      // ... unless this device's own copy is not older than the cloud's: its
+      // sides include the change of courts of a TTO, which only it knows
+      ...(kept.sides || {}),
+      // Set 3's toss: its winner hides the toss buttons, so its first server
+      // (and the side chosen in the break since) come with it
+      ...(set3Toss.set3CoinTossWinner ? { set3CoinTossWinner: set3Toss.set3CoinTossWinner } : {}),
+      ...(isAB(set3Toss.set3FirstServe) ? { set3FirstServe: set3Toss.set3FirstServe } : {}),
+      ...(isAB(set3Toss.set3LeftTeam) ? { set3LeftTeam: set3Toss.set3LeftTeam } : {}),
+      // Set 2's first server and each team's service order (savedSet2Choice):
+      // without them set 2 was served by the default and each team's first
+      // server was its lower number
+      ...(set2Choice.set2FirstServe ? { set2FirstServe: set2Choice.set2FirstServe } : {}),
+      ...(set2Choice.team1FirstServe != null ? { team1FirstServe: set2Choice.team1FirstServe } : {}),
+      ...(set2Choice.team2FirstServe != null ? { team2FirstServe: set2Choice.team2FirstServe } : {}),
+      // Match result: prefer JSONB, fallback to legacy
+      setResults: results.set_results || match.set_results,
+      winner: results.winner || match.winner,
+      finalScore: results.final_score || match.final_score,
+      sanctions: results.sanctions || match.sanctions,
+      // Scoresheet remarks (backend db/017; '' when the server has none)
+      remarks: typeof match.remarks === 'string' ? match.remarks : '',
+      // Approval: prefer JSONB, fallback to legacy
+      approved: approval.approved !== undefined ? approval.approved : match.approved,
+      approvedAt: approval.approved_at || match.approved_at,
+      // Connection settings: prefer JSONB, fallback to legacy
+      refereeConnectionEnabled: connections.referee_enabled !== undefined ? connections.referee_enabled : match.referee_connection_enabled,
+      refereePin: connectionPins.referee || match.referee_pin,
+      team1UploadPin: connectionPins.upload_team1 || match.team1_team_upload_pin,
+      team2UploadPin: connectionPins.upload_team2 || match.team2_team_upload_pin,
+      // Pending rosters: prefer JSONB, fallback to legacy
+      pendingteam1Roster: connections.pending_team1_roster || match.pending_team1_roster,
+      pendingTeam2Roster: connections.pending_team2_roster || match.pending_team2_roster,
+      // Import metadata
+      importedFrom: 'supabase',
+      importedAt: new Date().toISOString(),
+      createdAt: match.created_at || new Date().toISOString(),
+      // Mark match info as confirmed since we're restoring an existing match
+      matchInfoConfirmedAt: match.created_at || new Date().toISOString()
+    })
+
+    importedMatchId = localMatchId
+
+    // Create players from JSONB arrays (fresh teams, so no duplicates)
+    if (playersTeam1.length && team1Id) {
+      for (const p of playersTeam1) {
+        await db.players.add({
+          teamId: team1Id,
+          number: p.number,
+          name: `${p.last_name || ''} ${p.first_name || ''}`.trim(),
+          firstName: p.first_name,
+          lastName: p.last_name,
+          dob: p.dob,
+          isCaptain: p.is_captain,
+          createdAt: new Date().toISOString()
+        })
+      }
+    }
+
+    if (playersTeam2.length && team2Id) {
+      for (const p of playersTeam2) {
+        await db.players.add({
+          teamId: team2Id,
+          number: p.number,
+          name: `${p.last_name || ''} ${p.first_name || ''}`.trim(),
+          firstName: p.first_name,
+          lastName: p.last_name,
+          dob: p.dob,
+          isCaptain: p.is_captain,
+          createdAt: new Date().toISOString()
+        })
+      }
+    }
+
+    // Sets and events keep the local ids their cloud rows are keyed with
+    // (`<match>:s:<id>`, `<match>:e:<id>`, utils_beach/syncIds_beach): every
+    // later write of this device derives the external_id from the local id
+    // (the running set score, the set end, an undo's revision). Imported
+    // under new ids, they wrote rows the cloud did not have: after "Take back
+    // scoring here" set 1 (':s:1') stayed at the score of the hand-over while
+    // the device updated ':s:2', the approval's result had no finished set,
+    // and an undo voided ':e:17' instead of the real ':e:10' (stress test
+    // 2026-10-25; OpenVolley 83d8b9af).
+    const seedKey = match.external_id
+    const setIds = sets.map(s => cloudLocalId(seedKey, 'set', s.external_id))
+    // Events without an external_id are not cloud rows (the line-ups
+    // fetchMatchByPin makes up from the live state): new ids, never sent
+    const cloudEvents = events.filter(e => e.external_id != null)
+    const eventIds = cloudEvents.map(e => cloudLocalId(seedKey, 'event', e.external_id))
+    const keepIds = await idsAreFree(db.sets, setIds) && await idsAreFree(db.events, eventIds)
+    // Ids this device gives out from now on stay above every id the match has
+    // used on the server (voided events and revisions of events never
+    // uploaded too, restore-by-pin's idFloor): a new rally under the id of an
+    // event voided there is "born voided" (db/015), it would never count
+    const floor = cloudData.idFloor || {}
+    const setFloor = Math.max(Number(floor.set) || 0, ...setIds.map(id => id || 0))
+    const eventFloor = Math.max(Number(floor.event) || 0, ...eventIds.map(id => id || 0))
+
+    const setRow = (set) => ({
+      matchId: localMatchId,
+      index: set.index,
+      team1Points: set.team1_points,
+      team2Points: set.team2_points,
+      finished: set.finished,
+      // the start time this device's scorer confirmed (keptLocalState)
+      startTime: kept.setStartTimes[set.index] || set.start_time,
+      endTime: set.end_time,
+      externalId: set.external_id
+    })
+    const eventRow = (event) => ({
+      matchId: localMatchId,
+      setIndex: event.set_index,
+      type: event.type,
+      payload: event.payload,
+      ts: event.ts,
+      seq: event.seq,
+      externalId: event.external_id
+    })
+
+    // Imported as they are: no history of their own on this device (an add
+    // under an explicit id is otherwise a "restore" of a voided event)
+    await withoutEventHistory(localMatchId, async () => {
+      const newSetIds = []
+      const newEventIds = []
+      if (keepIds) {
+        for (let i = 0; i < sets.length; i++) await db.sets.add({ ...setRow(sets[i]), id: setIds[i] })
+        for (let i = 0; i < cloudEvents.length; i++) await db.events.add({ ...eventRow(cloudEvents[i]), id: eventIds[i] })
+      }
+      await raiseIdGenerator(db.sets, setFloor, { matchId: localMatchId, index: 0 })
+      await raiseIdGenerator(db.events, eventFloor, { matchId: localMatchId, type: 'rally_start', setIndex: 0, seq: 0 })
+      if (!keepIds) {
+        for (const set of sets) newSetIds.push(await db.sets.add(setRow(set)))
+        for (const event of cloudEvents) newEventIds.push(await db.events.add(eventRow(event)))
+      }
+
+      // If no sets exist but match has coin toss confirmed or has events, create Set 1
+      // This handles the case where a match was started but no rallies were played yet
+      if (sets.length === 0 && (match.coin_toss_confirmed || events.length > 0)) {
+        await db.sets.add({
+          matchId: localMatchId,
+          index: 1,
+          team1Points: 0,
+          team2Points: 0,
+          finished: false
+        })
+      }
+
+      for (const event of events) {
+        if (event.external_id == null) await db.events.add(eventRow(event))
+      }
+
+      // This device's events the cloud never gets (keptLocalState): new ids
+      for (const event of kept.events) await db.events.add({ ...event, matchId: localMatchId })
+
+      if (!keepIds && !match.test) {
+        // Another local match holds one of the ids (or a cloud id is not this
+        // match's own): the cloud rows move to this device's new ids instead,
+        // in one server transaction (POST /api/match/restore, as a backup
+        // restore does; test matches never sync)
+        console.warn(`[Import] ${seedKey}: the cloud ids cannot be kept on this device; re-keying the cloud rows`)
+        await db.sync_queue.add({
+          resource: 'match',
+          action: 'restore',
+          payload: {
+            match: filterMatchPayload({ external_id: seedKey, status: match.status }),
+            sets: sets.map((s, i) => ({ ...cloudChildRow(s), external_id: setExtId(seedKey, newSetIds[i]) })),
+            events: cloudEvents.map((e, i) => ({ ...cloudChildRow(e), external_id: eventExtId(seedKey, newEventIds[i]) })),
+            liveState: cloudData.liveState ? cloudChildRow(cloudData.liveState) : null
+          },
+          ts: new Date().toISOString(),
+          status: 'queued'
+        })
+      }
+    })
+  })
+
+  await afterJoin(importedMatchId, { claim: true })
+  return importedMatchId
+}
+
+// The event types the scoring screen writes without a sync job
+// (eventRevisions_beach LOCAL_ONLY_EVENT_TYPES), and the first rally_start of
+// a set, which is added the same way
+const DEVICE_ONLY_EVENT_TYPES = ['set_start', 'set3_coin_toss', 'between_sets_setup_confirmed', 'technical_to']
+
+/**
+ * What only this device knows of match `seedKey`, read before its own copy is
+ * replaced by the cloud's (importMatchFromSupabase: "Take back scoring here",
+ * a restore by PIN on a device that had the match):
+ * - `events`: its set_start, technical_to (with the TTO's change of courts),
+ *   set 3 toss and first-rally events, which never reach the cloud. Without
+ *   them a take-back after the TTO asked for the TTO again and switched the
+ *   courts a second time, and the sheet lost its set starts (stress test
+ *   2026-10-25). Only when the cloud has no event this copy lacks after them
+ *   (the other device did not score on): otherwise they may be stale.
+ * - `sides`: its court sides on the same condition (a TTO's change of courts
+ *   is in no cloud event), and `setStartTimes` (index -> the start time its
+ *   scorer confirmed; the cloud had the time the set row was created).
+ * The events come without id and match id (the import gives new ones).
+ */
+async function keptLocalState(seedKey, cloudEvents) {
+  const none = { events: [], sides: null, setStartTimes: {} }
+  if (!seedKey) return none
+  // read as replaceLocalCopies reads the copies it replaces
+  const [own] = await db.matches.filter(m => localMatchKey(m) === seedKey).toArray()
+  if (!own) return none
+  const ownEvents = await db.events.where('matchId').equals(own.id).toArray()
+  const seqOf = (e) => (Number.isFinite(Number(e?.seq)) ? Number(e.seq) : 0)
+  const ownLast = Math.max(0, ...ownEvents.map(seqOf))
+  const cloudLast = Math.max(0, ...(cloudEvents || []).filter(e => e.external_id != null).map(seqOf))
+  if (cloudLast > ownLast) return none
+  const cloudIds = new Set((cloudEvents || []).map(e => e.external_id).filter(Boolean))
+  const firstRallyOfSet = new Map()
+  for (const e of [...ownEvents].sort((a, b) => seqOf(a) - seqOf(b))) {
+    if (e.type === 'rally_start' && !firstRallyOfSet.has(e.setIndex)) firstRallyOfSet.set(e.setIndex, e.id)
+  }
+  const deviceOnly = (e) => DEVICE_ONLY_EVENT_TYPES.includes(e.type) || (e.type === 'rally_start' && firstRallyOfSet.get(e.setIndex) === e.id)
+  // eslint-disable-next-line no-unused-vars
+  const events = ownEvents.filter(e => deviceOnly(e) && !cloudIds.has(eventExtId(seedKey, e.id))).map(({ id: _id, matchId: _matchId, ...e }) => e)
+  const sides = {
+    ...(own.setLeftTeamOverrides ? { setLeftTeamOverrides: { ...own.setLeftTeamOverrides } } : {}),
+    ...(own.set3LeftTeam ? { set3LeftTeam: own.set3LeftTeam } : {})
+  }
+  const setStartTimes = {}
+  for (const set of await db.sets.where('matchId').equals(own.id).toArray()) {
+    if (set.startTime && set.index != null) setStartTimes[set.index] = set.startTime
+  }
+  return { events, sides: Object.keys(sides).length ? sides : null, setStartTimes }
+}
+
+// The local id a cloud set/event row of match `seedKey` is keyed with
+// (`<seedKey>:s:<id>` / `<seedKey>:e:<id>`), or null
+function cloudLocalId(seedKey, kind, externalId) {
+  const p = parseExtId(externalId)
+  return p && p.seedKey === seedKey && p.kind === kind && Number.isSafeInteger(p.localId) && p.localId > 0 ? p.localId : null
+}
+
+// Can rows be stored under these ids: each one its own, none in use?
+async function idsAreFree(table, ids) {
+  if (ids.some(id => id == null) || new Set(ids).size !== ids.length) return false
+  if (ids.length === 0) return true
+  const rows = await table.bulkGet(ids)
+  return rows.every(row => row === undefined)
+}
+
+// Make `table` give out ids above `floor` from now on. IndexedDB moves its
+// key generator past every numeric key added explicitly, so a row is added
+// under `floor` and removed again; an id in use means it is past it already.
+async function raiseIdGenerator(table, floor, row) {
+  if (!Number.isSafeInteger(floor) || floor <= 0) return
+  if ((await table.get(floor)) !== undefined) return
+  await table.add({ ...row, id: floor })
+  await table.delete(floor)
+}
+
+// A cloud row as a restore job sends it back: the server's own keys left out
+// eslint-disable-next-line no-unused-vars
+const cloudChildRow = ({ id: _id, match_id: _matchId, updated_at: _updated, ...row }) => row
+
+// Remove the local copies of match `externalId` (inside the caller's
+// transaction: matches, sets, events, sync_queue); their unsent jobs are
+// superseded by the cloud copy.
+async function replaceLocalCopies(externalId) {
+  if (!externalId) return 0
+  const previous = await db.matches.filter(m => localMatchKey(m) === externalId).toArray()
+  if (!previous.length) return 0
+  for (const old of previous) {
+    await wipeMatchEvents(db, old.id)
+    await db.sets.where('matchId').equals(old.id).delete()
+    await db.matches.delete(old.id)
+  }
+  const open = await db.sync_queue.where('status').anyOf('queued', 'error', 'failed').toArray()
+  // (the writes of the match's score; a "My Matches" link still goes)
+  const ids = open.filter(j => ['match', 'set', 'event'].includes(j.resource) && jobMatchKey(j) === externalId).map(j => j.id)
+  for (const id of ids) await db.sync_queue.update(id, { status: 'superseded', superseded_by: 'cloud-copy' })
+  console.log(`[Import] Replaced ${previous.length} local copy/copies of match ${externalId} with the cloud copy (${ids.length} unsent job(s) superseded)`)
+  return previous.length
+}
+
+/**
+ * This device continues a cloud match (a restore by game PIN, a backup
+ * restore; utils_beach/matchHandover_beach): it becomes the match's scoring
+ * device (the claim job; a backup restore claims through its restore job
+ * instead). Never throws: the restore itself is done. (OpenVolley also
+ * retires a refused copy of the same official game here: beach game numbers
+ * are not unique, db/013, no beach match is refused for its game.)
+ */
+async function afterJoin(localMatchId, { claim = false } = {}) {
+  if (!claim) return
+  try {
+    const joined = localMatchId != null ? await db.matches.get(localMatchId) : null
+    if (joined) await queueScorerClaim(db, joined)
+  } catch (err) {
+    console.warn('[Restore] Could not hand the match over to this device:', err?.message)
+  }
+}
+
+/**
+ * Select a backup file using file picker
+ * Returns parsed JSON data or null if cancelled
+ */
+export async function selectBackupFile() {
+  // Try File System Access API first (Chrome/Edge)
+  if ('showOpenFilePicker' in window) {
+    try {
+      const [fileHandle] = await window.showOpenFilePicker({
+        types: [{
+          description: 'JSON Backup Files',
+          accept: { 'application/json': ['.json'] }
+        }],
+        multiple: false
+      })
+      const file = await fileHandle.getFile()
+      const text = await file.text()
+      return JSON.parse(text)
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        return null // User cancelled
+      }
+      throw error
+    }
+  }
+
+  // Fallback for Safari/Firefox - use hidden input
+  return new Promise((resolve, reject) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json,application/json'
+
+    input.onchange = async (e) => {
+      const file = e.target.files?.[0]
+      if (!file) {
+        resolve(null)
+        return
+      }
+
+      try {
+        const text = await file.text()
+        const data = JSON.parse(text)
+        resolve(data)
+      } catch (error) {
+        reject(new Error('Invalid JSON file'))
+      }
+    }
+
+    input.oncancel = () => resolve(null)
+
+    // Safari doesn't fire oncancel, so we use a focus event workaround
+    const handleFocus = () => {
+      setTimeout(() => {
+        if (!input.files?.length) {
+          resolve(null)
+        }
+        window.removeEventListener('focus', handleFocus)
+      }, 300)
+    }
+    window.addEventListener('focus', handleFocus)
+
+    input.click()
+  })
+}
+
+/**
+ * List cloud backups from Supabase storage for a match
+ * @param {string} gamePin - The 6-digit game PIN
+ * @param {number} gameN - The game number (default 1)
+ * @returns {Array} Array of backup file info
+ */
+export async function listCloudBackups(gamePin, gameN = 1) {
+  if (!isBackendAvailable()) {
+    throw new Error('Supabase not configured')
+  }
+
+  // The backups of the match this game number AND game PIN name, newest
+  // first (logger_beach listMatchBackups: beach game numbers repeat)
+  // eslint-disable-next-line no-unused-vars
+  return (await listMatchBackups(gamePin, gameN)).map(({ created_at, ...b }) => ({ ...b, created: created_at }))
+}
+
+/**
+ * Fetch a cloud backup file content
+ * @param {string} path - Full path to the backup file
+ * @returns {Object} Parsed JSON backup data
+ */
+export async function fetchCloudBackup(path) {
+  if (!isBackendAvailable()) {
+    throw new Error('Supabase not configured')
+  }
+
+  const { data, error } = await apiStorage
+    .from('backup')
+    .download(path)
+
+  if (error) throw error
+
+  const text = await data.text()
+  return JSON.parse(text)
+}
+
+/**
+ * Get backup settings from localStorage. The apps (native: true) keep their own
+ * switch, on by default; browsers default to off. The scoreboard's
+ * "Auto-download data at set end" is on by default everywhere, and its
+ * "Download even if sync succeeded" off (neither was stored: every new
+ * scoreboard put them back).
+ */
+const autoBackupKey = (native) => (native ? 'nativeAutoBackupEnabled' : 'autoBackupEnabled')
+
+export function getBackupSettings({ native = false } = {}) {
+  const stored = localStorage.getItem(autoBackupKey(native))
+  return {
+    autoBackupEnabled: stored === null || stored === undefined ? native : stored === 'true',
+    backupFrequencyMinutes: parseInt(localStorage.getItem('backupFrequencyMinutes') || '5', 10),
+    autoDownloadAtSetEnd: localStorage.getItem('autoDownloadAtSetEnd') !== 'false',
+    alwaysDownloadAtSetEnd: localStorage.getItem('alwaysDownloadAtSetEnd') === 'true'
+  }
+}
+
+/**
+ * Save backup settings to localStorage
+ */
+export function saveBackupSettings(settings, { native = false } = {}) {
+  if (settings.autoBackupEnabled !== undefined) {
+    localStorage.setItem(autoBackupKey(native), String(settings.autoBackupEnabled))
+  }
+  if (settings.backupFrequencyMinutes !== undefined) {
+    localStorage.setItem('backupFrequencyMinutes', String(settings.backupFrequencyMinutes))
+  }
+  if (settings.autoDownloadAtSetEnd !== undefined) {
+    localStorage.setItem('autoDownloadAtSetEnd', String(settings.autoDownloadAtSetEnd))
+  }
+  if (settings.alwaysDownloadAtSetEnd !== undefined) {
+    localStorage.setItem('alwaysDownloadAtSetEnd', String(settings.alwaysDownloadAtSetEnd))
+  }
+}

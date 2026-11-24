@@ -1,0 +1,7 @@
+OpenBeach 3.0.3
+- The app opens on Home: Continue resumes the match in one tap, a reload goes back into it, 15 minutes in the background goes to Home.
+- A match closed on the server opens read-only and keeps no sync error.
+- Restoring a backup no longer deletes the other matches on the device.
+- The match-end and set-end files can be restored.
+- The last backup is saved before the app closes.
+- "Auto-download data at set end" is remembered.

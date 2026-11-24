@@ -1,0 +1,3 @@
+OpenBeach 3.1.1
+- Error reports: when something goes wrong, the app sends what went wrong and where (never what you typed) to the OpenVolley server, also without signing in. You can switch it off in Support & feedback.
+- Privacy policy 1.22.

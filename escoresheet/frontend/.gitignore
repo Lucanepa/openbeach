@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+# Cloudflare Pages builds (npm run build:subdomains)
+dist-beachapp/
+dist-beach-*/
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Build output
+out/
+build/
+
+
+# Android app web bundle (CAPACITOR=true vite build)
+dist-capacitor/

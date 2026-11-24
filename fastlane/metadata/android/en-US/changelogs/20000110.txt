@@ -1,0 +1,2 @@
+OpenBeach 2.0.11
+- Sync: deleting a match that is closed on the server no longer keeps the cloud sync in error.

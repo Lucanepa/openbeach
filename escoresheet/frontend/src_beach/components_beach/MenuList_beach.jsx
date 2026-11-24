@@ -1,0 +1,301 @@
+import { useState, useEffect, useRef } from 'react'
+import { ChevronDown } from 'lucide-react'
+import { MENU_PANEL, MENU_ROW, MENU_SEP, MENU_ICON, MENU_TITLE, MENU_SECTION } from './chromeClasses_beach'
+import { cn } from '../ui/volleyui/cn.js'
+
+// 200 px wide at least, but never wider than the screen minus its 8 px
+// margins (a narrow phone or a zoomed page): the labels wrap instead
+const MENU_WIDTH = { minWidth: 'min(200px, calc(100vw - 16px))', maxWidth: 'calc(100vw - 16px)' }
+
+/**
+ * A toolbar dropdown. `items`: rows ({ key, icon, label, onClick, className,
+ * style }), { separator: true }, or { header: 'Title' } (a group label, not a
+ * row: the scorer's Match menu is grouped, as OpenVolley's matchMenu.jsx).
+ */
+export default function MenuList({
+  items = [],
+  position = 'right', // 'left' | 'right' | 'center'
+  vertical = 'bottom', // 'bottom' | 'top' - whether menu opens above or below the button
+  buttonLabel = 'Menu',
+  buttonTitle = '',
+  menuTitle = '',
+  buttonStyle = {},
+  buttonClassName = '',
+  showArrow = true,
+  // 'light': the volleyui face (kit menu panel and rows, `buttonClassName`
+  // carries the trigger's kit classes). The default keeps the legacy dark
+  // look for the screens not restyled yet.
+  tone = 'dark'
+}) {
+  const [showMenu, setShowMenu] = useState(false)
+  const menuRef = useRef(null)
+  const buttonRef = useRef(null)
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (showMenu && menuRef.current && !menuRef.current.contains(e.target) && 
+          buttonRef.current && !buttonRef.current.contains(e.target)) {
+        setShowMenu(false)
+      }
+    }
+
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside)
+      }
+    }
+  }, [showMenu])
+
+  // Position menu dynamically
+  useEffect(() => {
+    if (showMenu && buttonRef.current && menuRef.current) {
+      const updatePosition = () => {
+        const buttonRect = buttonRef.current.getBoundingClientRect()
+        const menu = menuRef.current
+        
+        requestAnimationFrame(() => {
+          // Horizontal positioning
+          if (position === 'right') {
+            menu.style.right = `${window.innerWidth - buttonRect.right}px`
+            menu.style.left = 'auto'
+          } else if (position === 'left') {
+            menu.style.left = `${buttonRect.left}px`
+            menu.style.right = 'auto'
+          } else {
+            // center
+            menu.style.left = `${buttonRect.left + (buttonRect.width / 2)}px`
+            menu.style.right = 'auto'
+            menu.style.transform = 'translateX(-50%)'
+          }
+
+          // Kept on the screen: on a phone the match end's Scoresheet button
+          // sits at the left edge and its right-aligned menu ran off the left
+          // (emulator audit 2026-10-14)
+          const margin = 8
+          const r = menu.getBoundingClientRect()
+          if (r.left < margin) {
+            menu.style.left = `${margin}px`
+            menu.style.right = 'auto'
+            menu.style.transform = 'none'
+          } else if (r.right > window.innerWidth - margin) {
+            menu.style.right = `${margin}px`
+            menu.style.left = 'auto'
+            menu.style.transform = 'none'
+          }
+
+          // Vertical positioning
+          if (vertical === 'top') {
+            menu.style.bottom = `${window.innerHeight - buttonRect.top + 4}px`
+            menu.style.top = 'auto'
+          } else {
+            menu.style.top = `${buttonRect.bottom + 4}px`
+            menu.style.bottom = 'auto'
+          }
+        })
+      }
+
+      updatePosition()
+      window.addEventListener('scroll', updatePosition, true)
+      window.addEventListener('resize', updatePosition)
+
+      return () => {
+        window.removeEventListener('scroll', updatePosition, true)
+        window.removeEventListener('resize', updatePosition)
+      }
+    }
+  }, [showMenu, position, vertical])
+
+  const getPositionStyle = () => {
+    // Will be set dynamically via useEffect
+    return {}
+  }
+
+  if (tone === 'light') {
+    return (
+      <div className="ov-kit relative">
+        <button
+          type="button"
+          ref={buttonRef}
+          className={buttonClassName}
+          title={buttonTitle || undefined}
+          aria-label={typeof buttonLabel === 'string' ? undefined : (buttonTitle || undefined)}
+          aria-haspopup="menu"
+          aria-expanded={showMenu}
+          onClick={(e) => {
+            e.stopPropagation()
+            setShowMenu(!showMenu)
+          }}
+          style={buttonStyle}
+        >
+          {buttonLabel}
+          {showArrow && (
+            <ChevronDown size={16} aria-hidden="true" className={cn('transition-transform', showMenu && 'rotate-180')} />
+          )}
+        </button>
+
+        {showMenu && (
+          <div
+            ref={menuRef}
+            role="menu"
+            onClick={(e) => e.stopPropagation()}
+            className={cn(MENU_PANEL, 'fixed z-[1000]')}
+            style={MENU_WIDTH}
+          >
+            {menuTitle && <div className={cn(MENU_TITLE, 'px-3 pb-2 pt-1')}>{menuTitle}</div>}
+            {items.map((item, index) => {
+              if (item.separator) return <div key={`separator-${index}`} className={MENU_SEP} />
+              if (item.header) return <div key={item.key || `header-${index}`} role="presentation" className={MENU_SECTION}>{item.header}</div>
+              return (
+                <button
+                  type="button"
+                  role="menuitem"
+                  key={item.key || index}
+                  onClick={() => {
+                    if (item.onClick) {
+                      item.onClick()
+                    }
+                    setShowMenu(false)
+                  }}
+                  className={cn(MENU_ROW, item.className)}
+                  style={item.style}
+                >
+                  {item.icon && <span className={MENU_ICON}>{item.icon}</span>}
+                  <span>{item.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        ref={buttonRef}
+        className={buttonClassName}
+        title={buttonTitle || undefined}
+        onClick={(e) => {
+          e.stopPropagation()
+          setShowMenu(!showMenu)
+        }}
+        style={{
+          ...buttonStyle,
+          cursor: 'pointer',
+          transition: 'all 0.2s'
+        }}
+        onMouseEnter={(e) => {
+          if (buttonStyle.background) {
+            e.currentTarget.style.opacity = '0.9'
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (buttonStyle.background) {
+            e.currentTarget.style.opacity = '1'
+          }
+        }}
+      >
+        {buttonLabel}
+        {showArrow && (
+          <span style={{ marginLeft: '6px', fontSize: '10px' }}>
+            {showMenu ? '▲' : '▼'}
+          </span>
+        )}
+      </button>
+      
+      {/* Menu List */}
+      {showMenu && (
+        <div
+          ref={menuRef}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            ...getPositionStyle(),
+            background: 'rgb(0, 0, 0)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            borderRadius: '6px',
+            padding: '8px',
+            width: 'auto',
+            ...MENU_WIDTH,
+            zIndex: 1000,
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
+          }}
+        >
+          {menuTitle && (
+            <div style={{
+              padding: '8px 12px 12px 12px',
+              fontSize: '14px',
+              fontWeight: 700,
+              color: '#fff',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.15)',
+              marginBottom: '8px'
+            }}>
+              {menuTitle}
+            </div>
+          )}
+          {items.map((item, index) => {
+            if (item.header) {
+              return (
+                <div key={item.key || `header-${index}`} role="presentation" style={{ padding: '6px 12px 4px', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'rgba(255, 255, 255, 0.6)' }}>
+                  {item.header}
+                </div>
+              )
+            }
+            if (item.separator) {
+              return (
+                <div
+                  key={`separator-${index}`}
+                  style={{
+                    height: '1px',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    margin: '8px 0'
+                  }}
+                />
+              )
+            }
+
+            return (
+              <div
+                key={item.key || index}
+                onClick={() => {
+                  if (item.onClick) {
+                    item.onClick()
+                  }
+                  setShowMenu(false)
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 12px',
+                  marginBottom: index < items.length - 1 ? '4px' : '0',
+                  fontSize: '13px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  ...(item.style || {})
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                }}
+              >
+                {item.icon && <span style={{ fontSize: '16px' }}>{item.icon}</span>}
+                <span>{item.label}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}

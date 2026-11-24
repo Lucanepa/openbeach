@@ -1,0 +1,2 @@
+OpenBeach 2.0.4
+- The scoresheet stays at hand after the approval: preview or save it before closing the match.

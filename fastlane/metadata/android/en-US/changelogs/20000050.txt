@@ -1,0 +1,4 @@
+OpenBeach 2.0.5
+- A match scored offline or signed out now reaches the server whole: the approval waits for its sets and points.
+- Signed in again, the "Session expired" notice goes as soon as the waiting changes are being sent.
+- A saved scoresheet is named game<n>_<league>_<date>.pdf.

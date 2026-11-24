@@ -1,0 +1,597 @@
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import jsPDF from 'jspdf';
+import OpenbeachScoresheet from './components_beach/eScoresheet_beach';
+// Opened as a popup, a desktop app window or the Android app's in-app view
+import { closeAppWindow, deliverPdfToOpener, getOpenerWindow, savePdfThroughApp, reportPdfProgress, watchPdfWindowClose } from '../src_beach/utils_beach/appWindowGuest_beach.js';
+// The app's language (the same localStorage as the scorer page)
+import i18n from '../src_beach/i18n.js';
+// The desktop app's quit question says a PDF is still being saved here
+import { setPdfBusy } from '../src_beach/utils_beach/openAppWindow_beach.js';
+import { beachScoresheetFilename } from '../src_beach/utils_beach/scoresheetFilename_beach.js';
+
+// Count actual pages in the DOM
+const countPages = (): number => {
+  let count = 0;
+  while (document.getElementById(`page-${count + 1}`)) count++;
+  return Math.max(count, 2); // At least 2 pages
+};
+
+const t = (key: string, opts?: Record<string, unknown>) => String(i18n.t(key, opts));
+
+// The PDF is A4 landscape (297 x 210 mm) and each 277 x 190 mm page of the
+// sheet is placed on it at its true size, centred (10 mm margins), as
+// OpenVolley places its sheet on A3. It was stretched over the whole A4 page
+// (x 1.072 across, x 1.105 down: out of proportion) with no margin left for a
+// printer's unprintable edge.
+export const PDF_PAGE_MM = { width: 297, height: 210 } as const;
+export const SHEET_PAGE_MM = { width: 277, height: 190 } as const;
+export const SHEET_PAGE_OFFSET_MM = {
+  x: (PDF_PAGE_MM.width - SHEET_PAGE_MM.width) / 2,
+  y: (PDF_PAGE_MM.height - SHEET_PAGE_MM.height) / 2
+} as const;
+
+/**
+ * Draws a captured page of the sheet (a JPEG of the page's 277 x 190 mm box,
+ * so of its proportions) on the PDF's current page, at its true size.
+ */
+export function addSheetPageImage(pdf: any, imgData: string) {
+  pdf.addImage(imgData, 'JPEG', SHEET_PAGE_OFFSET_MM.x, SHEET_PAGE_OFFSET_MM.y, SHEET_PAGE_MM.width, SHEET_PAGE_MM.height, undefined, 'FAST');
+}
+
+/**
+ * REMARKS too long for their box on the sheet (OpenVolley 4d4277be): the
+ * whole text on pages of their own after the sheet (A4 landscape, as the
+ * sheet). `page` is the first of them, as the sheet's "Remarks continue on
+ * page n." says.
+ */
+export function addRemarksPages(pdf: any, text: string, title: string) {
+  const left = 15;
+  const top = 38;
+  const bottom = PDF_PAGE_MM.height - 12;
+  const fontPt = 11;
+  // jsPDF's line height: the font size times 1.15, in mm
+  const lineMm = fontPt * 1.15 * 25.4 / 72;
+  const perPage = Math.max(1, Math.floor((bottom - top) / lineMm));
+  pdf.setFontSize(fontPt);
+  const lines: string[] = pdf.splitTextToSize(text, PDF_PAGE_MM.width - 2 * left);
+  for (let i = 0; i === 0 || i < lines.length; i += perPage) {
+    pdf.addPage();
+    pdf.setFontSize(14);
+    pdf.text(i === 0 ? 'REMARKS (continued from the scoresheet)' : 'REMARKS (continued)', left, 20);
+    pdf.setFontSize(10);
+    pdf.text(title, left, 27);
+    pdf.setFontSize(fontPt);
+    pdf.text(lines.slice(i, i + perPage), left, top);
+  }
+}
+
+/** The page's URL action: 'getBlob' (the match-end approval), 'save', 'print' or none (preview). */
+export const pageAction = (search = typeof window !== 'undefined' ? window.location.search : '') =>
+  new URLSearchParams(search).get('action');
+
+/** The progress line under "Generating…". */
+export function progressLabel(p: { step: string; page?: number; pages?: number; error?: string } | null) {
+  if (!p) return t('scoresheet.wait');
+  if (p.step === 'page') return t('scoresheet.page', { page: p.page, pages: p.pages });
+  if (p.step === 'finishing') return t('scoresheet.finishing');
+  if (p.step === 'sent') return t('scoresheet.sent');
+  if (p.step === 'failed') return t('scoresheet.pdfFailed', { error: p.error || '' });
+  return t('scoresheet.preparing');
+}
+
+export default function App({ matchData }: { matchData?: any }) {
+  // The match-end approval (action=getBlob) makes the PDF at once: the
+  // "Generating…" overlay is there from the first paint (no interactive
+  // preview for 2 s that closes under the scorer), without Download / zoom.
+  const approvalMode = pageAction() === 'getBlob';
+  const [zoom, setZoom] = useState(1);
+  // The sheet's own size (layout px, unscaled): the box around it takes it times the zoom
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
+  // The pages stay hidden until the first fit-to-window: no 100 % -> 125 % jump
+  const [fitted, setFitted] = useState(false);
+  const [savedNotice, setSavedNotice] = useState(false);
+  // REMARKS too long for their box even at the smallest size: warned above
+  // the sheet, and the PDF prints the whole text on a page of its own
+  const [remarksClipped, setRemarksClipped] = useState<{ text: string; page: number } | null>(null);
+  // (read by the PDF: the URL action's save runs the first render's handleSavePDF)
+  const remarksClippedRef = useRef<{ text: string; page: number } | null>(null);
+  const onRemarksClipped = useCallback((clipped: { text: string; page: number } | null) => {
+    remarksClippedRef.current = clipped;
+    setRemarksClipped(clipped);
+  }, []);
+  const [isAutoFit, setIsAutoFit] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(2);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isPdfGenerating, setIsPdfGenerating] = useState(approvalMode);
+  const [pdfProgress, setPdfProgress] = useState<{ step: string; page?: number; pages?: number; error?: string } | null>(approvalMode ? { step: 'preparing' } : null);
+  // While the approval waits for this window: its heartbeat to the opener,
+  // and closing the window tells the opener at once (it then asks the scorer)
+  const approvalBusyRef = useRef(approvalMode);
+  const progressRef = useRef<{ page?: number; pages?: number }>({});
+  useEffect(() => {
+    if (!approvalMode) return undefined;
+    const stopWatch = watchPdfWindowClose(() => approvalBusyRef.current);
+    reportPdfProgress(progressRef.current);
+    const beat = setInterval(() => {
+      if (approvalBusyRef.current) reportPdfProgress(progressRef.current);
+    }, 1000);
+    return () => { clearInterval(beat); stopWatch(); };
+  }, [approvalMode]);
+
+  // Update total pages after render
+  useEffect(() => {
+    const timer = setTimeout(() => setTotalPages(countPages()), 200);
+    return () => clearTimeout(timer);
+  }, [matchData]);
+
+  // Get page element by number
+  const getPageElement = useCallback((pageNum: number) => {
+    return document.getElementById(`page-${pageNum}`);
+  }, []);
+
+  // Calculate auto-fit zoom to fit a single page in viewport
+  const calculateAutoFitZoom = useCallback(() => {
+    if (!containerRef.current) return 1;
+
+    const page1 = getPageElement(1);
+    if (!page1) return 1;
+
+    const containerWidth = containerRef.current.clientWidth - 48; // padding
+    const containerHeight = containerRef.current.clientHeight - 80; // toolbar + padding
+
+    // Use actual page dimensions
+    const pageWidth = page1.offsetWidth;
+    const pageHeight = page1.offsetHeight;
+
+    if (!pageWidth || !pageHeight || containerWidth <= 0 || containerHeight <= 0) return 1; // not laid out yet
+
+    const scaleX = containerWidth / pageWidth;
+    const scaleY = containerHeight / pageHeight;
+
+    return Math.min(scaleX, scaleY, 1.5); // Max zoom 1.5x
+  }, [getPageElement]);
+
+  // Scroll to a specific page using actual DOM element positions
+  const scrollToPage = useCallback((pageNum: number) => {
+    if (!scrollRef.current || !contentRef.current) return;
+
+    const pageElement = getPageElement(pageNum);
+    if (!pageElement) return;
+
+    // Get the page's position relative to the scroll container
+    const contentRect = contentRef.current.getBoundingClientRect();
+    const pageRect = pageElement.getBoundingClientRect();
+
+    // Calculate offset within the scaled content
+    const offsetInContent = (pageRect.top - contentRect.top) / zoom;
+
+    scrollRef.current.scrollTo({
+      top: offsetInContent * zoom,
+      behavior: 'smooth'
+    });
+
+    setCurrentPage(pageNum);
+  }, [zoom, getPageElement]);
+
+  // The first fit before the pages are shown (no zoom jump)
+  useLayoutEffect(() => {
+    if (fitted) return;
+    setZoom(calculateAutoFitZoom());
+    setFitted(true);
+  }, [fitted, calculateAutoFitZoom]);
+
+  // The sheet's own size, for its box (none until laid out: then the sheet
+  // is centred as before)
+  useLayoutEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const measure = () => {
+      const w = el.offsetWidth, h = el.offsetHeight;
+      if (w && h) setNatural(n => (n && n.w === w && n.h === h ? n : { w, h }));
+    };
+    measure();
+    // the pages keep growing after the fonts and the data load, with no
+    // window resize: watch the sheet itself
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [fitted, matchData]);
+
+  // Auto-fit on mount and resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (isAutoFit) {
+        const newZoom = calculateAutoFitZoom();
+        setZoom(newZoom);
+      }
+    };
+
+    // Initial calculation after a short delay to ensure DOM is ready
+    const timer = setTimeout(() => {
+      handleResize();
+      // Scroll to first page on initial load
+      scrollToPage(1);
+    }, 100);
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [isAutoFit, calculateAutoFitZoom, scrollToPage]);
+
+  // Update current page based on scroll position using actual page positions
+  useEffect(() => {
+    const scrollContainer = scrollRef.current;
+    const content = contentRef.current;
+    if (!scrollContainer || !content) return;
+
+    const handleScroll = () => {
+      const scrollTop = scrollContainer.scrollTop;
+      const containerMidpoint = scrollTop + scrollContainer.clientHeight / 2;
+
+      // Find which page is most visible
+      let closestPage = 1;
+      let closestDistance = Infinity;
+
+      for (let i = 1; i <= totalPages; i++) {
+        const pageEl = getPageElement(i);
+        if (!pageEl) continue;
+
+        const contentRect = content.getBoundingClientRect();
+        const pageRect = pageEl.getBoundingClientRect();
+        const pageTop = ((pageRect.top - contentRect.top) / zoom) * zoom;
+        const pageCenter = pageTop + (pageRect.height / 2);
+
+        const distance = Math.abs(containerMidpoint - pageCenter);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestPage = i;
+        }
+      }
+
+      if (closestPage !== currentPage) {
+        setCurrentPage(closestPage);
+      }
+    };
+
+    scrollContainer.addEventListener('scroll', handleScroll);
+    return () => scrollContainer.removeEventListener('scroll', handleScroll);
+  }, [zoom, currentPage, getPageElement]);
+
+  // Handle URL action parameters - auto-trigger PDF save and close window
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const action = urlParams.get('action');
+
+    if (action === 'save' || action === 'getBlob' || action === 'print') {
+      setTimeout(async () => {
+        await handleSavePDF(action === 'getBlob');
+        // Auto-close the window after saving (only for action-triggered saves)
+        if (action === 'save') {
+          setTimeout(() => closeAppWindow(), 1000);
+        }
+      }, 1500);
+    }
+  }, []);
+
+  const handleFitToPage = () => {
+    setIsAutoFit(true);
+    const newZoom = calculateAutoFitZoom();
+    setZoom(newZoom);
+  };
+
+  const handleZoomIn = () => {
+    setIsAutoFit(false);
+    setZoom(prev => Math.min(prev + 0.1, 2));
+  };
+
+  const handleZoomOut = () => {
+    setIsAutoFit(false);
+    // the floor fits a 360 px phone (about 0.28 there)
+    setZoom(prev => Math.max(prev - 0.1, 0.2));
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) scrollToPage(currentPage - 1);
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) scrollToPage(currentPage + 1);
+  };
+
+  // The PDF's file name: game<n>_<league>_<YYYY-MM-DD>.pdf (utils_beach/scoresheetFilename_beach)
+  const generateFilename = () => beachScoresheetFilename(matchData);
+
+  // Shared: prepare DOM for capture (reset zoom, make overflow visible, strip debug decorations)
+  const prepareForCapture = async () => {
+    const contentEl = contentRef.current;
+    const scrollEl = scrollRef.current;
+    if (!contentEl || !scrollEl) throw new Error('Content not found');
+
+    const savedZoom = zoom;
+    const savedScrollCss = scrollEl.style.cssText;
+    const savedContentCss = contentEl.style.cssText;
+
+    setZoom(1);
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    contentEl.style.transform = 'none';
+    contentEl.style.transition = 'none';
+    scrollEl.style.overflow = 'visible';
+    scrollEl.style.scrollbarGutter = 'stable';
+    scrollEl.style.scrollSnapType = 'none';
+
+    await new Promise(resolve => setTimeout(resolve, 200));
+    await document.fonts.ready;
+
+    // Find all page elements
+    const pages: HTMLElement[] = [];
+    let pageNum = 1;
+    while (document.getElementById(`page-${pageNum}`)) {
+      pages.push(document.getElementById(`page-${pageNum}`)!);
+      pageNum++;
+    }
+    if (pages.length === 0) throw new Error('No pages found');
+
+    // Strip debug decorations from all pages
+    const savedPageStyles: string[] = [];
+    for (const page of pages) {
+      savedPageStyles.push(page.style.cssText);
+      page.style.overflow = 'visible';
+      page.style.border = 'none';
+      page.style.boxShadow = 'none';
+      page.style.margin = '0';
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    return { contentEl, scrollEl, savedZoom, savedScrollCss, savedContentCss, pages, savedPageStyles };
+  };
+
+  // Shared: restore DOM after capture
+  const restoreAfterCapture = (state: Awaited<ReturnType<typeof prepareForCapture>>) => {
+    for (let i = 0; i < state.pages.length; i++) {
+      state.pages[i].style.cssText = state.savedPageStyles[i];
+    }
+    state.contentEl.style.cssText = state.savedContentCss;
+    state.scrollEl.style.cssText = state.savedScrollCss;
+    setZoom(state.savedZoom);
+  };
+
+  // Save a PDF: a download, or in the Android app's in-app view (no blob
+  // downloads in a WebView) handed to the app's bar
+  const savePdf = (pdf: any, filename: string) => {
+    savePdfThroughApp(pdf.output('blob'), filename).then((handled: boolean) => {
+      if (!handled) pdf.save(filename);
+    });
+  };
+
+  // Shared: finish PDF (save or send blob to parent)
+  const finishPDF = (pdf: any, returnBlob: boolean) => {
+    const filename = generateFilename();
+    if (returnBlob) {
+      // back to the match-end approval (opener, or the scorer under the in-app view)
+      deliverPdfToOpener({ arrayBuffer: pdf.output('arraybuffer'), filename });
+    } else {
+      savePdf(pdf, filename);
+    }
+  };
+
+  // Generate PDF using rasterizeHTML for all pages
+  const handleSavePDF = async (returnBlob = false) => {
+    setIsPdfGenerating(true);
+    setPdfProgress({ step: 'preparing' });
+    // the desktop app's quit question says a PDF is still being saved here
+    setPdfBusy(true);
+
+    try {
+      const rasterizeHTML = (await import('rasterizehtml')).default;
+      const state = await prepareForCapture();
+
+      // Collect all stylesheets as inline CSS
+      let allCSS = '';
+      for (const sheet of document.styleSheets) {
+        try {
+          for (const rule of sheet.cssRules) {
+            allCSS += rule.cssText + '\n';
+          }
+        } catch (_e) { /* cross-origin sheets */ }
+      }
+
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+      for (let i = 0; i < state.pages.length; i++) {
+        if (i > 0) pdf.addPage();
+        setPdfProgress({ step: 'page', page: i + 1, pages: state.pages.length });
+        progressRef.current = { page: i + 1, pages: state.pages.length };
+        if (returnBlob) reportPdfProgress(progressRef.current);
+
+        const page = state.pages[i];
+        const htmlContent = `<!DOCTYPE html>
+<html><head><style>${allCSS}</style></head>
+<body style="margin:0;padding:0;background:white">${page.outerHTML}</body></html>`;
+
+        const width = page.offsetWidth;
+        const height = page.offsetHeight;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width * 2;
+        canvas.height = height * 2;
+        const ctx = canvas.getContext('2d')!;
+        ctx.scale(2, 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+
+        await rasterizeHTML.drawHTML(htmlContent, canvas, { width, height });
+
+        const imgData = canvas.toDataURL('image/jpeg', 0.85);
+        addSheetPageImage(pdf, imgData);
+      }
+      const clippedRemarks = remarksClippedRef.current;
+      if (clippedRemarks) addRemarksPages(pdf, clippedRemarks.text, generateFilename().replace(/\.pdf$/i, ''));
+
+      restoreAfterCapture(state);
+      setPdfProgress({ step: 'finishing' });
+      if (returnBlob) {
+        // delivered: closing the window from now on cancels nothing
+        approvalBusyRef.current = false;
+        finishPDF(pdf, true);
+        // where window.close() does nothing (macOS app windows) the window
+        // stays: it must not keep saying "Generating…, closing cancels"
+        setPdfProgress({ step: 'sent' });
+      } else {
+        savePdf(pdf, generateFilename());
+        setSavedNotice(true);
+        setTimeout(() => setSavedNotice(false), 4000);
+      }
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      if (returnBlob && getOpenerWindow()) {
+        // The approval waits for this window: say so at once (no blocking alert)
+        approvalBusyRef.current = false;
+        deliverPdfToOpener({ error: message });
+        setPdfProgress({ step: 'failed', error: message });
+      } else {
+        alert(t('scoresheet.pdfFailed', { error: message }));
+      }
+    } finally {
+      setPdfBusy(false);
+      // the approval window closes itself once the PDF is sent: the overlay
+      // stays until then (no flash of the interactive preview)
+      if (!returnBlob) {
+        setIsPdfGenerating(false);
+        setPdfProgress(null);
+      }
+    }
+  };
+
+  const zoomPercentage = Math.round(zoom * 100);
+  // the approval's PDF went back (or its error did): nothing left to cancel
+  const pdfDone = pdfProgress?.step === 'sent' || pdfProgress?.step === 'failed';
+
+  return (
+    <div ref={containerRef} className="scoresheet-app h-screen flex flex-col bg-gray-200 overflow-hidden">
+      {/* Toolbar */}
+      {/* The toolbar wraps on a phone, without its title (it ran off the
+          screen at 384 px, emulator audit 2026-10-14) */}
+      <div className="scoresheet-toolbar flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-4 py-2 bg-gray-800 text-white">
+        <div className="hidden items-center gap-2 sm:flex">
+          <span className="text-sm font-medium mr-2">Beach Volleyball eScoresheet</span>
+        </div>
+
+        {!approvalMode && (
+        <div className="flex flex-wrap items-center gap-1">
+          <button onClick={handlePrevPage} disabled={currentPage <= 1}
+            className="px-2 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Previous page">
+            ◀
+          </button>
+          <span className="px-2 py-1.5 text-sm font-mono min-w-[60px] text-center">{currentPage} / {totalPages}</span>
+          <button onClick={handleNextPage} disabled={currentPage >= totalPages}
+            className="px-2 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Next page">
+            ▶
+          </button>
+
+          <div className="w-px h-6 bg-gray-600 mx-2" />
+
+          <button onClick={handleFitToPage}
+            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${isAutoFit ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'}`}
+            title="Fit to page">
+            Fit
+          </button>
+          <button onClick={handleZoomOut} disabled={zoom <= 0.2}
+            className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors" title="Zoom out">
+            −
+          </button>
+          <span className="px-3 py-1.5 text-sm font-mono min-w-[60px] text-center">{zoomPercentage}%</span>
+          <button onClick={handleZoomIn} disabled={zoom >= 2}
+            className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors" title="Zoom in">
+            +
+          </button>
+
+          <div className="w-px h-6 bg-gray-600 mx-2" />
+
+          <button onClick={() => handleSavePDF(false)} disabled={isPdfGenerating}
+            className="px-3 py-1.5 rounded bg-green-600 hover:bg-green-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="Download PDF">
+            {isPdfGenerating ? progressLabel(pdfProgress) : savedNotice ? `✓ ${t('scoresheet.pdfSaved')}` : t('scoresheet.downloadPdf')}
+          </button>
+        </div>
+        )}
+      </div>
+
+      {remarksClipped && (
+        <div data-testid="remarks-clipped-warning" className="px-4 py-1.5 border-b border-amber-300 bg-amber-50 text-xs text-amber-900">
+          {t('scoresheet.remarksClipped', { page: remarksClipped.page })}
+        </div>
+      )}
+
+      {/* Scrollable content area */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-auto p-4"
+        style={{ scrollSnapType: 'y mandatory', scrollBehavior: 'smooth' }}
+      >
+        {/* A box of the scaled sheet's size, the sheet scaled from its top
+            left inside it: centred when it fits, scrollable from its left
+            edge when not. Scaled about its top centre in a box of its full
+            size, a sheet narrower than that box hung off the right of a
+            phone (emulator audit 2026-10-14). */}
+        <div style={natural ? { width: natural.w * zoom, height: natural.h * zoom, margin: '0 auto' } : undefined}>
+        <div
+          ref={contentRef}
+          className={natural ? 'scoresheet-content' : 'scoresheet-content mx-auto'}
+          style={{
+            width: 'max-content',
+            transform: `scale(${zoom})`,
+            transformOrigin: natural ? 'top left' : 'top center',
+            transition: fitted ? 'transform 0.2s ease-out' : 'none',
+            visibility: fitted ? 'visible' : 'hidden',
+            pointerEvents: 'none',
+            userSelect: 'none',
+          }}
+        >
+          <OpenbeachScoresheet matchData={matchData} onRemarksClipped={onRemarksClipped} />
+        </div>
+        </div>
+
+      </div>
+
+      {/* PDF Generating overlay */}
+      {isPdfGenerating && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          // light, as the app (volleyui): no black flash when the window opens
+          backgroundColor: 'rgba(250, 250, 249, 0.97)', zIndex: 99998,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '24px', textAlign: 'center'
+        }}>
+          {pdfDone ? (
+            <div style={{ fontSize: '48px', marginBottom: '24px', color: pdfProgress?.step === 'sent' ? '#047857' : '#b91c1c' }} aria-hidden="true">{pdfProgress?.step === 'sent' ? '✓' : '!'}</div>
+          ) : (
+            <div style={{ fontSize: '48px', marginBottom: '24px', animation: 'spin 1s linear infinite' }}>⏳</div>
+          )}
+          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+          <h2 style={{ color: '#1c1917', fontSize: '24px', fontWeight: 'bold', marginBottom: '16px' }}>
+            {pdfProgress?.step === 'sent' ? t('scoresheet.sentTitle') : t('scoresheet.generating')}
+          </h2>
+          <p role="status" aria-live="polite" style={{ color: '#57534e', fontSize: '16px', maxWidth: '400px' }}>
+            {progressLabel(pdfProgress)}
+          </p>
+          {approvalMode && !pdfDone && (
+            <p style={{ color: '#b45309', fontSize: '15px', fontWeight: 600, maxWidth: '420px', marginTop: '16px' }}>
+              {t('scoresheet.closeCancels')}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

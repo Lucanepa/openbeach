@@ -1,0 +1,268 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+
+// (3) The main app had no account UI (UserButton_beach / ProfileModal_beach
+// were never mounted): no way to sign in, see the approval state, enter an
+// invite code, sign out of a shared court tablet or delete the account.
+
+const auth = vi.hoisted(() => ({ current: null }))
+vi.mock('../../contexts_beach/AuthContext_beach', () => ({ useAuth: () => auth.current }))
+const ui = vi.hoisted(() => ({ confirm: vi.fn(async () => true) }))
+vi.mock('../../ui/volleyui/uiStore.js', async (importOriginal) => {
+  const real = await importOriginal()
+  return { ...real, confirmDialog: (...a) => ui.confirm(...a) }
+})
+
+import UserButton, { accountInitials } from '../../components_beach/auth/UserButton_beach'
+import { SIGNUP_URL, RESET_PASSWORD_URL } from '../../lib_beach/accountLinks_beach'
+import { roleLabels, deleteErrorText } from '../../components_beach/auth/ProfileModal_beach'
+
+function signedOut(extra = {}) {
+  return { user: null, profile: null, access: { known: false, isPending: false, roles: [] }, loading: false, signIn: vi.fn(async () => ({ error: null })), ...extra }
+}
+function signedIn(extra = {}) {
+  return {
+    user: { id: 'u1', email: 'anna@example.ch' },
+    profile: { user_id: 'u1', first_name: 'Anna', last_name: 'Müller', roles: [] },
+    access: { known: true, isPending: true, roles: [] },
+    loading: false,
+    signOut: vi.fn(async () => ({ error: null })),
+    deleteAccount: vi.fn(async () => ({ error: null })),
+    updateProfile: vi.fn(async () => ({ error: null })),
+    redeemInvite: vi.fn(async () => ({ data: { roles: ['beach:scorer'] }, error: null, status: 200 })),
+    joinBeach: vi.fn(async () => ({ data: { app: 'beach', member: true }, error: null, status: 200 })),
+    ...extra
+  }
+}
+
+beforeEach(() => {
+  ui.confirm.mockClear()
+})
+
+describe('the header account button', () => {
+  it('signed out: Sign in opens the sign-in dialog, with Create account on manager-beach', async () => {
+    auth.current = signedOut()
+    render(<UserButton buttonClass="btn" />)
+    fireEvent.click(screen.getByTestId('header-sign-in'))
+    const dialog = await screen.findByRole('dialog', { name: 'Sign in' })
+    const create = within(dialog).getByTestId('create-account-link')
+    expect(create).toHaveAttribute('href', 'https://manager-beach.openvolley.app/#signup')
+    expect(SIGNUP_URL).toBe('https://manager-beach.openvolley.app/#signup')
+    // The external-link icon stays on the text's line (the kit scope makes
+    // every svg a block): the link is an inline flex row that does not wrap
+    expect(create.className).toMatch(/\binline-flex\b/)
+    expect(create.className).toMatch(/\bwhitespace-nowrap\b/)
+    expect(create.querySelector('svg')).not.toBeNull()
+    expect(within(dialog).getByText('Forgot password?')).toHaveAttribute('href', RESET_PASSWORD_URL)
+    // Sentence case and a named close button, no "x" glyph
+    expect(within(dialog).queryByText('Sign In')).toBeNull()
+    expect(within(dialog).queryByText(/^x$/)).toBeNull()
+    // No in-app sign-up any more
+    expect(within(dialog).queryByText('Sign Up')).toBeNull()
+  })
+
+  it('signs in with the typed email and password', async () => {
+    auth.current = signedOut()
+    render(<UserButton buttonClass="btn" />)
+    fireEvent.click(screen.getByTestId('header-sign-in'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText('Email'), { target: { value: ' anna@example.ch ' } })
+    fireEvent.change(within(dialog).getByLabelText('Password'), { target: { value: 'secret' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Sign in' }))
+    await waitFor(() => expect(auth.current.signIn).toHaveBeenCalledWith('anna@example.ch', 'secret'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('signed in and pending: initials with the waiting mark; the dialog has the invite code', async () => {
+    auth.current = signedIn()
+    render(<UserButton buttonClass="btn" />)
+    const button = screen.getByTestId('header-account')
+    expect(button).toHaveTextContent('AM')
+    expect(button).toHaveAccessibleName(/waiting for approval/)
+    fireEvent.click(button)
+    const dialog = await screen.findByRole('dialog', { name: 'Your account' })
+    expect(within(dialog).getByTestId('account-email')).toHaveTextContent('anna@example.ch')
+    expect(within(dialog).getByTestId('pending-approval')).toBeInTheDocument()
+    const code = within(dialog).getByLabelText('Invite code')
+    fireEvent.change(code, { target: { value: 'abcd1234efgh' } })
+    expect(code).toHaveValue('ABCD-1234-EFGH')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Redeem code' }))
+    await waitFor(() => expect(auth.current.redeemInvite).toHaveBeenCalledWith('ABCD-1234-EFGH'))
+  })
+
+  it('an OpenVolley account not in OpenBeach: Join OpenBeach, then the pending state', async () => {
+    auth.current = signedIn({ access: { known: true, isPending: true, needsJoin: true, roles: ['scorer'] } })
+    const { rerender } = render(<UserButton buttonClass="btn" />)
+    const button = screen.getByTestId('header-account')
+    expect(button).toHaveAccessibleName(/not in OpenBeach yet/)
+    fireEvent.click(button)
+    const dialog = await screen.findByRole('dialog', { name: 'Your account' })
+    expect(within(dialog).getByTestId('join-beach-section')).toBeInTheDocument()
+    // No invite code before the join (the join comes first)
+    expect(within(dialog).queryByTestId('pending-approval')).toBeNull()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Join OpenBeach' }))
+    await waitFor(() => expect(auth.current.joinBeach).toHaveBeenCalledTimes(1))
+    // The server says: a member now, waiting for approval
+    auth.current = { ...auth.current, access: { known: true, isPending: true, needsJoin: false, roles: ['scorer'] } }
+    rerender(<UserButton buttonClass="btn" />)
+    const after = await screen.findByRole('dialog', { name: 'Your account' })
+    expect(within(after).queryByTestId('join-beach-section')).toBeNull()
+    expect(within(after).getByTestId('pending-approval')).toBeInTheDocument()
+    expect(within(after).getByLabelText('Invite code')).toBeInTheDocument()
+  })
+
+  it('a failed join says so in the dialog', async () => {
+    auth.current = signedIn({
+      access: { known: true, isPending: true, needsJoin: true, roles: [] },
+      joinBeach: vi.fn(async () => ({ data: null, error: { message: 'x' }, status: 503 }))
+    })
+    render(<UserButton buttonClass="btn" />)
+    fireEvent.click(screen.getByTestId('header-account'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Join OpenBeach' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Joining OpenBeach failed')
+  })
+
+  it('Save is the kit primary button', async () => {
+    auth.current = signedIn({ access: { known: true, isPending: false, roles: ['beach:scorer'] } })
+    render(<UserButton buttonClass="btn" />)
+    fireEvent.click(screen.getByTestId('header-account'))
+    const dialog = await screen.findByRole('dialog')
+    const save = within(dialog).getByRole('button', { name: 'Save' })
+    expect(save.className).toMatch(/bg-red-600/)
+    expect(save.className).not.toMatch(/emerald/)
+  })
+
+  // Owner 19.11.2026: an account carries an optional licence number, never a
+  // date of birth
+  it('the account: name and an optional licence number, no date of birth', async () => {
+    auth.current = signedIn({
+      access: { known: true, isPending: false, roles: ['beach:scorer'] },
+      profile: { user_id: 'u1', first_name: 'Anna', last_name: 'Muster', license_number: '12345', roles: [] }
+    })
+    render(<UserButton buttonClass="btn" />)
+    fireEvent.click(screen.getByTestId('header-account'))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByText(/date of birth/i)).toBeNull()
+    expect(dialog.querySelector('input[type="date"]')).toBeNull()
+    const licence = within(dialog).getByLabelText('Licence number (optional)')
+    expect(licence).toHaveValue('12345')
+    expect(licence).toHaveAttribute('inputmode', 'numeric')
+    expect(within(dialog).getByText(/4 to 7 digits/)).toBeInTheDocument()
+  })
+
+  it('saves a changed licence number (digits only), never a dob', async () => {
+    auth.current = signedIn({ access: { known: true, isPending: false, roles: ['beach:scorer'] } })
+    render(<UserButton buttonClass="btn" />)
+    fireEvent.click(screen.getByTestId('header-account'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText('Licence number (optional)'), { target: { value: '12a3456' } })
+    expect(within(dialog).getByLabelText('Licence number (optional)')).toHaveValue('123456')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(auth.current.updateProfile).toHaveBeenCalledWith({ firstName: 'Anna', lastName: 'Müller', licenseNumber: '123456' }))
+    expect(JSON.stringify(auth.current.updateProfile.mock.calls)).not.toMatch(/dob/)
+  })
+
+  it('a licence number of 1 to 3 digits is refused; a name change alone sends no licence', async () => {
+    auth.current = signedIn({ access: { known: true, isPending: false, roles: ['beach:scorer'] } })
+    render(<UserButton buttonClass="btn" />)
+    fireEvent.click(screen.getByTestId('header-account'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText('Licence number (optional)'), { target: { value: '123' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    expect(await within(dialog).findByText('A licence number has 4 to 7 digits.')).toBeInTheDocument()
+    expect(auth.current.updateProfile).not.toHaveBeenCalled()
+    fireEvent.change(within(dialog).getByLabelText('Licence number (optional)'), { target: { value: '' } })
+    fireEvent.change(within(dialog).getByLabelText('First name'), { target: { value: 'Anne' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(auth.current.updateProfile).toHaveBeenCalledWith({ firstName: 'Anne', lastName: 'Müller' }))
+  })
+
+  it('an approved account has no pending block', async () => {
+    auth.current = signedIn({ access: { known: true, isPending: false, roles: ['beach:scorer'] } })
+    render(<UserButton buttonClass="btn" />)
+    expect(screen.getByTestId('header-account')).not.toHaveAccessibleName(/waiting/)
+    fireEvent.click(screen.getByTestId('header-account'))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByTestId('pending-approval')).toBeNull()
+    expect(within(dialog).getByText('Scorer')).toBeInTheDocument()
+  })
+
+  it('signs out (a shared court tablet)', async () => {
+    auth.current = signedIn()
+    render(<UserButton buttonClass="btn" />)
+    fireEvent.click(screen.getByTestId('header-account'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Sign out' }))
+    await waitFor(() => expect(auth.current.signOut).toHaveBeenCalled())
+  })
+
+  // Audit SEC-37: the backend deletes an account only with its password (or
+  // a passkey) besides the session; OpenBeach sent the session alone, so every
+  // deletion got 403 reauth_required. The confirmation (it used to be a
+  // confirm dialog) now asks for the password and sends it.
+  it('deletes the account only after its confirmation, with the password typed there', async () => {
+    auth.current = signedIn()
+    render(<UserButton buttonClass="btn" />)
+    fireEvent.click(screen.getByTestId('header-account'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete account' }))
+    const confirm = within(dialog).getByTestId('delete-account-confirm')
+    expect(confirm).toHaveTextContent('Delete your account?')
+    // Cancel: nothing deleted
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }))
+    expect(within(dialog).queryByTestId('delete-account-confirm')).toBeNull()
+    expect(auth.current.deleteAccount).not.toHaveBeenCalled()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete account' }))
+    const again = within(dialog).getByTestId('delete-account-confirm')
+    const button = within(again).getByRole('button', { name: 'Delete for good' })
+    // no password, no request
+    expect(button).toBeDisabled()
+    fireEvent.change(within(again).getByTestId('delete-password'), { target: { value: 'pw-typed' } })
+    fireEvent.click(button)
+    await waitFor(() => expect(auth.current.deleteAccount).toHaveBeenCalledWith({ password: 'pw-typed' }))
+  })
+
+  it('a wrong password or a missing confirmation is said in words; the dialog stays', async () => {
+    auth.current = signedIn({ deleteAccount: vi.fn(async () => ({ error: { message: 'Wrong password.', code: 'invalid_password', status: 401 } })) })
+    render(<UserButton buttonClass="btn" />)
+    fireEvent.click(screen.getByTestId('header-account'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete account' }))
+    const confirm = within(dialog).getByTestId('delete-account-confirm')
+    fireEvent.change(within(confirm).getByTestId('delete-password'), { target: { value: 'wrong' } })
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Delete for good' }))
+    expect(await within(confirm).findByText('Wrong password.')).toBeInTheDocument()
+    expect(within(dialog).getByTestId('delete-account-confirm')).toBeInTheDocument()
+  })
+
+  it('renders nothing outside an AuthProvider or while loading', () => {
+    auth.current = null
+    const { container } = render(<UserButton buttonClass="btn" />)
+    expect(container).toBeEmptyDOMElement()
+  })
+})
+
+describe('helpers', () => {
+  it('initials from the name, else the email', () => {
+    expect(accountInitials({ first_name: 'anna', last_name: 'müller' }, 'x@y')).toBe('AM')
+    expect(accountInitials(null, 'zoe@example.ch')).toBe('Z')
+    expect(accountInitials(null, '')).toBeNull()
+  })
+
+  it('role words: beach and plain roles once each', () => {
+    const t = (k) => ({ 'account.roles.scorer': 'Scorer', 'account.roles.admin': 'Admin' })[k] || k
+    expect(roleLabels(['scorer', 'beach:scorer', 'admin', 'guest'], t)).toEqual(['Scorer', 'Admin'])
+  })
+
+  it('a refused deletion in words: the backend codes of lib/auth.js confirmIdentity', () => {
+    const t = (k) => k
+    expect(deleteErrorText(t, { code: 'invalid_password', status: 401 })).toBe('account.errors.wrongPassword')
+    expect(deleteErrorText(t, { code: 'reauth_required', status: 403 })).toBe('account.errors.passwordNeeded')
+    expect(deleteErrorText(t, { code: 'account_locked', status: 429 })).toBe('account.errors.tooManyTries')
+    expect(deleteErrorText(t, { network: true, status: 0 })).toBe('account.errors.offline')
+    expect(deleteErrorText(t, { message: 'You are the last super admin.', status: 409 })).toBe('You are the last super admin.')
+    expect(deleteErrorText(t, {})).toBe('account.errors.deleteFailed')
+  })
+})

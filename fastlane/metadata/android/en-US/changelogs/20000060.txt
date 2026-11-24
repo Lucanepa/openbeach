@@ -1,0 +1,2 @@
+OpenBeach 2.0.6
+- No change on Android. This release is for the desktop app: an installed update restarts by itself after a short countdown, and closing the window asks whether OpenBeach keeps running in the tray or quits completely.

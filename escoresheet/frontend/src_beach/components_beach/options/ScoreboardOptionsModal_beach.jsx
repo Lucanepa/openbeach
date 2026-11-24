@@ -1,0 +1,1084 @@
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useAlert } from '../../contexts_beach/AlertContext_beach'
+import Modal from '../Modal_beach'
+import { listCloudBackups, loadCloudBackup } from '../../utils_beach/logger_beach'
+import { restoreMatchInPlace } from '../../utils_beach/backupManager_beach'
+import { db } from '../../db_beach/db_beach'
+import { clearCachesAndReload } from '../../utils_beach/appReload_beach'
+import BackupTable from '../BackupTable_beach'
+import { SatelliteDish } from '../Icons_beach'
+import { Switch } from '../../ui/volleyui/Switch.jsx'
+import { OptionInfo } from './optionRows_beach'
+import { reloadWithReason } from '../../diagnostics_beach/reload_beach'
+import DiagnosticsSection from '../../diagnostics_beach/DiagnosticsSection_beach'
+import ActivityLogSection from './ActivityLogSection_beach'
+import ThemeOption from './ThemeOption_beach'
+import LiveScreenSection from './LiveScreenSection_beach'
+
+// The kit InfoHint (a real button, opens on tap) and Switch (role="switch",
+// aria-checked, named, focus ring): the hand-made dot and toggle had no role,
+// state or name and could not be reached by keyboard.
+function InfoDot({ title }) {
+  return <span className="ov-kit inline-flex"><OptionInfo>{title}</OptionInfo></span>
+}
+
+function ToggleSwitch({ value, onToggle, label }) {
+  return (
+    <span className="ov-kit ml-4 inline-flex shrink-0">
+      <Switch size="lg" checked={!!value} onCheckedChange={() => onToggle()} aria-label={label} />
+    </span>
+  )
+}
+
+function Row({ children, style }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '12px 16px',
+        background: 'var(--ov-sunken)',
+        borderRadius: '8px',
+        ...style
+      }}
+    >
+      {children}
+    </div>
+  )
+}
+
+function Section({ title, children, borderBottom = true, paddingBottom = '24px' }) {
+  return (
+    <div style={{ marginBottom: '24px', paddingBottom: borderBottom ? paddingBottom : 0, borderBottom: borderBottom ? '1px solid var(--ov-hairline)' : 'none' }}>
+      {title ? (
+        <h3 style={{ marginTop: 0, marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>{title}</h3>
+      ) : null}
+      {children}
+    </div>
+  )
+}
+
+function Stepper({ value, onDecrement, onIncrement, label }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
+      <button
+        onClick={onDecrement}
+        style={{
+          width: '32px',
+          height: '32px',
+          borderRadius: '6px',
+          border: 'none',
+          background: 'var(--ov-sunken-strong)',
+          color: 'var(--text)',
+          fontSize: '18px',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+        aria-label={`Decrease ${label}`}
+      >
+        -
+      </button>
+      <span style={{ minWidth: '80px', textAlign: 'center', fontFamily: 'monospace', fontSize: '14px', fontWeight: 600 }}>
+        {Math.floor(value / 60)}' {(value % 60).toString().padStart(2, '0')}''
+      </span>
+      <button
+        onClick={onIncrement}
+        style={{
+          width: '32px',
+          height: '32px',
+          borderRadius: '6px',
+          border: 'none',
+          background: 'var(--ov-sunken-strong)',
+          color: 'var(--text)',
+          fontSize: '18px',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+        aria-label={`Increase ${label}`}
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
+export default function ScoreboardOptionsModal({
+  open,
+  onClose,
+
+  onOpenKeybindings,
+  onOpenConnectionSetup,
+  server,
+  matchOptions,
+  displayOptions,
+  matchId,
+  onRestoreBackup
+}) {
+  const { t } = useTranslation()
+  const { showAlert } = useAlert()
+  const [clearCacheModal, setClearCacheModal] = useState(null) // { type: 'cache' | 'all' }
+  const [fontSelectorOpen, setFontSelectorOpen] = useState(false)
+  const [showCloudBackups, setShowCloudBackups] = useState(false)
+  const [cloudBackups, setCloudBackups] = useState([])
+  const [backupsLoading, setBackupsLoading] = useState(false)
+  const [restoreConfirm, setRestoreConfirm] = useState(null) // backup to confirm restore
+
+  // Load cloud backups
+  const loadBackups = async () => {
+    if (!matchId) {
+      showAlert(t('options.alerts.noMatchId'), 'warning')
+      return
+    }
+    setBackupsLoading(true)
+    try {
+      // The backups of this match: its game number and game PIN (the local
+      // id was passed as the PIN, which listed game 1's backups)
+      const match = await db.matches.get(matchId)
+      const backups = await listCloudBackups(match?.gamePin ?? match?.game_pin, match?.gameN || match?.game_n || 1)
+      setCloudBackups(backups)
+      setShowCloudBackups(true)
+    } catch (err) {
+      console.error('Failed to load backups:', err)
+      showAlert(t('options.alerts.failedToLoadBackups'), 'error')
+    } finally {
+      setBackupsLoading(false)
+    }
+  }
+
+  // Restore from a cloud backup
+  const handleRestore = async (backup) => {
+    try {
+      const backupData = await loadCloudBackup(backup.path)
+      if (!backupData) {
+        showAlert(t('options.alerts.failedToLoadBackupData'), 'error')
+        return
+      }
+      // Use the callback or in-place restore
+      if (onRestoreBackup) {
+        await onRestoreBackup(backupData)
+      } else {
+        await restoreMatchInPlace(matchId, backupData)
+      }
+      setShowCloudBackups(false)
+      setRestoreConfirm(null)
+      onClose?.()
+      reloadWithReason('backup-restored')
+    } catch (err) {
+      console.error('Failed to restore backup:', err)
+      // backupManager refuses a backup of a match the server has closed
+      // before it writes anything: say so plainly
+      showAlert(err?.code === 'OV_MATCH_CLOSED'
+        ? t('cloudBlock.restoreRefused')
+        : t('options.alerts.failedToRestoreBackup', { error: err.message }), 'error')
+    }
+  }
+
+  const executeClearCache = async (includeLocalStorage) => {
+    try {
+      // Reachable mid-match: refuse when the server is unreachable, since with
+      // the precache and the service worker gone the reload could not load
+      // the app (the scorer would be stuck on a browser error page)
+      if (!(await clearCachesAndReload({ includeLocalStorage }))) {
+        showAlert(t('options.alerts.clearCacheNeedsServer', 'Cannot clear the cache while the server is unreachable: the app could not be reloaded afterwards.'), 'error')
+      }
+    } catch (error) {
+      console.error('Error clearing cache:', error)
+      showAlert(t('options.alerts.failedToClearCache', { error: error.message }), 'error')
+    }
+  }
+
+  if (!open) return null
+
+  const {
+    isAvailable: serverManagementAvailable,
+    serverRunning,
+    serverStatus,
+    serverLoading,
+    onStartServer,
+    onStopServer
+  } = server || {}
+
+  const {
+    checkAccidentalRallyStart,
+    setCheckAccidentalRallyStart,
+    accidentalRallyStartDuration,
+    setAccidentalRallyStartDuration,
+    checkAccidentalPointAward,
+    setCheckAccidentalPointAward,
+    accidentalPointAwardDuration,
+    setAccidentalPointAwardDuration,
+    scoreFont,
+    setScoreFont,
+    keybindingsEnabled,
+    setKeybindingsEnabled
+  } = matchOptions
+
+  const {
+    displayMode,
+    setDisplayMode,
+    detectedDisplayMode,
+    enterDisplayMode,
+    exitDisplayMode
+  } = displayOptions
+
+  const modeDescriptions = {
+    desktop: t('options.desktopDesc'),
+    tablet: t('options.tabletDesc'),
+    phone: t('options.phoneDesc')
+  }
+
+  return (
+    <Modal
+      title={t('options.title')}
+      open={true}
+      onClose={onClose}
+      width={600}
+      tone="light"
+    >
+      <div style={{ padding: '4px 4px 8px' }}>
+        {serverManagementAvailable && (
+          <Section title={t('options.liveServer')} paddingBottom="24px">
+            {serverRunning && serverStatus ? (
+              <div>
+                <div style={{
+                  background: 'rgba(16, 185, 129, 0.1)',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  borderRadius: '8px',
+                  padding: '12px',
+                  marginBottom: '12px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <span style={{ color: 'var(--ov-success)', fontWeight: 600 }}>●</span>
+                    <span style={{ fontWeight: 600 }}>{t('options.serverRunning')}</span>
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--ov-text-muted)', marginLeft: '24px' }}>
+                    <div>{t('options.hostname')}: <span style={{ fontFamily: 'monospace' }}>{serverStatus.hostname || 'escoresheet.local'}</span></div>
+                    <div>{t('options.ipAddress')}: <span style={{ fontFamily: 'monospace' }}>{serverStatus.localIP}</span></div>
+                    <div>{t('options.protocol')}: <span style={{ textTransform: 'uppercase' }}>{serverStatus.protocol || 'https'}</span></div>
+                  </div>
+                </div>
+
+                <div style={{
+                  background: 'var(--ov-card)',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  marginBottom: '12px',
+                  fontSize: '12px'
+                }}>
+                  <div style={{ fontWeight: 600, marginBottom: '8px' }}>{t('options.connectionUrls')}:</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontFamily: 'monospace', fontSize: '11px' }}>
+                    <div style={{ wordBreak: 'break-all' }}>
+                      <span style={{ color: 'var(--ov-text-muted)' }}>{t('options.main')}: </span>
+                      {serverStatus.urls?.mainIP || `${serverStatus.protocol}://${serverStatus.localIP}:${serverStatus.port}/`}
+                    </div>
+                    <div style={{ wordBreak: 'break-all' }}>
+                      <span style={{ color: 'var(--ov-text-muted)' }}>{t('header.referee')}: </span>
+                      {serverStatus.urls?.refereeIP || `${serverStatus.protocol}://${serverStatus.localIP}:${serverStatus.port}/referee`}
+                    </div>
+                    <div style={{ wordBreak: 'break-all' }}>
+                      <span style={{ color: 'var(--ov-text-muted)' }}>{t('options.websocket')}: </span>
+                      {serverStatus.urls?.websocketIP || `${serverStatus.wsProtocol}://${serverStatus.localIP}:${serverStatus.wsPort}`}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={onStopServer}
+                  disabled={serverLoading}
+                  style={{
+                    padding: '10px 20px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    background: 'var(--ov-danger)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: serverLoading ? 'not-allowed' : 'pointer',
+                    opacity: serverLoading ? 0.6 : 1,
+                    width: '100%'
+                  }}
+                >
+                  {serverLoading ? t('options.stopping') : t('options.stopServer')}
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '8px',
+                  padding: '12px',
+                  marginBottom: '12px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ color: 'var(--ov-danger-text)', fontWeight: 600 }}>●</span>
+                    <span style={{ fontWeight: 600 }}>{t('options.serverNotRunning')}</span>
+                  </div>
+                </div>
+                <p style={{ fontSize: '14px', color: 'var(--ov-text-muted)', marginBottom: '12px' }}>
+                  {t('options.startServerToConnect')}
+                </p>
+                <button
+                  onClick={onStartServer}
+                  disabled={serverLoading}
+                  style={{
+                    padding: '10px 20px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    background: 'var(--ov-success)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: serverLoading ? 'not-allowed' : 'pointer',
+                    opacity: serverLoading ? 0.6 : 1,
+                    width: '100%'
+                  }}
+                >
+                  {serverLoading ? t('options.starting') : t('options.startServer')}
+                </button>
+              </div>
+            )}
+          </Section>
+        )}
+
+        <Section title={t('options.matchOptions')}>
+          <Row style={{ marginBottom: '12px' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                <div style={{ fontWeight: 600, fontSize: '15px' }}>{t('options.checkAccidentalRallyStart')}</div>
+                <InfoDot title={t('options.checkAccidentalRallyStartInfo', { duration: accidentalRallyStartDuration })} />
+              </div>
+              {checkAccidentalRallyStart && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--ov-text-muted)' }}>{t('options.duration')}:</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={accidentalRallyStartDuration}
+                    onChange={(e) => {
+                      const val = Math.max(1, Math.min(10, parseInt(e.target.value, 10) || 3))
+                      setAccidentalRallyStartDuration(val)
+                      localStorage.setItem('accidentalRallyStartDuration', String(val))
+                    }}
+                    style={{
+                      width: '50px',
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      background: 'var(--ov-sunken-strong)',
+                      border: '1px solid var(--ov-hairline-strong)',
+                      borderRadius: '4px',
+                      color: 'var(--text)',
+                      textAlign: 'center'
+                    }}
+                  />
+                  <span style={{ fontSize: '12px', color: 'var(--ov-text-muted)' }}>{t('options.seconds')}</span>
+                </div>
+              )}
+            </div>
+            <ToggleSwitch
+              label={t('options.checkAccidentalRallyStart')}
+              value={checkAccidentalRallyStart}
+              onToggle={() => {
+                const newValue = !checkAccidentalRallyStart
+                setCheckAccidentalRallyStart(newValue)
+                localStorage.setItem('checkAccidentalRallyStart', String(newValue))
+              }}
+            />
+          </Row>
+
+          <Row style={{ marginBottom: '12px' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                <div style={{ fontWeight: 600, fontSize: '15px' }}>{t('options.checkAccidentalPointAward')}</div>
+                <InfoDot title={t('options.checkAccidentalPointAwardInfo', { duration: accidentalPointAwardDuration })} />
+              </div>
+              {checkAccidentalPointAward && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--ov-text-muted)' }}>{t('options.duration')}:</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={accidentalPointAwardDuration}
+                    onChange={(e) => {
+                      const val = Math.max(1, Math.min(10, parseInt(e.target.value, 10) || 3))
+                      setAccidentalPointAwardDuration(val)
+                      localStorage.setItem('accidentalPointAwardDuration', String(val))
+                    }}
+                    style={{
+                      width: '50px',
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      background: 'var(--ov-sunken-strong)',
+                      border: '1px solid var(--ov-hairline-strong)',
+                      borderRadius: '4px',
+                      color: 'var(--text)',
+                      textAlign: 'center'
+                    }}
+                  />
+                  <span style={{ fontSize: '12px', color: 'var(--ov-text-muted)' }}>{t('options.seconds')}</span>
+                </div>
+              )}
+            </div>
+            <ToggleSwitch
+              label={t('options.checkAccidentalPointAward')}
+              value={checkAccidentalPointAward}
+              onToggle={() => {
+                const newValue = !checkAccidentalPointAward
+                setCheckAccidentalPointAward(newValue)
+                localStorage.setItem('checkAccidentalPointAward', String(newValue))
+              }}
+            />
+          </Row>
+          <Row style={{ marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ fontWeight: 600, fontSize: '15px' }}>{t('options.showNamesOnCourt')}</div>
+              <InfoDot title={t('options.showNamesOnCourtInfo')} />
+            </div>
+            <ToggleSwitch
+              label={t('options.showNamesOnCourt')}
+              value={displayOptions?.showNamesOnCourt}
+              onToggle={() => displayOptions?.setShowNamesOnCourt?.(!displayOptions?.showNamesOnCourt)}
+            />
+          </Row>
+
+          <Row style={{ marginBottom: '12px', flexDirection: 'column', alignItems: 'stretch', gap: '0' }}>
+            {(() => {
+              const fontOptions = [
+                { value: 'default', label: t('options.fontDefault'), fontFamily: 'inherit', preview: '12:25' },
+                { value: 'orbitron', label: 'Orbitron', fontFamily: "'Orbitron', monospace", preview: '12:25' },
+                { value: 'roboto-mono', label: 'Roboto Mono', fontFamily: "'Roboto Mono', monospace", preview: '12:25' },
+                { value: 'jetbrains-mono', label: 'JetBrains Mono', fontFamily: "'JetBrains Mono', monospace", preview: '12:25' },
+                { value: 'space-mono', label: 'Space Mono', fontFamily: "'Space Mono', monospace", preview: '12:25' },
+                { value: 'ibm-plex-mono', label: 'IBM Plex Mono', fontFamily: "'IBM Plex Mono', monospace", preview: '12:25' }
+              ]
+              const currentFont = fontOptions.find(f => f.value === scoreFont) || fontOptions[0]
+              return (
+                <>
+                  <button
+                    onClick={() => setFontSelectorOpen(!fontSelectorOpen)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '12px 14px',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      background: 'transparent',
+                      color: 'var(--text)',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      width: '100%'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ fontWeight: 600, fontSize: '15px' }}>{t('options.scoreFont')}</div>
+                      <InfoDot title={t('options.scoreFontInfo')} />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{
+                        fontFamily: currentFont.fontFamily,
+                        fontSize: '18px',
+                        fontWeight: 700,
+                        color: 'var(--ov-success)',
+                        letterSpacing: '1px'
+                      }}>
+                        {currentFont.preview}
+                      </span>
+                      <span style={{
+                        fontSize: '12px',
+                        color: 'var(--ov-text-muted)',
+                        transition: 'transform 0.2s',
+                        transform: fontSelectorOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+                      }}>
+                        ▼
+                      </span>
+                    </div>
+                  </button>
+                  {fontSelectorOpen && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px', paddingLeft: '8px', paddingRight: '8px' }}>
+                      {fontOptions.map(option => (
+                        <button
+                          key={option.value}
+                          onClick={() => {
+                            setScoreFont(option.value)
+                            localStorage.setItem('scoreFont', option.value)
+                            setFontSelectorOpen(false)
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '10px 14px',
+                            fontSize: '14px',
+                            fontWeight: 500,
+                            background: scoreFont === option.value ? 'rgba(59, 130, 246, 0.2)' : 'var(--ov-sunken)',
+                            color: 'var(--text)',
+                            border: scoreFont === option.value ? '2px solid #3b82f6' : '1px solid var(--ov-hairline-strong)',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            textAlign: 'left'
+                          }}
+                        >
+                          <span style={{ fontSize: '13px' }}>{option.label}</span>
+                          <span style={{
+                            fontFamily: option.fontFamily,
+                            fontSize: '20px',
+                            fontWeight: 700,
+                            color: scoreFont === option.value ? 'var(--ov-info-text)' : 'var(--ov-success)',
+                            letterSpacing: '1px'
+                          }}>
+                            {option.preview}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )
+            })()}
+          </Row>
+
+          <Row style={{ marginBottom: '12px' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: keybindingsEnabled && onOpenKeybindings ? '8px' : 0 }}>
+                <div style={{ fontWeight: 600, fontSize: '15px' }}>{t('options.keyboardShortcuts')}</div>
+                <InfoDot title={t('options.keyboardShortcutsInfo')} />
+              </div>
+              {keybindingsEnabled && onOpenKeybindings ? (
+                <button
+                  onClick={onOpenKeybindings}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    background: 'rgba(59, 130, 246, 0.2)',
+                    color: 'var(--ov-info-text)',
+                    border: '1px solid rgba(59, 130, 246, 0.4)',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {t('options.configureKeys')}
+                </button>
+              ) : null}
+            </div>
+            <ToggleSwitch
+              label={t('options.keyboardShortcuts')}
+              value={keybindingsEnabled}
+              onToggle={() => {
+                const newValue = !keybindingsEnabled
+                setKeybindingsEnabled(newValue)
+                localStorage.setItem('keybindingsEnabled', String(newValue))
+              }}
+            />
+          </Row>
+
+          <Row style={{ marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ fontWeight: 600, fontSize: '15px' }}>{t('options.autoDownloadAtSetEnd')}</div>
+              <InfoDot title={t('options.autoDownloadAtSetEndInfo')} />
+            </div>
+            <ToggleSwitch
+              label={t('options.autoDownloadAtSetEnd')}
+              value={displayOptions?.autoDownloadAtSetEnd ?? true}
+              onToggle={() => displayOptions?.setAutoDownloadAtSetEnd?.(!displayOptions?.autoDownloadAtSetEnd)}
+            />
+          </Row>
+          {displayOptions?.autoDownloadAtSetEnd && (
+            <Row style={{ marginBottom: '12px', paddingLeft: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--muted)' }}>{t('options.alwaysDownloadAtSetEnd')}</div>
+                <InfoDot title={t('options.alwaysDownloadAtSetEndInfo')} />
+              </div>
+              <ToggleSwitch
+                label={t('options.alwaysDownloadAtSetEnd')}
+                value={displayOptions?.alwaysDownloadAtSetEnd ?? false}
+                onToggle={() => displayOptions?.setAlwaysDownloadAtSetEnd?.(!displayOptions?.alwaysDownloadAtSetEnd)}
+              />
+            </Row>
+          )}
+        </Section>
+
+        <Section title={t('options.displayMode')}>
+          <Row style={{ marginBottom: '12px', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                <div style={{ fontWeight: 600, fontSize: '15px' }}>{t('options.screenMode')}</div>
+                <InfoDot title={t('options.screenModeInfo')} />
+              </div>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {['auto', 'desktop', 'tablet', 'phone'].map(mode => (
+                  <button
+                    key={mode}
+                    onClick={() => {
+                      if (mode === 'tablet') {
+                        enterDisplayMode(mode)
+                        return
+                      }
+                      if (mode === 'desktop') {
+                        exitDisplayMode()
+                        return
+                      }
+                      setDisplayMode(mode)
+                      localStorage.setItem('displayMode', mode)
+                    }}
+                    style={{
+                      padding: '8px 16px',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      background: displayMode === mode ? 'var(--ov-selected)' : 'var(--ov-sunken-strong)',
+                      color: displayMode === mode ? '#fff' : 'var(--text)',
+                      border: displayMode === mode ? '1px solid #3b82f6' : '1px solid var(--ov-hairline-strong)',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      textTransform: 'capitalize',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <span>{mode === 'auto' ? t('options.autoWithMode', { mode: detectedDisplayMode }) : mode}</span>
+                    {modeDescriptions[mode] ? (
+                      <span
+                        title={modeDescriptions[mode]}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '14px',
+                          height: '14px',
+                          borderRadius: '50%',
+                          background: displayMode === mode ? 'var(--ov-hairline)' : 'var(--ov-hairline)',
+                          color: displayMode === mode ? 'var(--ov-text)' : 'var(--ov-text-muted)',
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          cursor: 'help'
+                        }}
+                      >
+                        i
+                      </span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+
+              {displayMode !== 'desktop' && displayMode !== 'auto' && (
+                <div style={{ marginTop: '12px' }}>
+                  <button
+                    onClick={exitDisplayMode}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      background: 'rgba(239, 68, 68, 0.2)',
+                      color: 'var(--ov-danger-text)',
+                      border: '1px solid rgba(239, 68, 68, 0.4)',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {t('options.exitMode', { mode: displayMode })}
+                  </button>
+                </div>
+              )}
+            </div>
+          </Row>
+          <Row style={{ display: 'block', padding: '0 16px' }}>
+            <div className="ov-kit">
+              <ThemeOption />
+            </div>
+          </Row>
+        </Section>
+
+        {/* TVs at the event: every court's score (utils_beach/liveScreen_beach.js) */}
+        <Section title={t('liveScreen.title')}>
+          <div className="ov-kit" data-testid="scoreboard-options-live-screen">
+            <LiveScreenSection />
+          </div>
+        </Section>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+          <button
+            onClick={() => {
+              onClose?.()
+              onOpenConnectionSetup?.()
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '12px 16px',
+              fontSize: '16px',
+              fontWeight: 600,
+              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%)',
+              color: 'var(--text)',
+              border: '1px solid rgba(59, 130, 246, 0.4)',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              width: '100%',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(59, 130, 246, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%)'
+            }}
+          >
+            <span style={{ fontSize: '20px' }}><SatelliteDish /></span>
+            <span>{t('options.setupConnections')}</span>
+          </button>
+
+        </div>
+
+        <div style={{ marginBottom: '24px' }}><ActivityLogSection matchId={matchId ?? null} /></div>
+
+        <Section title={t('options.cloudBackup')}>
+          <Row style={{ flexDirection: 'column', alignItems: 'stretch', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ fontWeight: 600, fontSize: '15px' }}>{t('options.restoreFromCloud')}</div>
+              <InfoDot title={t('options.restoreFromCloudInfo')} />
+            </div>
+            <button
+              onClick={loadBackups}
+              disabled={backupsLoading || !matchId}
+              style={{
+                padding: '10px 20px',
+                fontSize: '14px',
+                fontWeight: 600,
+                background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(16, 185, 129, 0.2) 100%)',
+                color: '#22c55e',
+                border: '1px solid rgba(34, 197, 94, 0.4)',
+                borderRadius: '8px',
+                cursor: backupsLoading || !matchId ? 'not-allowed' : 'pointer',
+                opacity: backupsLoading || !matchId ? 0.6 : 1,
+                width: '100%',
+                transition: 'all 0.2s'
+              }}
+            >
+              {backupsLoading ? t('options.loading') : t('options.browseCloudBackups')}
+            </button>
+            {!matchId && (
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--ov-text-muted)' }}>
+                {t('options.startMatchToAccessBackups')}
+              </p>
+            )}
+          </Row>
+        </Section>
+
+        <Section title={t('options.diagnostics')}>
+          <DiagnosticsSection showAlert={showAlert} testIdPrefix="options" />
+        </Section>
+
+        <Section title={t('options.cacheManagement')} borderBottom={false}>
+          <Row style={{ flexDirection: 'column', alignItems: 'stretch', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ fontWeight: 600, fontSize: '15px' }}>{t('options.clearApplicationCache')}</div>
+              <InfoDot title={t('options.clearApplicationCacheInfo')} />
+            </div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setClearCacheModal({ type: 'cache' })}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  background: 'rgba(239, 68, 68, 0.2)',
+                  color: 'var(--ov-danger-text)',
+                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.3)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'
+                }}
+              >
+                {t('options.clearCache')}
+              </button>
+              <button
+                onClick={() => setClearCacheModal({ type: 'all' })}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  background: 'var(--ov-danger)',
+                  color: '#fff',
+                  border: '1px solid rgba(239, 68, 68, 0.6)',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.5)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.4)'
+                }}
+              >
+                {t('options.clearAll')}
+              </button>
+            </div>
+          </Row>
+        </Section>
+
+        {/* Cloud Backups Modal */}
+        {showCloudBackups && (
+          <div
+            onClick={() => setShowCloudBackups(false)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgb(28 25 23 / 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10000
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: 'var(--ov-card)',
+                border: '1px solid var(--ov-hairline-strong)',
+                borderRadius: '12px',
+                padding: '24px',
+                maxWidth: '500px',
+                width: '90%',
+                maxHeight: '70vh',
+                display: 'flex',
+                flexDirection: 'column'
+              }}
+            >
+              <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: 'var(--ov-text)' }}>
+                {t('options.cloudBackups')}
+              </h3>
+
+              {cloudBackups.length === 0 ? (
+                <p style={{ color: 'var(--ov-text-muted)', textAlign: 'center', padding: '24px 0' }}>
+                  {t('options.noCloudBackupsFound')}
+                </p>
+              ) : (
+                <div style={{ flex: 1, overflowY: 'auto', marginBottom: '16px' }}>
+                  <BackupTable
+                    backups={cloudBackups}
+                    onBackupSelect={(backup) => setRestoreConfirm(backup)}
+                    showRestoreButton={true}
+                    mode="row"
+                    restoreButtonText={t('options.restore')}
+                  />
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setShowCloudBackups(false)}
+                  style={{
+                    padding: '10px 20px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    background: 'var(--ov-sunken-strong)',
+                    color: 'var(--text)',
+                    border: '1px solid var(--ov-hairline-strong)',
+                    borderRadius: '8px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {t('options.close')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Restore Confirmation Modal */}
+        {restoreConfirm && (
+          <div
+            onClick={() => setRestoreConfirm(null)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgb(28 25 23 / 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10001
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: 'var(--ov-card)',
+                border: '1px solid var(--ov-hairline-strong)',
+                borderRadius: '12px',
+                padding: '24px',
+                maxWidth: '400px',
+                width: '90%'
+              }}
+            >
+              <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: 'var(--ov-text)' }}>
+                {t('options.confirmRestore')}
+              </h3>
+              <p style={{ margin: '0 0 8px 0', color: 'var(--ov-text-secondary)', lineHeight: 1.5 }}>
+                {t('options.restoreMatchToThisState')}
+              </p>
+              <div style={{
+                background: 'var(--ov-sunken)',
+                padding: '12px',
+                borderRadius: '8px',
+                marginBottom: '16px'
+              }}>
+                <div style={{ fontWeight: 600, fontSize: '16px' }}>
+                  {restoreConfirm.team1Points !== undefined ? (
+                    t('options.backupSetScore', { setIndex: restoreConfirm.setIndex, team1Points: restoreConfirm.team1Points, team2Points: restoreConfirm.team2Points })
+                  ) : (
+                    restoreConfirm.name
+                  )}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--ov-text-muted)', marginTop: '4px' }}>
+                  {restoreConfirm.timestamp || restoreConfirm.created_at}
+                </div>
+              </div>
+              <p style={{ margin: '0 0 16px 0', color: 'var(--ov-danger-text)', fontSize: '13px' }}>
+                {t('options.warningStateReplaced')}
+              </p>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setRestoreConfirm(null)}
+                  style={{
+                    padding: '10px 20px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    background: 'var(--ov-sunken-strong)',
+                    color: 'var(--text)',
+                    border: '1px solid var(--ov-hairline-strong)',
+                    borderRadius: '8px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {t('options.cancel')}
+                </button>
+                <button
+                  onClick={() => handleRestore(restoreConfirm)}
+                  style={{
+                    padding: '10px 20px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    background: 'var(--ov-success)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {t('options.restore')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Clear Cache Confirmation Modal */}
+        {clearCacheModal && (
+          <div
+            onClick={() => setClearCacheModal(null)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgb(28 25 23 / 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10000
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: 'var(--ov-card)',
+                border: '1px solid var(--ov-hairline-strong)',
+                borderRadius: '12px',
+                padding: '24px',
+                maxWidth: '400px',
+                width: '90%'
+              }}
+            >
+              <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: 'var(--ov-text)' }}>
+                {t('options.confirmClearCache')}
+              </h3>
+              <p style={{ margin: '0 0 16px 0', color: 'var(--ov-text-secondary)', lineHeight: 1.5 }}>
+                {clearCacheModal.type === 'all'
+                  ? t('options.clearAllWarning')
+                  : t('options.clearCacheWarning')
+                }
+              </p>
+              {clearCacheModal.type === 'all' && (
+                <p style={{ margin: '0 0 16px 0', color: 'var(--ov-danger-text)', fontSize: '13px' }}>
+                  {t('options.resetPreferencesWarning')}
+                </p>
+              )}
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setClearCacheModal(null)}
+                  style={{
+                    padding: '10px 20px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    background: 'var(--ov-sunken-strong)',
+                    color: 'var(--text)',
+                    border: '1px solid var(--ov-hairline-strong)',
+                    borderRadius: '8px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {t('options.cancel')}
+                </button>
+                <button
+                  onClick={() => executeClearCache(clearCacheModal.type === 'all')}
+                  style={{
+                    padding: '10px 20px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    background: 'var(--ov-danger)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {clearCacheModal.type === 'all' ? t('options.clearAll') : t('options.clearCache')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </Modal >
+  )
+}

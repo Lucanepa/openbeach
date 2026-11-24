@@ -1,0 +1,359 @@
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Clock, LogIn, LogOut, Trash2, UserRound } from 'lucide-react'
+import { useAuth } from '../../contexts_beach/AuthContext_beach'
+import { Modal } from '../../ui/volleyui/Modal.jsx'
+import { Field, FormError } from '../../ui/volleyui/Field.jsx'
+import { Input } from '../../ui/volleyui/Input.jsx'
+import { Button } from '../../ui/volleyui/Button.jsx'
+import { Chip } from '../../ui/volleyui/Chip.jsx'
+import { toast } from '../../ui/volleyui/uiStore.js'
+import AuthLayer from './AuthLayer_beach'
+import InviteCodeForm from './InviteCodeForm_beach'
+import ApprovalPinSection from './ApprovalPinSection_beach'
+import { displayedRoles } from '../../lib_beach/access_beach'
+import { ACCOUNT_LICENCE } from '../../utils_beach/idValue_beach'
+
+/**
+ * "Join OpenBeach": an OpenVolley account (the login both apps share) that
+ * is not an OpenBeach member yet joins with one tap. It then waits for
+ * approval like any new account: the pending block with the invite code.
+ * Used by the account dialog and the sync banner.
+ * @param {{ onJoined?: () => void, size?: string, variant?: string, className?: string }} props
+ */
+export function JoinBeachButton({ onJoined, size = 'md', variant = 'dark', className = '' }) {
+  const { t } = useTranslation()
+  const { joinBeach } = useAuth()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const join = async () => {
+    if (busy) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setError(t('account.errors.offline', 'No connection: this needs the internet.'))
+      return
+    }
+    setBusy(true)
+    setError('')
+    const { error: err, status } = await joinBeach()
+    setBusy(false)
+    if (err) {
+      setError(status === 429
+        ? t('account.errors.tooManyTries', 'Too many tries. Wait a few minutes and try again.')
+        : t('account.errors.joinFailed', 'Joining OpenBeach failed. Try again.'))
+      return
+    }
+    toast.success(t('account.joined', 'You joined OpenBeach. It now waits for approval.'))
+    onJoined?.()
+  }
+  return (
+    <div className={className}>
+      <Button size={size} variant={variant} icon={LogIn} loading={busy} disabled={busy} onClick={join} data-testid="join-beach">
+        {t('account.joinBeach', 'Join OpenBeach')}
+      </Button>
+      {error && <p role="alert" className="mt-1.5 text-xs font-medium text-red-600">{error}</p>}
+    </div>
+  )
+}
+
+const ROLE_WORDS = {
+  admin: ['account.roles.admin', 'Admin'],
+  super_admin: ['account.roles.admin', 'Admin'],
+  scorer: ['account.roles.scorer', 'Scorer'],
+  'beach:scorer': ['account.roles.scorer', 'Scorer'],
+  referee: ['account.roles.referee', 'Referee'],
+  'beach:referee': ['account.roles.referee', 'Referee'],
+  competition_manager: ['account.roles.competitionManager', 'Competition manager'],
+  'beach:competition_manager': ['account.roles.competitionManager', 'Competition manager']
+}
+
+/** The account's roles as words, once each (beach:scorer and scorer are one). */
+export function roleLabels(roles, t) {
+  const out = []
+  for (const r of roles || []) {
+    const word = ROLE_WORDS[r]
+    if (!word) continue
+    const label = t(word[0], word[1])
+    if (!out.includes(label)) out.push(label)
+  }
+  return out
+}
+
+/**
+ * The words for a refused account deletion: the backend's codes (lib/auth.js
+ * confirmIdentity) in the user's language, else its own message.
+ */
+export function deleteErrorText(t, error) {
+  const code = error?.code
+  if (code === 'invalid_password') return t('account.errors.wrongPassword', 'Wrong password.')
+  if (code === 'reauth_required' || code === 'password_required') return t('account.errors.passwordNeeded', 'Enter your password to confirm.')
+  if (code === 'account_locked' || error?.status === 429) return t('account.errors.tooManyTries', 'Too many tries. Wait a few minutes and try again.')
+  if (error?.network) return t('account.errors.offline', 'No connection: this needs the internet.')
+  return error?.message || t('account.errors.deleteFailed', 'The account was not deleted.')
+}
+
+/**
+ * The account of this device: who is signed in, the approval state (with
+ * the invite code for a pending account), the name and the optional licence
+ * number (no date of birth), sign out (court tablets are shared) and delete
+ * account.
+ */
+export default function ProfileModal({ open, onClose }) {
+  const { t } = useTranslation()
+  const { user, profile, access, updateProfile, signOut, deleteAccount } = useAuth()
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [licence, setLicence] = useState('')
+  const [licenceError, setLicenceError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [busy, setBusy] = useState(null) // 'signout' | 'delete'
+  const [actionError, setActionError] = useState('')
+  // Delete account: the backend wants the password besides the session, so
+  // a court tablet left signed in cannot delete the account (audit SEC-37)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteError, setDeleteError] = useState('')
+
+  useEffect(() => {
+    if (!open) return
+    setFirstName(profile?.first_name || '')
+    setLastName(profile?.last_name || '')
+    setLicence(profile?.license_number || '')
+    setLicenceError('')
+    setSaveError('')
+    setActionError('')
+  }, [open, profile])
+
+  // (not on a profile reload: a password being typed stays)
+  useEffect(() => {
+    setConfirmingDelete(false)
+    setDeletePassword('')
+    setDeleteError('')
+  }, [open])
+
+  if (!open || !user) return null
+
+  const email = user.email || profile?.email || ''
+  const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ')
+  const licenceChanged = licence.trim() !== (profile?.license_number || '')
+  const changed = firstName.trim() !== (profile?.first_name || '') || lastName.trim() !== (profile?.last_name || '') || licenceChanged
+  const roles = roleLabels(displayedRoles(access), t)
+
+  const save = async (e) => {
+    e.preventDefault()
+    if (!changed || saving) return
+    const lic = licence.trim()
+    if (lic !== '' && !ACCOUNT_LICENCE.test(lic)) {
+      setLicenceError(t('account.licenceInvalid', 'A licence number has 4 to 7 digits.'))
+      return
+    }
+    setLicenceError('')
+    setSaving(true)
+    setSaveError('')
+    // The licence only when it changed: an older backend without the column
+    // still saves a new name
+    const { error } = await updateProfile({
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      ...(licenceChanged ? { licenseNumber: lic } : {})
+    })
+    setSaving(false)
+    if (error) {
+      setSaveError(error.message || t('account.errors.saveFailed', 'Not saved. Try again.'))
+      return
+    }
+    toast.success(t('account.saved', 'Saved.'))
+  }
+
+  const handleSignOut = async () => {
+    setBusy('signout')
+    setActionError('')
+    const { error } = await signOut()
+    setBusy(null)
+    if (error) {
+      setActionError(error.message || t('account.errors.signOutFailed', 'Sign-out failed.'))
+      return
+    }
+    toast.info(t('account.signedOut', 'Signed out. Matches stay on this device.'))
+    onClose?.()
+  }
+
+  // Delete account: the button opens the confirmation (what goes, and the
+  // password the backend asks for); only its own button deletes
+  const startDelete = () => {
+    setActionError('')
+    setDeleteError('')
+    setDeletePassword('')
+    setConfirmingDelete(true)
+  }
+  const cancelDelete = () => {
+    setConfirmingDelete(false)
+    setDeletePassword('')
+    setDeleteError('')
+  }
+  const confirmDelete = async (e) => {
+    e?.preventDefault?.()
+    if (busy || !deletePassword) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setDeleteError(t('account.errors.offline', 'No connection: this needs the internet.'))
+      return
+    }
+    setBusy('delete')
+    setDeleteError('')
+    const { error } = await deleteAccount({ password: deletePassword })
+    setBusy(null)
+    if (error) {
+      setDeleteError(deleteErrorText(t, error))
+      return
+    }
+    setDeletePassword('')
+    toast.success(t('account.deleted', 'Account deleted.'))
+    onClose?.()
+  }
+
+  return (
+    <AuthLayer>
+      <Modal
+        open={open}
+        onClose={onClose}
+        layout="sections"
+        size="md"
+        icon={UserRound}
+        title={t('account.title', 'Your account')}
+        closeLabel={t('common.close', 'Close')}
+      >
+        <div className="space-y-4">
+          {/* Who is signed in */}
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-400">{t('account.signedInAs', 'Signed in as')}</div>
+            {name && <div className="mt-0.5 text-sm font-semibold text-stone-900 break-words">{name}</div>}
+            <div className="text-sm text-stone-600 break-all" data-testid="account-email">{email}</div>
+            {roles.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {roles.map(r => <Chip key={r}>{r}</Chip>)}
+              </div>
+            )}
+          </div>
+
+          {/* An OpenVolley account, not in OpenBeach yet: join first */}
+          {access?.known && access.needsJoin && (
+            <section aria-labelledby="ob-join-title" className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-3 text-sky-950" data-testid="join-beach-section">
+              <h3 id="ob-join-title" className="text-sm font-semibold">{t('account.joinTitle', 'Not in OpenBeach yet')}</h3>
+              <p className="mt-0.5 text-xs text-sky-950/80">
+                {t('account.joinBody', 'This is an OpenVolley account. Join OpenBeach with the same login; an invite code or an admin then approves it. Matches stay on this device until then.')}
+              </p>
+              <JoinBeachButton className="mt-3" />
+            </section>
+          )}
+
+          {/* Waiting for approval: the invite code */}
+          {access?.known && access.isPending && !access.needsJoin && (
+            <section aria-labelledby="ob-pending-title" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-amber-900" data-testid="pending-approval">
+              <div className="flex items-start gap-2">
+                <Clock size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-amber-700" />
+                <div className="min-w-0 flex-1">
+                  <h3 id="ob-pending-title" className="text-sm font-semibold">{t('account.pendingTitle', 'Waiting for approval')}</h3>
+                  <p className="mt-0.5 text-xs text-amber-900/90">
+                    {t('account.pendingBody', 'Your account can score on this device, but matches reach the cloud only once it is approved. Have an invite code? Enter it here.')}
+                  </p>
+                  <InviteCodeForm className="mt-3" />
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Referees and scorers: the personal PIN to approve results with the account (OpenVolley 0fc2661a) */}
+          <ApprovalPinSection />
+
+          {/* Name and licence number (no date of birth) */}
+          <form onSubmit={save} className="space-y-3" noValidate>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t('account.firstName', 'First name')}>
+                <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" />
+              </Field>
+              <Field label={t('account.lastName', 'Last name')}>
+                <Input value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" />
+              </Field>
+            </div>
+            <Field
+              label={t('account.licence', 'Licence number (optional)')}
+              hint={t('account.licenceHint', '4 to 7 digits. Match setup fills it in as the scorer’s licence.')}
+              error={licenceError || undefined}
+            >
+              <Input
+                value={licence}
+                onChange={(e) => { setLicence(e.target.value.replace(/\D/g, '').slice(0, 7)); setLicenceError('') }}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={7}
+                autoComplete="off"
+                className="sm:max-w-[12rem]"
+                data-testid="account-licence"
+              />
+            </Field>
+            {saveError && <FormError>{saveError}</FormError>}
+            <Button type="submit" loading={saving} disabled={!changed}>
+              {t('account.save', 'Save')}
+            </Button>
+          </form>
+
+          {/* Sign out / delete */}
+          <div className="space-y-3 border-t border-stone-100 pt-4">
+            <p className="text-xs text-stone-500">
+              {t('account.signOutHint', 'On a shared court tablet, sign out when you are done. Matches stay on this device.')}
+            </p>
+            {actionError && <FormError>{actionError}</FormError>}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="dark" size="lg" icon={LogOut} loading={busy === 'signout'} disabled={!!busy} onClick={handleSignOut}>
+                {t('account.signOut', 'Sign out')}
+              </Button>
+              {!confirmingDelete && (
+                <Button variant="danger-outline" size="lg" icon={Trash2} disabled={!!busy} onClick={startDelete} className="ml-auto">
+                  {t('account.deleteAccount', 'Delete account')}
+                </Button>
+              )}
+            </div>
+            {confirmingDelete && (
+              <form
+                onSubmit={confirmDelete}
+                noValidate
+                aria-labelledby="ob-delete-title"
+                className="space-y-3 rounded-lg border border-red-200 bg-red-50/60 px-3 py-3"
+                data-testid="delete-account-confirm"
+              >
+                <div>
+                  <h3 id="ob-delete-title" className="text-sm font-semibold text-red-900">{t('account.deleteConfirmTitle', 'Delete your account?')}</h3>
+                  <p className="mt-0.5 text-xs text-red-900/80">
+                    {t('account.deleteConfirmBody', { email, defaultValue: 'The account {{email}} and its profile are deleted for good. Matches on this device stay here.' })}
+                  </p>
+                </div>
+                <Field
+                  label={t('account.deletePasswordLabel', 'Your password')}
+                  hint={t('account.deletePasswordHint', 'Enter your password to confirm: a tablet left signed in cannot delete your account.')}
+                  error={deleteError || undefined}
+                >
+                  <Input
+                    type="password"
+                    value={deletePassword}
+                    onChange={(e) => { setDeletePassword(e.target.value); setDeleteError('') }}
+                    autoComplete="current-password"
+                    autoFocus
+                    data-testid="delete-password"
+                  />
+                </Field>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="secondary" size="lg" disabled={busy === 'delete'} onClick={cancelDelete}>
+                    {t('common.cancel', 'Cancel')}
+                  </Button>
+                  <Button type="submit" variant="danger" size="lg" icon={Trash2} loading={busy === 'delete'} disabled={!!busy || !deletePassword} className="ml-auto">
+                    {t('account.deleteForGood', 'Delete for good')}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      </Modal>
+    </AuthLayer>
+  )
+}

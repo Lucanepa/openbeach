@@ -1,0 +1,126 @@
+---
+description: 
+alwaysApply: true
+---
+
+# OpenBeach - Beach Volleyball eScoresheet
+
+Offline-first beach volleyball scoring application with multi-platform support (Web PWA, Windows, macOS, Linux).
+
+## Tech Stack
+
+- **Frontend**: React 18 + Vite
+- **Database**: Dexie (IndexedDB wrapper) for offline-first local storage
+- **Cloud Sync**: the OpenVolley backend (backend.openvolley.app: auth, `/api/db`, realtime relay, storage), shared with indoor; beach rows carry `sport_type = 'beach'`
+- **Desktop**: the Tauri beach flavour of the OpenVolley desktop app (built in the OpenVolley repo, `escoresheet/frontend/src-tauri/tauri.beach.conf.json`); its relay serves these pages on 5174 / WS 8081
+- **Android**: Capacitor (`com.openvolley.beach`, `npm run build:android`)
+- **PDF**: jsPDF, pdf-lib, pdfjs-dist
+- **i18n**: i18next (en, fr, it, de, de-CH)
+- **Styling**: Tailwind v4 + the volleyui kit (`src_beach/ui/volleyui`, light only) via `src_beach/tailwind_beach.css`; the legacy `styles_beach.css` (dark) sits in a `legacy` layer until every screen is restyled. Restyled views live inside `.ov-kit`.
+
+## Project Structure
+
+```
+escoresheet/frontend/
+├── src_beach/           # Beach volleyball source code
+│   ├── components_beach/    # React components
+│   ├── hooks_beach/         # Custom hooks
+│   ├── utils_beach/         # Utilities
+│   ├── i18n_beach/          # Translations
+│   └── *App_beach.jsx       # Entry points
+├── scoresheet_pdf_beach/    # PDF generation
+├── public_beach/            # Static assets
+└── android/                 # Capacitor Android app
+```
+
+## Commands
+
+Run from `escoresheet/frontend/`:
+
+```bash
+npm run dev              # Dev server (port 6173)
+npm run build            # Production build
+npm run build:subdomains # Cloudflare Pages builds (dist-beach*)
+npm run build:android    # Capacitor web bundle (dist-capacitor)
+npm run test:run         # vitest
+```
+
+## Key Entry Points
+
+- **App_beach.jsx** - Main scoresheet management
+- **RefereeApp_beach.jsx** - Referee interface
+- **LivescoreApp_beach.jsx** - Spectator display
+- **ScoresheetApp_beach.jsx** - Scoring interface
+
+## Architecture Patterns
+
+### Offline-First Sync
+- All data written to IndexedDB first
+- Sync queue processes changes to the backend when online and signed in (it waits for a sign-in on 401)
+- External IDs enable idempotent retries
+
+### Two-Path Sync
+1. **Queued**: Events, sets, match data → reliable but slower
+2. **Direct**: match_live_state → sub-second for spectators
+
+### State Management
+- React hooks + Context API (AuthContext, AlertContext)
+- Dexie `useLiveQuery` for reactive database reads
+- Refs for performance-critical non-reactive state
+
+## Naming Conventions
+
+- `*_beach.jsx/js` - Beach volleyball specific files
+- `*_old.jsx/js` - Legacy code kept for reference
+- `*-main_beach.jsx` - Entry point files
+- team1 and team2 instead of home and away, forever, for the teams
+
+
+
+
+## Guidelines
+
+DELETE LIBERO, SUBSTITUTION, COACH, EXCEPTIONAL SUBSTITUTION, BENCH OFFICIAL, BENCH PLAYERS mentions and code
+
+### Do
+- Use functional components with hooks
+- Use existing patterns (Modal, useLiveQuery, context providers)
+- Keep offline-first in mind - write to IndexedDB, sync later
+- Use the existing CSS variables for styling
+- Test offline scenarios
+
+### Don't
+- Add new npm dependencies without good reason
+- Create new CSS files (use styles_beach.css)
+- Break offline functionality
+- Add inline styles (use CSS classes)
+- Forget to handle loading/error states for async operations
+- keep libero, substitutions, any bench officials but coach, bench players and officials, drag etc function
+- Use html2canvas — it breaks Tailwind CSS rendering and component styles. NEVER use it for PDF/screenshot capture.
+
+## Environment Variables
+
+In `.env`:
+```
+VITE_BACKEND_URL=https://backend.openvolley.app   # or a LOCAL backend for testing, never production writes
+VITE_LOCAL_SERVER=                                # 'true' only for a build that runs next to a local server
+```
+
+No Supabase variables: openbeach talks only to the OpenVolley backend
+(`lib_beach/apiClient_beach.js`, `X-OV-Proto: 2`). `lib_beach/supabaseClient_beach.js`
+is a shim over the backend's realtime relay, not a Supabase client.
+
+## Database Schema (Dexie)
+
+Key tables: `teams`, `players`, `matches`, `sets`, `events`, `sync_queue`, `match_setup`, `referees`, `scorers`
+
+## CSS Theme Variables
+
+```css
+--bg: #0b1220;      /* Background */
+--panel: #111827;   /* Panel background */
+--text: #e5e7eb;    /* Primary text */
+--muted: #9ca3af;   /* Muted text */
+--accent: #22c55e;  /* Green accent */
+--danger: #ef4444;  /* Red/danger */
+```

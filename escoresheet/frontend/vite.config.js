@@ -1,0 +1,189 @@
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+import scoresheetTailwind from './scripts/vite-plugin-scoresheet-tailwind.js'
+import { VitePWA } from 'vite-plugin-pwa'
+import { readFileSync } from 'fs'
+import { fileURLToPath } from 'url'
+import { dirname, resolve } from 'path'
+import { PWA_INCLUDE_ASSETS, PWA_ICONS, THEME_COLOR } from './pwa-icons.js'
+import { IGNORE_URL_PARAMETERS, MAIN_RUNTIME_CACHING } from './pwa-workbox.js'
+import { APP_PAGES } from './scripts/subdomain-pages.js'
+import { themeBoot } from './theme-boot.js'
+import { cspMeta } from './csp.js'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+// Read version from package.json
+const packageJson = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'))
+const appVersion = packageJson.version
+
+// Android app build (scripts/release-android.sh, the F-Droid recipe): the
+// WebView loads the bundled files, so no service worker (an old precache would
+// keep serving the previous version after an APK update), and the output goes
+// to dist-capacitor (capacitor.config.json webDir).
+const isCapacitor = process.env.CAPACITOR === 'true'
+// scripts/build-subdomains.js: each subdomain app brings its own VitePWA
+// (its own manifest name); this one would overwrite it
+const isSubdomainBuild = process.env.OB_SUBDOMAIN_BUILD === 'true'
+
+export default defineConfig({
+  // Set base from env for GitHub Pages project site deployments.
+  // If deploying to a custom domain (CNAME), use '/'. Otherwise set to '/<repo-name>/'
+  base: process.env.VITE_BASE_PATH || '/',
+  publicDir: 'public_beach',
+  // Android app: no .env files, only the variables given on the command line.
+  // F-Droid builds the APK from source and checks it against the owner-signed
+  // one byte for byte, so a value from someone's local .env (e.g. a VITE_*
+  // backend URL) must not end up in the bundle.
+  envDir: isCapacitor ? false : undefined,
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion)
+  },
+  plugins: [
+    react(),
+    // The Android app's Content-Security-Policy as a <meta> (no server sends
+    // it a header; the web builds get a _headers file, build-subdomains.js).
+    // Its hook runs last (order 'post'), so the <meta> is first in <head>: a
+    // policy <meta> governs only what comes after it.
+    cspMeta({ enabled: isCapacitor }),
+    // Colour theme (utils_beach/theme_beach.js): set <html data-theme> before
+    // the first paint, so a dark or e-ink page does not flash light while the
+    // bundle loads, and follow a change made in another tab. Not on the PDF
+    // scoresheet page: it is the paper form. (theme-boot.js: the CSP allows
+    // this inline script by its hash, csp.js)
+    themeBoot(),
+    // Vite injects the stylesheets of the CSS chunks that several pages share
+    // (tailwind_beach, flag-icons) in a racy order, so two builds of the same
+    // commit could differ in admin_beach.html / index.html. F-Droid rebuilds
+    // the tag and needs the same bytes as the signed APK (Binaries in the
+    // recipe): put the injected <link rel="stylesheet"> tags in a fixed order
+    // (by file name; flag-icons and the Tailwind layers do not overlap).
+    {
+      name: 'stable-css-order',
+      transformIndexHtml: {
+        order: 'post',
+        handler(html) {
+          const re = /^[ \t]*<link rel="stylesheet" crossorigin href="[^"]+">\n/gm
+          const links = html.match(re)
+          if (!links || links.length < 2) return html
+          const sorted = [...links].sort()
+          let i = 0
+          return html.replace(re, () => sorted[i++])
+        },
+      },
+    },
+    // The PDF scoresheet's own Tailwind v3 (was the CDN); before v4 sees it
+    scoresheetTailwind(),
+    // Tailwind v4 + the volleyui tokens (src_beach/tailwind_beach.css)
+    tailwindcss(),
+    VitePWA({
+      disable: isCapacitor || isSubdomainBuild,
+      // 'prompt', not 'autoUpdate': a new worker waits until the scorer taps
+      // "Refresh to update" (UpdateBanner_beach). autoUpdate (skipWaiting) let
+      // it take over by itself after a deploy or a desktop app update, and
+      // clients.claim() then swapped the worker under every open page, the
+      // scoretable mid-match included (useServiceWorker_beach).
+      registerType: 'prompt',
+      includeAssets: PWA_INCLUDE_ASSETS,
+      workbox: {
+        skipWaiting: false,
+        clientsClaim: true,
+        // Cache all assets for offline use
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        // The phone signing page (public_beach/sign/, OpenVolley cb20be70) is
+        // opened by OTHER phones from a QR code, never by the app: not
+        // precached. (vite-plugin-pwa's own defaults are kept: setting
+        // globIgnores replaces them.)
+        globIgnores: ['**/node_modules/**/*', 'sw.js', 'workbox-*.js', 'sign/**'],
+        // Workbox's 2 MiB default fails a build whose entry chunk outgrows it
+        // (the subdomain build did at 2.4 MB, 2.0.2): the entry must be
+        // precached, scorers work offline (scripts/build-subdomains.js too)
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        // A multi-page app: no SPA fallback. With workbox's default every
+        // navigation the service worker controls got index.html, so on the
+        // desktop / venue relay a tablet's /referee or /livescore (the QR
+        // code links) opened the scoretable once the worker was installed.
+        // The subdomain builds (scripts/build-subdomains.js) do the same.
+        navigateFallback: null,
+        // A page the app opens with a query (?mode=local, ?action=print,
+        // ?cache_bust=..) is its precached file, offline too (pwa-workbox.js)
+        ignoreURLParametersMatching: IGNORE_URL_PARAMETERS,
+        // The API from the network only (first), CacheFirst for images and
+        // fonts; no catch-all NetworkFirst route (pwa-workbox.js)
+        runtimeCaching: MAIN_RUNTIME_CACHING
+      },
+      manifest: {
+        name: process.env.VITE_APP_TITLE || 'OpenBeach eScoresheet',
+        short_name: 'OpenBeach',
+        start_url: '.',
+        display: 'standalone',
+        background_color: '#ffffff',
+        theme_color: THEME_COLOR,
+        icons: PWA_ICONS
+      }
+    })
+  ],
+  server: {
+    port: 6173,
+    https: process.env.VITE_HTTPS === 'true',
+    host: true, // Allow external connections
+    proxy: {
+      '/api/screenshot': {
+        target: 'http://localhost:3456',
+        changeOrigin: true,
+        rewrite: (path) => '/screenshot',
+      },
+      '/api/pdf': {
+        target: 'http://localhost:3456',
+        changeOrigin: true,
+        rewrite: (path) => '/pdf',
+      },
+    },
+  },
+  build: {
+    ...(isCapacitor ? { outDir: 'dist-capacitor' } : {}),
+    // Hidden source maps on the web build Cloudflare Pages makes (CF_PAGES=1;
+    // OV_SOURCEMAPS=1 by hand): next to each bundle, no sourceMappingURL comment,
+    // so browsers never fetch them; OpenVolley's error tracker reads them for
+    // readable stacks (its backend lib/sourceMaps.js). Never in the apps.
+    sourcemap: !isCapacitor && (process.env.CF_PAGES === '1' || process.env.OV_SOURCEMAPS === '1') ? 'hidden' : false,
+    // Use safer build options to avoid eval in production (Vite 8 minifies
+    // with Oxc; 'esbuild' is deprecated there)
+    target: 'es2015',
+    // CSS: the browsers Tailwind 4 itself needs. Vite 8 minifies CSS with
+    // Lightning CSS, which for 'es2015' flattened Tailwind's cascade layers
+    // (utilities then beat rules they lose to in a browser: the referee
+    // card's heading got a margin, the header buttons padding).
+    cssTarget: ['chrome111', 'edge111', 'firefox128', 'safari16.4'],
+    rolldownOptions: {
+      // The pages next to index.html: one list with beach.openvolley.app's
+      // build (scripts/subdomain-pages.js, scripts/build-subdomains.js)
+      input: {
+        main: './index.html',
+        ...APP_PAGES,
+      },
+      output: {
+        // Avoid eval in production builds
+        format: 'es',
+        // (Vite 8 has no manualChunks object form: the same groups by path).
+        // The syntax helpers (es2015 output), Vite's preload helper and fflate
+        // (also read-excel-file's) get their own small chunks: inside
+        // pdf-vendor, as jsPDF's dependencies, they made every page load the
+        // PDF libraries.
+        codeSplitting: {
+          groups: [
+            { name: 'helpers', test: /vite[\\/]preload-helper|@oxc-project[+\\/]runtime[@\\/]|@babel[\\/]runtime[\\/]/, priority: 10 },
+            { name: 'fflate', test: /node_modules[\\/]fflate[\\/]/, priority: 10 },
+            { name: 'react-vendor', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+            { name: 'dexie-vendor', test: /node_modules[\\/]dexie/ },
+            { name: 'pdf-vendor', test: /node_modules[\\/](jspdf|pdf-lib|@pdf-lib)[\\/]/ }
+          ]
+        }
+      }
+    }
+  }
+})
+
+

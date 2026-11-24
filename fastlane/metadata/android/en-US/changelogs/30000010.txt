@@ -1,0 +1,6 @@
+OpenBeach 3.0.1
+- Forfeit: the right sets are awarded and reach the server as finished.
+- A competition manager can reopen a closed match.
+- Time-outs: a request over a running time-out keeps it; undo stops it.
+- Scoresheet: long remarks never cut; remark for a set beyond 44 points.
+- Roster rows no longer jump while a number is typed; more translations.

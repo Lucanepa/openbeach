@@ -1,0 +1,57 @@
+/**
+ * What the app backup files (the native per-event backups) leave out of the
+ * match row, and what the coalescing key ignores.
+ *
+ * The files are written to the app's own folder (Android, since audit
+ * SEC-22: it was the public Documents folder) or the desktop app's data
+ * folder, sealed with the match's game PIN and referee PIN
+ * (utils_beach/backupCrypto), and Export to Documents copies them out on
+ * request. Connection PINs, the game PIN and session ids are access secrets,
+ * not scoring data: a restore keeps the PINs of the local copy it replaces,
+ * then the PIN that opened the file, or makes new ones (backupManager_beach
+ * restoreMatchFromJson). The cloud backup
+ * and the browser download / folder backup file are unchanged: they keep the
+ * PINs, which a match moved to another device needs.
+ *
+ * Ported from OpenVolley src/utils/nativeBackup/redact.js, with openbeach's
+ * PIN names (team1Pin / team2Pin, team1UploadPin / team2UploadPin, matchPin).
+ */
+
+import { VOLATILE_MATCH_KEY } from './matchWriteHook_beach'
+
+// The match-row PINs (local names, older spellings and cloud spellings)
+export const MATCH_SECRET_FIELDS = [
+  'gamePin', 'game_pin', 'matchPin',
+  'refereePin', 'referee_pin',
+  'team1Pin', 'team2Pin', 'team1TeamPin', 'team2TeamPin',
+  'team1UploadPin', 'team2UploadPin', 'team1TeamUploadPin', 'team2TeamUploadPin',
+  'homeTeamPin', 'awayTeamPin', 'homeTeamUploadPin', 'awayTeamUploadPin',
+  'connection_pins', 'connectionPins',
+  'sessionId', 'session_id'
+]
+// Any other PIN- or session-id-like key, so a new field is never written by accident
+const SECRET_KEY = /(^|[a-z0-9_])pins?$|session_?id$|token$|secret/i
+
+/** Marker in the file: the restore must not expect PINs in it. */
+export const SECRETS_REMOVED = 'secretsRemoved'
+
+/** The match row without PINs and session ids (a copy). */
+export function redactMatch(match) {
+  if (!match || typeof match !== 'object') return match
+  const out = {}
+  for (const [key, value] of Object.entries(match)) {
+    if (MATCH_SECRET_FIELDS.includes(key) || SECRET_KEY.test(key)) continue
+    out[key] = value
+  }
+  return out
+}
+
+/** The match row without its bookkeeping fields (heartbeats, sessions, sync stamps, updatedAt). */
+export function stableMatch(match) {
+  if (!match || typeof match !== 'object') return match
+  const out = {}
+  for (const [key, value] of Object.entries(match)) {
+    if (!VOLATILE_MATCH_KEY.test(key)) out[key] = value
+  }
+  return out
+}

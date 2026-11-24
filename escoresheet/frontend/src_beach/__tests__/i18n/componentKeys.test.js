@@ -1,0 +1,63 @@
+import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
+import en from '../../i18n_beach/locales/en.json'
+import de from '../../i18n_beach/locales/de.json'
+import deCH from '../../i18n_beach/locales/de-CH.json'
+import fr from '../../i18n_beach/locales/fr.json'
+import it_ from '../../i18n_beach/locales/it.json'
+
+// Every t('ns.key') a screen calls exists in all 5 locales OpenBeach ships
+// (ServerConnectionScreen_beach showed raw connection.* keys once).
+
+const LOCALES = { en, de, 'de-CH': deCH, fr, it: it_ }
+const get = (obj, path) => path.split('.').reduce((o, k) => o?.[k], obj)
+
+const SCREENS = [
+  'components_beach/ServerConnectionScreen_beach.jsx',
+  'components_beach/StartupConnectivityModal_beach.jsx',
+  'LivescoreApp_beach.jsx',
+  'contexts_beach/AlertContext_beach.jsx',
+  'components_beach/auth/LoginModal_beach.jsx',
+  'components_beach/auth/ProfileModal_beach.jsx',
+  // Android's Export to Documents (audit SEC-22)
+  'components_beach/options/ExportToDocumentsRow_beach.jsx',
+  // the PIN of a sealed backup file, the restore preview's "not encrypted" (audit SEC-22)
+  'components_beach/BackupUnlockDialog_beach.jsx',
+  'components_beach/RestorePreviewModal_beach.jsx',
+  'components_beach/auth/UserButton_beach.jsx',
+  'components_beach/auth/InviteCodeForm_beach.jsx',
+  'diagnostics_beach/DiagnosticsSection_beach.jsx',
+  'components_beach/scoreboard/PhoneScoreboard_beach.jsx',
+  // the MTO / RIT dialog was English in every language (its keys were in no locale)
+  'components_beach/Scoreboard_beach.jsx',
+  'components_beach/TimeInput24_beach.jsx',
+  // the guide showed raw keys (its button demo, troubleshooting q11 to q16)
+  'components_beach/InteractiveGuide_beach.jsx'
+]
+
+function keysOf(file) {
+  const src = readFileSync(resolve(__dirname, '../..', file), 'utf8')
+  const keys = new Set()
+  for (const m of src.matchAll(/\bt\(\s*['`]([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+)['`]/g)) keys.add(m[1])
+  return [...keys]
+}
+
+describe.each(SCREENS)('%s', (file) => {
+  const keys = keysOf(file)
+
+  it('calls translated keys', () => {
+    expect(keys.length).toBeGreaterThan(0)
+  })
+
+  for (const [name, loc] of Object.entries(LOCALES)) {
+    it(`${name} has every key`, () => {
+      const missing = keys.filter((k) => {
+        const v = get(loc, k)
+        // a plural key lives as key_one / key_other
+        return typeof v !== 'string' && typeof get(loc, `${k}_other`) !== 'string'
+      })
+      expect(missing).toEqual([])
+    })
+  }
+})

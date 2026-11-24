@@ -1,0 +1,2 @@
+OpenBeach 2.0.1, a maintenance release.
+- Reproducible build: two builds of the same source now give the same APK, byte for byte (the page stylesheets are loaded in a fixed order), as F-Droid needs to verify the app. Nothing changes in how the app looks or works.

@@ -1,0 +1,6 @@
+OpenBeach 2.0.0, the first Android release.
+- Scores beach volleyball matches offline, on the tablet.
+- Venue mode: connect to a local server (Options, Server) and open the referee or livescore view on a second tablet.
+- Cloud sync with backend.openvolley.app for signed-in scorers.
+- The scoreboard locks to landscape; the other screens also work in portrait.
+- Back asks before closing the app.
