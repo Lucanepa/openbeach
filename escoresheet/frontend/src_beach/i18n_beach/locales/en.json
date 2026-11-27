@@ -599,7 +599,10 @@
       "expulsion": "Expulsion",
       "disqualification": "Disqualification",
       "title": "Sanctions",
-      "formalWarning": "Formal warning"
+      "formalWarning": "Formal warning",
+      "improperRequestShort": "Improper request",
+      "delayWarningShort": "Delay warning",
+      "delayPenaltyShort": "Delay penalty"
     },
     "labels": {
       "sets": "SETS",

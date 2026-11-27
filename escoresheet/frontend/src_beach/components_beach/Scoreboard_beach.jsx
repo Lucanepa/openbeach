@@ -182,7 +182,7 @@ const bmpChoiceButton = {
   textOverflow: 'ellipsis'
 }
 
-/** A label that some locales break with a soft "-\n" (de: "Verzögerungs-\nwarnung"), on one line. */
+/** A label that some locales break with "\n" or a soft "-\n" (de: "Verwarnung\nwegen Verzögerung"), on one line. */
 const oneLine = (text) => String(text).replace(/-\n/g, '').replace(/\n/g, ' ')
 
 // Finished sets a team won. A set row holds its points, not its winner.
@@ -9200,11 +9200,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
+                          // a long label (large system font) wraps to a second line instead of an ellipsis
+                          whiteSpace: 'normal',
+                          lineHeight: 1.1,
                           boxSizing: 'border-box'
                         }}
-                        title={t('scoreboard.sanctions.improperRequest', 'Improper request')}
-                      >{t('scoreboard.sanctions.improperRequest', 'Improper request')}</button>
+                        title={oneLine(t('scoreboard.sanctions.improperRequest', 'Improper request'))}
+                        aria-label={oneLine(t('scoreboard.sanctions.improperRequest', 'Improper request'))}
+                      >{t('scoreboard.sanctions.improperRequestShort', 'Improper request')}</button>
                     )}
                     {/* Delay Warning / Delay Penalty - yellow if DW not given, red if DW already given */}
                     {(() => {
@@ -9229,11 +9232,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
+                              // a long label (large system font) wraps to a second line instead of an ellipsis
+                              whiteSpace: 'normal',
+                              lineHeight: 1.1,
                               boxSizing: 'border-box'
                             }}
-                            title={t('scoreboard.sanctions.delayPenalty', 'Delay penalty')}
-                          >{t('scoreboard.sanctions.delayPenalty', 'Delay penalty')}</button>
+                            title={oneLine(t('scoreboard.sanctions.delayPenalty', 'Delay penalty'))}
+                            aria-label={oneLine(t('scoreboard.sanctions.delayPenalty', 'Delay penalty'))}
+                          >{t('scoreboard.sanctions.delayPenaltyShort', 'Delay penalty')}</button>
                         )
                       } else {
                         // Delay Warning - yellow
@@ -9254,11 +9260,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
+                              // a long label (large system font) wraps to a second line instead of an ellipsis
+                              whiteSpace: 'normal',
+                              lineHeight: 1.1,
                               boxSizing: 'border-box'
                             }}
-                            title={t('scoreboard.sanctions.delayWarning', 'Delay warning')}
-                          >{oneLine(t('scoreboard.sanctions.delayWarning', 'Delay warning'))}</button>
+                            title={oneLine(t('scoreboard.sanctions.delayWarning', 'Delay warning'))}
+                            aria-label={oneLine(t('scoreboard.sanctions.delayWarning', 'Delay warning'))}
+                          >{t('scoreboard.sanctions.delayWarningShort', 'Delay warning')}</button>
                         )
                       }
                     })()}
@@ -10993,11 +11002,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
+                          // a long label (large system font) wraps to a second line instead of an ellipsis
+                          whiteSpace: 'normal',
+                          lineHeight: 1.1,
                           boxSizing: 'border-box'
                         }}
-                        title={t('scoreboard.sanctions.improperRequest', 'Improper request')}
-                      >{t('scoreboard.sanctions.improperRequest', 'Improper request')}</button>
+                        title={oneLine(t('scoreboard.sanctions.improperRequest', 'Improper request'))}
+                        aria-label={oneLine(t('scoreboard.sanctions.improperRequest', 'Improper request'))}
+                      >{t('scoreboard.sanctions.improperRequestShort', 'Improper request')}</button>
                     )}
                     {/* Delay Warning / Delay Penalty - yellow if DW not given, red if DW already given */}
                     {(() => {
@@ -11022,11 +11034,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
+                              // a long label (large system font) wraps to a second line instead of an ellipsis
+                              whiteSpace: 'normal',
+                              lineHeight: 1.1,
                               boxSizing: 'border-box'
                             }}
-                            title={t('scoreboard.sanctions.delayPenalty', 'Delay penalty')}
-                          >{t('scoreboard.sanctions.delayPenalty', 'Delay penalty')}</button>
+                            title={oneLine(t('scoreboard.sanctions.delayPenalty', 'Delay penalty'))}
+                            aria-label={oneLine(t('scoreboard.sanctions.delayPenalty', 'Delay penalty'))}
+                          >{t('scoreboard.sanctions.delayPenaltyShort', 'Delay penalty')}</button>
                         )
                       } else {
                         // Delay Warning - yellow
@@ -11047,11 +11062,14 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               padding: `${2 * scaleFactor}px ${4 * scaleFactor}px`,
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
+                              // a long label (large system font) wraps to a second line instead of an ellipsis
+                              whiteSpace: 'normal',
+                              lineHeight: 1.1,
                               boxSizing: 'border-box'
                             }}
-                            title={t('scoreboard.sanctions.delayWarning', 'Delay warning')}
-                          >{oneLine(t('scoreboard.sanctions.delayWarning', 'Delay warning'))}</button>
+                            title={oneLine(t('scoreboard.sanctions.delayWarning', 'Delay warning'))}
+                            aria-label={oneLine(t('scoreboard.sanctions.delayWarning', 'Delay warning'))}
+                          >{t('scoreboard.sanctions.delayWarningShort', 'Delay warning')}</button>
                         )
                       }
                     })()}
