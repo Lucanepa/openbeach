@@ -42,7 +42,7 @@
     "rasterizehtml": "^1.4.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-i18next": "^17.0.16",
+    "react-i18next": "^18.0.3",
     "read-excel-file": "^9.3.12",
     "tailwind-merge": "^3.7.0"
   },
