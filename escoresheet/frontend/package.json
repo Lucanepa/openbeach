@@ -33,7 +33,7 @@
     "hash-wasm": "^4.13.0",
     "html5-qrcode": "^2.3.8",
     "i18n-iso-countries": "^7.14.0",
-    "i18next": "^26.4.3",
+    "i18next": "^27.2.7",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.1",
     "lucide-react": "^1.52.0",
