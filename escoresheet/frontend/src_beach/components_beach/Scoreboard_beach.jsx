@@ -9206,7 +9206,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           boxSizing: 'border-box'
                         }}
                         title={oneLine(t('scoreboard.sanctions.improperRequest', 'Improper request'))}
-                        aria-label={oneLine(t('scoreboard.sanctions.improperRequest', 'Improper request'))}
                       >{t('scoreboard.sanctions.improperRequestShort', 'Improper request')}</button>
                     )}
                     {/* Delay Warning / Delay Penalty - yellow if DW not given, red if DW already given */}
@@ -9238,7 +9237,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               boxSizing: 'border-box'
                             }}
                             title={oneLine(t('scoreboard.sanctions.delayPenalty', 'Delay penalty'))}
-                            aria-label={oneLine(t('scoreboard.sanctions.delayPenalty', 'Delay penalty'))}
                           >{t('scoreboard.sanctions.delayPenaltyShort', 'Delay penalty')}</button>
                         )
                       } else {
@@ -9266,7 +9264,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               boxSizing: 'border-box'
                             }}
                             title={oneLine(t('scoreboard.sanctions.delayWarning', 'Delay warning'))}
-                            aria-label={oneLine(t('scoreboard.sanctions.delayWarning', 'Delay warning'))}
                           >{t('scoreboard.sanctions.delayWarningShort', 'Delay warning')}</button>
                         )
                       }
@@ -11008,7 +11005,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                           boxSizing: 'border-box'
                         }}
                         title={oneLine(t('scoreboard.sanctions.improperRequest', 'Improper request'))}
-                        aria-label={oneLine(t('scoreboard.sanctions.improperRequest', 'Improper request'))}
                       >{t('scoreboard.sanctions.improperRequestShort', 'Improper request')}</button>
                     )}
                     {/* Delay Warning / Delay Penalty - yellow if DW not given, red if DW already given */}
@@ -11040,7 +11036,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               boxSizing: 'border-box'
                             }}
                             title={oneLine(t('scoreboard.sanctions.delayPenalty', 'Delay penalty'))}
-                            aria-label={oneLine(t('scoreboard.sanctions.delayPenalty', 'Delay penalty'))}
                           >{t('scoreboard.sanctions.delayPenaltyShort', 'Delay penalty')}</button>
                         )
                       } else {
@@ -11068,7 +11063,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
                               boxSizing: 'border-box'
                             }}
                             title={oneLine(t('scoreboard.sanctions.delayWarning', 'Delay warning'))}
-                            aria-label={oneLine(t('scoreboard.sanctions.delayWarning', 'Delay warning'))}
                           >{t('scoreboard.sanctions.delayWarningShort', 'Delay warning')}</button>
                         )
                       }
