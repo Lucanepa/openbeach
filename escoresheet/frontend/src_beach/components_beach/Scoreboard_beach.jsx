@@ -73,7 +73,6 @@ import { gameNumberValue } from '../utils_beach/gameNumber_beach'
 import CountryFlag from './CountryFlag_beach'
 import SignaturePad from './SignaturePad_beach'
 import { saveMatchSignature, signaturesPayload, clearedPostMatchSignatures, reopenedMatchUpdate } from '../utils_beach/signatures_beach'
-import { undoAccountApprovalsBestEffort } from '../lib_beach/approvalsApi_beach'
 import { signatureSourceUpdate } from '../utils_beach/phoneSignature_beach'
 import { uploadBackupToCloud, uploadLogsToCloud, triggerContinuousBackup } from '../utils_beach/logger_beach'
 import { splitLocalDateTime, parseLocalDateTimeToISO, roundToMinute, formatTimeLocal, localTimeNear } from '../utils_beach/timeUtils_beach'
@@ -5983,10 +5982,8 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
     // the captains', referee's and scorer's signatures, which then certified
     // the new result unsigned; no next set was opened after the set ended
     // again ('ended' stops it), and a reload opened Match End on a set
-    // unfinished. The signatures, their "signed on phone" records and the
-    // approvals go (they are collected again), here and in the cloud (the
-    // server voids the account approvals on 'live'; online they are undone
-    // at once too, after the commit: no fetch inside the action).
+    // unfinished. The signatures and their "signed on phone" records go
+    // (they are collected again), here and in the cloud.
     if (['ended', 'approved', 'final'].includes(match?.status)) {
       await db.matches.update(matchId, reopenedMatchUpdate())
       if (cloud) {
@@ -6003,7 +6000,6 @@ const [betweenSetsCountdown, setBetweenSetsCountdown] = useState(null) // { coun
           status: 'queued'
         })
       }
-      runOrDefer({ run: () => undoAccountApprovalsBestEffort(match) })
     }
 
     // The set (and the later ones, played again) can be ended again

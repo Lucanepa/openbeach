@@ -4,7 +4,7 @@
 // 24 h), the main build (vite.config.js) in 'network-cache' (a catch-all
 // NetworkFirst https route, 3 s). On a shared beach tablet, when the Wi-Fi
 // dropped or took longer than that, the next account (or a signed-out page)
-// got the previous account's /api/me, saved teams and approvals as a normal
+// got the previous account's /api/me, saved teams and more as a normal
 // 200. Now the API goes to the network only, first of all routes, in both
 // builds; the old caches are deleted at start and when a session ends.
 import { describe, it, expect, vi } from 'vitest'
@@ -34,8 +34,6 @@ function firstRoute(routes, url, pageOrigin = 'https://beach.openvolley.app') {
 
 const API_URLS = [
   'https://backend.openvolley.app/api/me',
-  'https://backend.openvolley.app/api/account/approvals',
-  'https://backend.openvolley.app/api/approvals?external_id=match_1_x',
   'https://backend.openvolley.app/api/saved-teams?sport=beach',
   'https://backend.openvolley.app/api/match/bundle/match_1',
   'https://backend.openvolley.app/api/storage/download/logo.png',

@@ -14,7 +14,7 @@ describe('isSensitiveTarget', () => {
   })
 
   it('treats a PIN field by its label, placeholder or autocomplete as secret', () => {
-    expect(isSensitiveTarget(field({ 'aria-label': 'Approval PIN' }))).toBe(true)
+    expect(isSensitiveTarget(field({ 'aria-label': 'Referee PIN' }))).toBe(true)
     expect(isSensitiveTarget(field({ placeholder: 'PIN' }))).toBe(true)
     expect(isSensitiveTarget(field({ autocomplete: 'one-time-code' }))).toBe(true)
     expect(isSensitiveTarget(field({ autocomplete: 'current-password' }))).toBe(true)
@@ -38,7 +38,7 @@ describe('isSensitiveTarget', () => {
 describe('isSecretEntry', () => {
   it('flags stored entries typed into a password or PIN field', () => {
     expect(isSecretEntry({ target: { type: 'password', name: null } })).toBe(true)
-    expect(isSecretEntry({ target: { type: 'text', ariaLabel: 'Approval PIN' } })).toBe(true)
+    expect(isSecretEntry({ target: { type: 'text', ariaLabel: 'Referee PIN' } })).toBe(true)
   })
 
   it('keeps other entries', () => {

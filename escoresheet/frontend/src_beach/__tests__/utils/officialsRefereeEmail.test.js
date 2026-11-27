@@ -4,17 +4,10 @@ import {
 } from '../../utils_beach/officials_beach'
 import { toWireMatch, publicWireMatch } from '../../utils_beach/relayPublisher_beach'
 import { redactForLog } from '../../hooks_beach/useSyncQueue_beach'
-import { appointedNameIfDiffers } from '../../utils_beach/accountApproval_beach'
-import { approvalErrorKey } from '../../lib_beach/approvalsApi_beach'
 
-// OpenVolley audit round 3, PERM-08 (owner decision 6): OpenBeach stored no
-// address with its referees, so the backend could not bind a referee slot's
-// electronic approval to the appointed referee: any beach:referee account
-// at the scoring table approved as "1st referee" of a match that names
-// someone else (poc/beach/beach-approval-any-referee.sh). The match now
-// stores the appointed referees' account addresses (officials[].email, as
-// OpenVolley does), and the backend's OV_APPROVAL_NOT_MATCH_OFFICIAL check
-// binds the slot to that account. Based on the audit's
+// The match stores the appointed referees' account addresses
+// (officials[].email, as OpenVolley does; OpenVolley audit round 3, PERM-08).
+// They are kept clean, never relayed and never logged. Based on the audit's
 // __audit__/beach_logic/officials.property.test.js.
 
 const ref1 = { firstName: 'Rita', lastName: 'Ref', country: 'CHE', dob: '990001', email: '  Rita.Ref@Example.CH ' }
@@ -88,22 +81,5 @@ describe('the addresses stay with the match\'s scorers', () => {
     const logged = redactForLog({ id: 'match_1', officials: match.officials, game_pin: '123456' })
     expect(JSON.stringify(logged)).not.toMatch(/@example\.ch|123456/)
     expect(findOfficial(logged.officials, '2nd referee')).toMatchObject({ firstName: 'Remo' })
-  })
-})
-
-describe('the approval and the appointed referee', () => {
-  const match = { officials: buildOfficialsArray(ref1, ref2, scorer, asst) }
-
-  it('names the appointed referee next to an account of another name', () => {
-    expect(appointedNameIfDiffers(match, 'ref1', { name: 'Beachref Beat' })).toBe('Ref Rita')
-    // the same person, another word order or case: nothing to show
-    expect(appointedNameIfDiffers(match, 'ref1', { name: 'rita ref' })).toBe('')
-    expect(appointedNameIfDiffers(match, 'ref2', null)).toBe('')
-    expect(appointedNameIfDiffers({ officials: [] }, 'ref1', { name: 'Beachref Beat' })).toBe('')
-  })
-
-  it('says why the server refused another account for the slot', () => {
-    expect(approvalErrorKey({ code: 'OV_APPROVAL_NOT_MATCH_OFFICIAL', status: 403 })).toBe('approval.errors.notMatchOfficial')
-    expect(approvalErrorKey({ code: 'OV_APPROVAL_OFFICIAL_EMAIL_MISSING', status: 409 })).toBe('approval.errors.officialEmailMissing')
   })
 })

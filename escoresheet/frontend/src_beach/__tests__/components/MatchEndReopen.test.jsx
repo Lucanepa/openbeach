@@ -79,9 +79,9 @@ describe('MatchEnd_beach: Reopen match on a match the server has closed', () => 
     expect((await db.matches.get(matchId)).status).toBe('final')
   })
 
-  it('an admin: reopened on the server with the reason, then here (approvals voided)', async () => {
+  it('an admin: reopened on the server with the reason, then here', async () => {
     auth.isAdmin = true
-    await seed({ accountApprovals: { scorer: { userId: 'u1' } } })
+    await seed()
     renderMatchEnd()
     await clickEl(await screen.findByRole('button', { name: 'Reopen match' }))
     const confirm = await screen.findByTestId('admin-reopen-confirm')
@@ -89,7 +89,7 @@ describe('MatchEnd_beach: Reopen match on a match the server has closed', () => 
     await act(async () => { fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'Wrong result entered' } }) })
     await clickEl(confirm)
     expect(server.reopen).toHaveBeenCalledWith('uuid-1', { reason: 'Wrong result entered' })
-    await waitFor(async () => expect((await db.matches.get(matchId))).toMatchObject({ status: 'ended', approved: false, accountApprovals: null, closed_at: null }))
+    await waitFor(async () => expect((await db.matches.get(matchId))).toMatchObject({ status: 'ended', approved: false, closed_at: null }))
   })
 
   it('open on the server already: reopened here without asking anyone', async () => {
