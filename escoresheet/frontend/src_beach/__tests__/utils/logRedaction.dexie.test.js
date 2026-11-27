@@ -25,7 +25,7 @@ describe('interaction log secrets already stored', () => {
   it('are deleted when the logger starts; other entries stay', async () => {
     await db.interaction_logs.bulkAdd([
       entry('a', { type: 'password', name: null }),
-      entry('b', { type: 'text', ariaLabel: 'Approval PIN' }),
+      entry('b', { type: 'text', ariaLabel: 'Referee PIN' }),
       entry('c', { type: 'text', name: 'teamName' })
     ])
     const { initComprehensiveLogger } = await import('../../utils_beach/comprehensiveLogger_beach')

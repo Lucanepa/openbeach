@@ -94,14 +94,8 @@ export const REFEREE_ROLES = Object.freeze(['1st referee', '2nd referee'])
  * The address of the appointed referee's account as the match stores it:
  * trimmed, lower-case, null unless it looks like one (the OpenVolley
  * backend's officialAddressOf reads the same: at most 254 characters).
- *
- * Why it is stored (OpenVolley audit round 3, PERM-08, owner decision 6):
- * the backend binds the electronic approval of a referee slot to the address
- * stored for that referee (OV_APPROVAL_NOT_MATCH_OFFICIAL): only that
- * account may approve as that referee. Without one, any beach:referee
- * account at the scoring table could approve as the referee the match names,
- * so Match end offers the account approval of a referee slot only when its
- * address is stored (accountApproval_beach pinApprovalState). Never relayed
+ * Stored since OpenVolley audit round 3 (PERM-08), when it bound the
+ * now-removed account approval of a referee slot. Never relayed
  * (relayPublisher_beach) and never logged (useSyncQueue_beach redactForLog);
  * the backend gives the officials to the match's scorers only.
  */
@@ -178,8 +172,7 @@ export function officialsWithEdits(stored, edited, { cloud = false } = {}) {
     if (!filled(firstName) && !filled(lastName)) continue
     const country = ('country' in e ? e.country : base.country) || null
     const dob = 'dob' in e ? e.dob : base.dob
-    // a referee's account address stays as Match Setup stored it (the cloud
-    // copy binds the referee's approval to it, PERM-08)
+    // a referee's account address stays as Match Setup stored it (PERM-08)
     const email = REFEREE_ROLES.includes(role) ? cleanOfficialEmail(base.email) : null
     out.push(cloud
       ? { role, first_name: firstName, last_name: lastName, country, dob: idValueForSync(dob), ...(email ? { email } : {}) }

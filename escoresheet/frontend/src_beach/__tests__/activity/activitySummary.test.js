@@ -28,7 +28,6 @@ const SERVER_KINDS = {
   'match.coin_toss': ['keys', 'confirmed'],
   'match.manual_change': ['category', 'field', 'before', 'after'],
   'match.signature': ['role', 'signed'],
-  'match.approval': ['role', 'method', 'approved'],
   'match.remarks': ['length'],
   'match.forfeit': ['team', 'forfeit', 'stopped'],
   'match.roster': ['team', 'number', 'fields', 'op'],

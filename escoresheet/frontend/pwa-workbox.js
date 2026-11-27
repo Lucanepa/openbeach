@@ -24,10 +24,9 @@ export const IGNORE_URL_PARAMETERS = [/^(?!ob_probe$)/]
  * The backend's API (/api/ on any origin) goes to the network only and is
  * never kept by the service worker (OpenVolley's API_NETWORK_ONLY_ROUTE).
  * Its answers belong to the account signed in, and a cache keyed by URL (the
- * token is no part of the key) handed one account's /api/me, saved teams and
- * approvals to the next account on a shared tablet, or to a signed-out page,
- * whenever the network failed or was slow, as a normal 200; a stale approvals
- * list passed the re-check before "Confirm and approve", and a relay bundle
+ * token is no part of the key) handed one account's /api/me and saved teams
+ * to the next account on a shared tablet, or to a signed-out page,
+ * whenever the network failed or was slow, as a normal 200, and a relay bundle
  * fetched with a match token answered a later request without one (audit
  * SEC-20). The app keeps its own offline copies (Dexie, localStorage) and
  * handles a failed request itself.
@@ -44,10 +43,8 @@ export const API_NETWORK_ONLY_ROUTE = {
 
 /**
  * The runtime routes of the main build (vite.config.js: the desktop app's
- * pages, dev): the API first, from the network only (the account approvals
- * and the approval PIN status among them: a stale list would bring back an
- * approval undone or voided since and pass the re-check before "Confirm and
- * approve", MatchEnd_beach), then images and fonts cache-first. No catch-all
+ * pages, dev): the API first, from the network only, then images and fonts
+ * cache-first. No catch-all
  * NetworkFirst route any more: it kept every https answer by URL for a day
  * ('network-cache', 3 s), the backend's API included. The pages and their
  * code are in the precache.

@@ -8,10 +8,7 @@ import { findOfficial } from '../../utils_beach/officials_beach'
 
 // Match Setup's officials (OpenVolley audit round 3, PERM-08, owner decision
 // 6): the 1st and 2nd referee take the address of the appointed referee's
-// account. It is stored with the match and synced (officials[].email), so
-// the backend lets only that account approve as that referee
-// (OV_APPROVAL_NOT_MATCH_OFFICIAL). OpenBeach stored no address before, and
-// any beach:referee account approved any beach match's referee slots.
+// account. It is stored with the match and synced (officials[].email).
 
 const h = vi.hoisted(() => ({ auth: null }))
 
@@ -89,10 +86,8 @@ describe('Match Setup: the referees\' account addresses', () => {
     const ref1 = await screen.findByTestId('ref1-email')
     expect(ref1).toHaveValue('rita@example.ch')
     expect(ref1).toHaveAttribute('type', 'email')
-    // not "optional": without it the referee cannot approve with their account (Match end offers no PIN approval)
-    expect(ref1.getAttribute('aria-label')).toMatch(/Email of their account \(needed to approve with PIN\)$/)
-    expect(ref1.getAttribute('aria-label')).not.toMatch(/optional/i)
-    expect(screen.getByText(/Without an address, this referee signs by hand\./)).toBeInTheDocument()
+    expect(ref1.getAttribute('aria-label')).toMatch(/Email of their account$/)
+    expect(screen.getByText(/Only this match's scorers see it\./)).toBeInTheDocument()
     // the scorers' boxes have no address field (their slot is the match's own accounts)
     expect(screen.queryByTestId('scorer-email')).toBeNull()
 

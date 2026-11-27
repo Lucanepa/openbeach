@@ -42,7 +42,6 @@ export const ACTIVITY_KINDS = Object.freeze({
   'match.coin_toss': { cat: 'match', keys: ['keys', 'confirmed'] },
   'match.manual_change': { cat: 'correction', keys: ['category', 'field', 'before', 'after'] },
   'match.signature': { cat: 'match', keys: ['role', 'signed'] },
-  'match.approval': { cat: 'match', keys: ['role', 'method', 'approved'] },
   'match.remarks': { cat: 'match', keys: ['length'] },
   'match.forfeit': { cat: 'correction', keys: ['team', 'forfeit', 'stopped'] },
   'match.roster': { cat: 'match', keys: ['team', 'number', 'fields', 'op'] },
@@ -245,7 +244,6 @@ export const MATCH_KEY_KINDS = Object.freeze([
   [k => k === 'approved', 'match.close', null],
   [k => /^coinToss/.test(k) || k === 'firstServe' || /FirstServe$/.test(k), 'match.coin_toss', null],
   [k => /Signature$/.test(k), 'match.signature', (k, before, after) => ({ role: k.replace(/Signature$/, ''), signed: !!after })],
-  [k => k === 'accountApprovals', 'match.approval', null],
   [k => k === 'remarks', 'match.remarks', (k, before, after) => ({ length: typeof after === 'string' ? after.length : 0 })],
   // beach writes forfait / forfaitTeam (Scoreboard_beach handleForfait)
   [k => k === 'forfeitTeam' || k === 'forfeitReason' || k === 'stoppedReason' || k === 'forfait' || k === 'forfaitTeam', 'match.forfeit', null],
@@ -260,18 +258,6 @@ function same(a, b) {
   } catch {
     return false
   }
-}
-
-function approvalEntries(before, after) {
-  const out = []
-  const b = before && typeof before === 'object' ? before : {}
-  const a = after && typeof after === 'object' ? after : {}
-  for (const slot of new Set([...Object.keys(b), ...Object.keys(a)])) {
-    if (same(b[slot], a[slot])) continue
-    const rec = a[slot]
-    out.push({ role: slot, approved: !!rec, method: rec ? (rec.method || (rec.pin_used || rec.pinUsed ? 'pin' : 'account')) : null })
-  }
-  return out
 }
 
 /**
@@ -308,8 +294,6 @@ export function matchUpdateEntries(mods, row) {
       seen.add(kind)
       const keys = changed.map(k => k.split('.')[0]).filter(k => /^coinToss/.test(k) || k === 'firstServe' || /FirstServe$/.test(k))
       out.push({ kind, data: { keys: [...new Set(keys)], confirmed: (mods.coinTossConfirmed ?? row?.coinTossConfirmed) === true } })
-    } else if (kind === 'match.approval') {
-      for (const data of approvalEntries(before, after)) out.push({ kind, data })
     } else if (kind === 'match.forfeit') {
       if (seen.has(kind)) continue
       seen.add(kind)
@@ -392,7 +376,6 @@ export function activityLine(entry) {
     case 'sync.state': return `${d.from ?? '–'} → ${d.to ?? '–'}`
     case 'match.manual_change': return `${d.category || ''} ${d.field || ''}: ${d.before ?? ''} → ${d.after ?? ''}`.trim()
     case 'match.signature': return `${d.role} ${d.signed ? 'signed' : 'cleared'}`
-    case 'match.approval': return `${d.role} ${d.approved ? `approved (${d.method})` : 'approval removed'}`
     case 'match.remarks': return `${d.length} characters`
     case 'match.roster': return `${d.team || ''} #${d.number ?? '?'} ${d.op || ''}`.trim()
     case 'sync.error':
