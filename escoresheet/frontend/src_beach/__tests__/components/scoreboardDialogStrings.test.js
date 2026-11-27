@@ -26,6 +26,6 @@ describe('Scoreboard_beach dialog strings', () => {
       expect(d.matchEnd.yesReopen, l).toBeTruthy()
       for (const k of ['cancel', 'confirm', 'close']) expect(d.common[k], `${l} common.${k}`).toBeTruthy()
     }
-    expect(locale('de').scoreboard.modals.confirmTimeoutRequest).toBe('Timeout-Anfrage bestätigen?')
+    expect(locale('de').scoreboard.modals.confirmTimeoutRequest).toBe('Antrag auf Auszeit bestätigen?')
   })
 })
