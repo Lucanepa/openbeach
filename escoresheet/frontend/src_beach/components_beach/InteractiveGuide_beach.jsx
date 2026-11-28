@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import Modal from './Modal_beach'
 import { Select } from '../ui/volleyui/Select.jsx'
-import { Camera, Card, ChartColumn, CircleAlert, ClipboardList, CloudUpload, Coin, FileText, Globe, House, Info, Keyboard, Lightbulb, Link, LockOpen, NotebookPen, Pause, Play, Plus, Rocket, RotateCw, Save, Settings, Shield, Signature, Smartphone, SquareNumber3, Target, Timer, TrendingUp, TriangleAlert, Trophy, Undo, Users, Volleyball, Whistle, Wrench, Zap } from './Icons_beach'
+import { TEAM_TIMEOUT_SECONDS } from '../utils_beach/countdownClock_beach'
+import { ArrowLeftRight, Camera, Card, ChartColumn, CircleAlert, ClipboardList, CloudUpload, Coin, FileText, Globe, House, Info, Keyboard, Lightbulb, Link, LockOpen, NotebookPen, Pause, Play, Plus, Rocket, RotateCw, Save, Settings, Shield, Signature, Smartphone, SquareNumber3, Target, Timer, TrendingUp, TriangleAlert, Trophy, Undo, Users, Volleyball, Whistle, Wrench, Zap } from './Icons_beach'
 
 // CSS Keyframe animations as inline styles
 const animationStyles = `
@@ -45,6 +46,7 @@ function Section({ title, icon, children, defaultOpen = false }) {
     <div style={{ marginBottom: 16, border: '1px solid var(--ov-sunken-strong)', borderRadius: 8, overflow: 'hidden' }}>
       <button
         onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
         style={{
           width: '100%',
           padding: '14px 16px',
@@ -62,9 +64,10 @@ function Section({ title, icon, children, defaultOpen = false }) {
           transition: 'all 0.2s'
         }}
       >
-        <span style={{ fontSize: 18 }}>{icon}</span>
-        <span style={{ flex: 1 }}>{title}</span>
-        <span style={{ fontSize: 12, opacity: 0.7, transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+        <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
+        {/* a long word ("Aufschlagreihenfolge") breaks instead of pushing the arrow out (phone, large font) */}
+        <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{title}</span>
+        <span style={{ flexShrink: 0, fontSize: 12, opacity: 0.7, transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
       </button>
       {isOpen && (
         <div style={{ padding: 16, animation: 'fade-in 0.3s ease-out' }}>
@@ -83,6 +86,7 @@ function QAItem({ question, answer }) {
     <div style={{ marginBottom: 8, borderRadius: 6, overflow: 'hidden', background: 'var(--ov-sunken)' }}>
       <button
         onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
         style={{
           width: '100%',
           padding: '12px 14px',
@@ -98,7 +102,7 @@ function QAItem({ question, answer }) {
         }}
       >
         <span style={{ fontWeight: 700, color: 'var(--ov-info-text)' }}>Q:</span>
-        <span style={{ flex: 1 }}>{question}</span>
+        <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{question}</span>
         <span style={{ fontSize: 10, opacity: 0.6 }}>{isOpen ? '−' : '+'}</span>
       </button>
       {isOpen && (
@@ -161,37 +165,27 @@ function DemoButton({ label, color = '#3b82f6', onClick, small = false, disabled
   )
 }
 
-// Interactive Court Visualization for Beach Volleyball (2v2)
-function CourtDemo({ animateRotation = false, highlightPosition = null, t }) {
-  const [positions, setPositions] = useState([
-    { pos: 'left', number: 1, serve: true },
-    { pos: 'right', number: 2 }
-  ])
-
+// Interactive Court Visualization for Beach Volleyball (2v2). There are no
+// positions on a beach court (rule 7.4.1), only the service order (7.6): each
+// time the team wins back the serve, its other player serves. The animation
+// passes the serve from one player to the other.
+function CourtDemo({ animateRotation = false, t }) {
+  const [server, setServer] = useState(1)
   const [isRotating, setIsRotating] = useState(false)
   const later = useLater()
 
-  const rotate = () => {
+  const nextServer = () => {
     if (isRotating) return
     setIsRotating(true)
     later(() => {
-      setPositions(prev => {
-        const newPositions = [...prev]
-        // Swap positions and toggle serve
-        const temp = newPositions[0].number
-        newPositions[0].number = newPositions[1].number
-        newPositions[1].number = temp
-        newPositions[0].serve = !newPositions[0].serve
-        newPositions[1].serve = !newPositions[1].serve
-        return newPositions
-      })
+      setServer(s => (s === 1 ? 2 : 1))
       setIsRotating(false)
     }, 300)
   }
 
   useEffect(() => {
     if (animateRotation) {
-      const interval = setInterval(rotate, 2000)
+      const interval = setInterval(nextServer, 2000)
       return () => clearInterval(interval)
     }
   }, [animateRotation])
@@ -202,7 +196,7 @@ function CourtDemo({ animateRotation = false, highlightPosition = null, t }) {
       <div style={{ width: 200, height: 4, background: 'linear-gradient(90deg, transparent, #fff, transparent)', borderRadius: 2, opacity: 0.3 }} />
       <div style={{ fontSize: 10, opacity: 0.5, marginBottom: 4 }}>{t('interactiveGuide.demos.net')}</div>
 
-      {/* Court - 2 players side by side */}
+      {/* Court - the team's 2 players, the ball with the one who serves */}
       <div style={{
         display: 'flex',
         gap: 16,
@@ -211,14 +205,15 @@ function CourtDemo({ animateRotation = false, highlightPosition = null, t }) {
         border: '2px solid rgba(34, 197, 94, 0.3)',
         borderRadius: 8
       }}>
-        {positions.map((p) => (
+        {[1, 2].map((number) => (
           <div
-            key={p.pos}
+            key={number}
+            data-testid={`guide-court-player-${number}`}
             style={{
               width: 60,
               height: 60,
               borderRadius: '50%',
-              background: highlightPosition === p.pos ? '#3b82f6' : 'var(--ov-hairline)',
+              background: 'var(--ov-hairline)',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -229,10 +224,9 @@ function CourtDemo({ animateRotation = false, highlightPosition = null, t }) {
               position: 'relative'
             }}
           >
-            <span style={{ fontSize: 18, fontWeight: 700 }}>{p.number}</span>
-            <span style={{ fontSize: 10, opacity: 0.6 }}>{p.pos}</span>
-            {p.serve && (
-              <div style={{
+            <span style={{ fontSize: 18, fontWeight: 700 }}>{number}</span>
+            {server === number && (
+              <div data-testid="guide-court-serve" style={{
                 position: 'absolute',
                 top: -8,
                 right: -8,
@@ -326,7 +320,8 @@ function ScoreDemo({ t }) {
 
 // Countdown Demo
 function CountdownDemo({ t }) {
-  const [seconds, setSeconds] = useState(30)
+  // the app's time-out countdown: 45 s, to the referee's whistle
+  const [seconds, setSeconds] = useState(TEAM_TIMEOUT_SECONDS)
   const [running, setRunning] = useState(false)
 
   useEffect(() => {
@@ -335,7 +330,7 @@ function CountdownDemo({ t }) {
       return () => clearTimeout(timer)
     } else if (seconds === 0) {
       setRunning(false)
-      setSeconds(30)
+      setSeconds(TEAM_TIMEOUT_SECONDS)
     }
   }, [running, seconds])
 
@@ -359,7 +354,7 @@ function CountdownDemo({ t }) {
             stroke="#eab308"
             strokeWidth="6"
             strokeDasharray="220"
-            strokeDashoffset={220 - (seconds / 30) * 220}
+            strokeDashoffset={220 - (seconds / TEAM_TIMEOUT_SECONDS) * 220}
             strokeLinecap="round"
             style={{ transition: 'stroke-dashoffset 1s linear' }}
           />
@@ -616,7 +611,7 @@ function TimeoutAvailabilityDemo({ t }) {
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState('info')
   const [activeCountdown, setActiveCountdown] = useState(null) // 'team1' or 'team2'
-  const [countdown, setCountdown] = useState(30)
+  const [countdown, setCountdown] = useState(TEAM_TIMEOUT_SECONDS)
 
   const later = useLater()
   const showMessage = (msg, type) => {
@@ -631,7 +626,7 @@ function TimeoutAvailabilityDemo({ t }) {
       return () => clearTimeout(timer)
     } else if (countdown === 0) {
       setActiveCountdown(null)
-      setCountdown(30)
+      setCountdown(TEAM_TIMEOUT_SECONDS)
     }
   }, [activeCountdown, countdown])
 
@@ -666,7 +661,7 @@ function TimeoutAvailabilityDemo({ t }) {
     setTeam2Timeouts(0)
     setRallyActive(false)
     setActiveCountdown(null)
-    setCountdown(30)
+    setCountdown(TEAM_TIMEOUT_SECONDS)
     setMessage('')
   }
 
@@ -715,7 +710,7 @@ function TimeoutAvailabilityDemo({ t }) {
               <circle cx="35" cy="35" r="30" fill="none" stroke="var(--ov-sunken-strong)" strokeWidth="5" />
               <circle
                 cx="35" cy="35" r="30" fill="none" stroke="#eab308" strokeWidth="5"
-                strokeDasharray="188" strokeDashoffset={188 - (countdown / 30) * 188}
+                strokeDasharray="188" strokeDashoffset={188 - (countdown / TEAM_TIMEOUT_SECONDS) * 188}
                 strokeLinecap="round" style={{ transition: 'stroke-dashoffset 1s linear' }}
               />
             </svg>
@@ -898,11 +893,11 @@ function MatchSetupMockup({ t }) {
             </div>
             <div style={{ background: 'var(--ov-sunken)', padding: 8, borderRadius: 4 }}>
               <div style={{ opacity: 0.5, marginBottom: 2 }}>{t('interactiveGuide.mockups.location')}</div>
-              <div>Zürich, Sportshalle</div>
+              <div>Zürich, Court 1</div>
             </div>
             <div style={{ background: 'var(--ov-sunken)', padding: 8, borderRadius: 4 }}>
               <div style={{ opacity: 0.5, marginBottom: 2 }}>{t('interactiveGuide.mockups.league')}</div>
-              <div>NLA</div>
+              <div>Beach Cup</div>
             </div>
           </div>
         </div>
@@ -910,64 +905,35 @@ function MatchSetupMockup({ t }) {
         {/* Teams Row */}
         <div style={{ display: 'flex', gap: 12 }}>
           {/* Team A Card */}
-          <div style={{ flex: 1, background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: 8, padding: 12 }}>
+          <div style={{ flex: 1, minWidth: 0, background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: 8, padding: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--ov-info-text)' }}>
               {t('interactiveGuide.mockups.teamA')}
             </div>
             <div style={{ background: '#3b82f6', color: 'var(--ov-text)', padding: '6px 10px', borderRadius: 4, fontSize: 14, fontWeight: 600, textAlign: 'center', marginBottom: 8 }}>
               VBC Seeblick
             </div>
-            <div style={{ fontSize: 11, opacity: 0.7, display: 'flex', justifyContent: 'space-between' }}>
-              <span><Users /> 12 {t('interactiveGuide.mockups.players')}</span>
+            <div style={{ fontSize: 11, opacity: 0.7, display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'space-between' }}>
+              <span><Users /> 2 {t('interactiveGuide.mockups.players')}</span>
               <span>✓ {t('interactiveGuide.mockups.rosterComplete')}</span>
             </div>
           </div>
 
           {/* Team B Card */}
-          <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 8, padding: 12 }}>
+          <div style={{ flex: 1, minWidth: 0, background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 8, padding: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--ov-danger-text)' }}>
               {t('interactiveGuide.mockups.teamB')}
             </div>
             <div style={{ background: '#ef4444', color: 'var(--ov-text)', padding: '6px 10px', borderRadius: 4, fontSize: 14, fontWeight: 600, textAlign: 'center', marginBottom: 8 }}>
               Volley Bergtal
             </div>
-            <div style={{ fontSize: 11, opacity: 0.7, display: 'flex', justifyContent: 'space-between' }}>
-              <span><Users /> 11 {t('interactiveGuide.mockups.players')}</span>
+            <div style={{ fontSize: 11, opacity: 0.7, display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'space-between' }}>
+              <span><Users /> 2 {t('interactiveGuide.mockups.players')}</span>
               <span>✓ {t('interactiveGuide.mockups.rosterComplete')}</span>
             </div>
           </div>
         </div>
 
-        {/* Signatures Card */}
-        <div style={{ background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: 8, padding: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--ov-success-text)' }}>
-            {t('interactiveGuide.mockups.signatures')}
-          </div>
-          <div style={{ display: 'flex', gap: 12, fontSize: 11 }}>
-            <div style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ background: 'var(--ov-sunken-strong)', padding: 8, borderRadius: 4, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontStyle: 'italic', opacity: 0.5 }}>✓ {t('interactiveGuide.mockups.signed')}</span>
-              </div>
-            </div>
-            <div style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ opacity: 0.6, marginBottom: 4 }}>{t('interactiveGuide.mockups.captainA')}</div>
-              <div style={{ background: 'var(--ov-sunken-strong)', padding: 8, borderRadius: 4, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontStyle: 'italic', opacity: 0.5 }}>✓ {t('interactiveGuide.mockups.signed')}</span>
-              </div>
-            </div>
-            <div style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ background: 'var(--ov-sunken)', padding: 8, borderRadius: 4, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed var(--ov-hairline)' }}>
-                <span style={{ opacity: 0.4 }}>{t('interactiveGuide.mockups.tapToSign')}</span>
-              </div>
-            </div>
-            <div style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ opacity: 0.6, marginBottom: 4 }}>{t('interactiveGuide.mockups.captainB')}</div>
-              <div style={{ background: 'var(--ov-sunken)', padding: 8, borderRadius: 4, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed var(--ov-hairline)' }}>
-                <span style={{ opacity: 0.4 }}>{t('interactiveGuide.mockups.tapToSign')}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* No signatures here: the captains sign at the coin toss */}
 
         {/* Continue Button */}
         <button style={{
@@ -1049,11 +1015,11 @@ function CoinTossMockup({ t }) {
 
         {/* Captain Signatures */}
         <div style={{ display: 'flex', gap: 12, width: '100%' }}>
-          <div style={{ flex: 1, background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: 8, padding: 12, textAlign: 'center' }}>
+          <div style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: 8, padding: 12, textAlign: 'center' }}>
             <div style={{ fontSize: 10, opacity: 0.6, marginBottom: 4 }}>{t('interactiveGuide.mockups.captainA')}</div>
             <div style={{ fontStyle: 'italic', opacity: 0.5, fontSize: 12 }}>✓ {t('interactiveGuide.mockups.signed')}</div>
           </div>
-          <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 8, padding: 12, textAlign: 'center' }}>
+          <div style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 8, padding: 12, textAlign: 'center' }}>
             <div style={{ fontSize: 10, opacity: 0.6, marginBottom: 4 }}>{t('interactiveGuide.mockups.captainB')}</div>
             <div style={{ fontStyle: 'italic', opacity: 0.5, fontSize: 12 }}>✓ {t('interactiveGuide.mockups.signed')}</div>
           </div>
@@ -1141,7 +1107,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             }}>
               <Volleyball />
             </div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>2 : 1</div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>1 : 0</div>
             <div style={{ fontSize: 10, opacity: 0.5 }}>{t('interactiveGuide.mockups.sets')}</div>
           </div>
 
@@ -1170,10 +1136,10 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             borderRadius: 8,
             padding: 8,
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 28px)',
+            gridTemplateColumns: 'repeat(2, 28px)',
             gap: 4
           }}>
-            {[4, 8, 12, 6, 1, 10].map((num, i) => (
+            {[1, 2].map((num, i) => (
               <div key={i} style={{
                 width: 28,
                 height: 28,
@@ -1200,10 +1166,10 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             borderRadius: 8,
             padding: 8,
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 28px)',
+            gridTemplateColumns: 'repeat(2, 28px)',
             gap: 4
           }}>
-            {[2, 9, 3, 11, 5, 7].map((num, i) => (
+            {[1, 2].map((num, i) => (
               <div key={i} style={{
                 width: 28,
                 height: 28,
@@ -1285,7 +1251,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             textAlign: 'center'
           }}>
             <div style={{ fontSize: 40, fontWeight: 700, color: 'var(--ov-warning-text)' }}>0:25</div>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>VBC Seeblick - Timeout 1/1</div>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>VBC Seeblick - {t('interactiveGuide.mockups.timeout')} 1/1</div>
             <button style={{
               marginTop: 12,
               padding: '8px 24px',
@@ -1311,7 +1277,7 @@ function ScoreboardMockup({ t, state = 'normal' }) {
             textAlign: 'center'
           }}>
             <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>{t('interactiveGuide.mockups.selectSanction')}</div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
               <div style={{ padding: '8px 16px', background: '#eab308', borderRadius: 6, fontWeight: 600, cursor: 'default' }}>
                 <Card fill="currentColor" /> {t('interactiveGuide.scoreboard.warning')}
               </div>
@@ -1950,38 +1916,38 @@ export default function InteractiveGuide({ open, onClose }) {
             <Section title={t('interactiveGuide.scoreboard.sanctions')} icon={<Card fill="currentColor" style={{ color: 'var(--ov-warning-text)' }} />}>
               <p>{t('interactiveGuide.scoreboard.sanctionsDesc')}</p>
 
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginTop: 12 }}>
-                <tbody>
-                  <tr style={{ borderBottom: '1px solid var(--ov-sunken-strong)' }}>
-                    <td style={{ padding: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ width: 20, height: 20, background: '#eab308', borderRadius: 4 }}></span>
-                      <strong>{t('interactiveGuide.scoreboard.warning')}</strong>
-                    </td>
-                    <td style={{ padding: 8, opacity: 0.8 }}>{t('interactiveGuide.scoreboard.warningDesc')}</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--ov-sunken-strong)' }}>
-                    <td style={{ padding: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ width: 20, height: 20, background: '#ef4444', borderRadius: 4 }}></span>
-                      <strong>{t('interactiveGuide.scoreboard.penalty')}</strong>
-                    </td>
-                    <td style={{ padding: 8, opacity: 0.8 }}>{t('interactiveGuide.scoreboard.penaltyDesc')}</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--ov-sunken-strong)' }}>
-                    <td style={{ padding: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ width: 20, height: 20, background: '#ef4444', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ov-text)', fontSize: 10 }}>E</span>
-                      <strong>{t('interactiveGuide.scoreboard.expulsion')}</strong>
-                    </td>
-                    <td style={{ padding: 8, opacity: 0.8 }}>{t('interactiveGuide.scoreboard.expulsionDesc')}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ width: 20, height: 20, background: '#000', border: '2px solid #ef4444', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ov-on-dark)', fontSize: 10 }}>D</span>
-                      <strong>{t('interactiveGuide.scoreboard.disqualification')}</strong>
-                    </td>
-                    <td style={{ padding: 8, opacity: 0.8 }}>{t('interactiveGuide.scoreboard.disqualificationDesc')}</td>
-                  </tr>
-                </tbody>
-              </table>
+              {/* One row per sanction: the card and its name, then what it
+                  means; on a narrow screen (a phone, a large system font) the
+                  meaning goes under the name (a table squeezed it to a sliver
+                  that ran out of the box) */}
+              <div style={{ fontSize: 13, marginTop: 12 }}>
+                {[
+                  { key: 'warning', label: t('interactiveGuide.scoreboard.warning'), desc: t('interactiveGuide.scoreboard.warningDesc'), chip: <span style={{ width: 20, height: 20, flexShrink: 0, background: '#eab308', borderRadius: 4 }}></span> },
+                  { key: 'penalty', label: t('interactiveGuide.scoreboard.penalty'), desc: t('interactiveGuide.scoreboard.penaltyDesc'), chip: <span style={{ width: 20, height: 20, flexShrink: 0, background: '#ef4444', borderRadius: 4 }}></span> },
+                  { key: 'expulsion', label: t('interactiveGuide.scoreboard.expulsion'), desc: t('interactiveGuide.scoreboard.expulsionDesc'), chip: <span style={{ width: 20, height: 20, flexShrink: 0, background: '#ef4444', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ov-text)', fontSize: 10 }}>E</span> },
+                  { key: 'disqualification', label: t('interactiveGuide.scoreboard.disqualification'), desc: t('interactiveGuide.scoreboard.disqualificationDesc'), chip: <span style={{ width: 20, height: 20, flexShrink: 0, background: '#000', border: '2px solid #ef4444', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ov-on-dark)', fontSize: 10 }}>D</span> }
+                ].map(({ key, label, desc, chip }, i, rows) => (
+                  <div
+                    key={key}
+                    data-testid={`guide-sanction-${key}`}
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'baseline',
+                      columnGap: 16,
+                      rowGap: 4,
+                      padding: 8,
+                      borderBottom: i < rows.length - 1 ? '1px solid var(--ov-sunken-strong)' : 'none'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '0 0 12em', maxWidth: '100%' }}>
+                      {chip}
+                      <strong>{label}</strong>
+                    </div>
+                    <div style={{ flex: '1 1 14em', minWidth: 0, opacity: 0.8 }}>{desc}</div>
+                  </div>
+                ))}
+              </div>
             </Section>
 
             <Section title={t('interactiveGuide.scoreboard.undo')} icon={<Undo />}>
@@ -2001,6 +1967,15 @@ export default function InteractiveGuide({ open, onClose }) {
                 {t('interactiveGuide.scoreboard.rotationDesc')}
               </p>
               <CourtDemo animateRotation t={t} />
+            </Section>
+
+            <Section title={t('interactiveGuide.scoreboard.sets')} icon={<ArrowLeftRight />}>
+              <p>{t('interactiveGuide.scoreboard.setsDesc')}</p>
+              <ul style={{ paddingLeft: 20 }}>
+                <li>{t('interactiveGuide.scoreboard.setsRule1')}</li>
+                <li>{t('interactiveGuide.scoreboard.setsRule2')}</li>
+                <li>{t('interactiveGuide.scoreboard.setsRule3')}</li>
+              </ul>
             </Section>
 
             <Section title={t('interactiveGuide.scoreboard.set3')} icon={<SquareNumber3 />}>
